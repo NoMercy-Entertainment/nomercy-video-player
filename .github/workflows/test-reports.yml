@@ -33,7 +33,7 @@ jobs:
         run: npx vitest run --reporter=default --reporter=html --outputFile=reports/vitest/index.html
 
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install chromium
 
       - name: Run E2E tests
         run: npx playwright test
