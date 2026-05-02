@@ -443,8 +443,19 @@ export const coreMethods = {
 		const hlsSupported = HLS.isSupported();
 		const useHls = !this.options.disableHls && hlsSupported && (this.options.forceHls || isHls);
 
+		this._hlsRecoveryAttempts = 0;
+		if (this._hlsRecoveryTimer !== null) {
+			clearTimeout(this._hlsRecoveryTimer);
+			this._hlsRecoveryTimer = null;
+		}
+
 		if (useHls) {
-			this.hls ??= new HLS({
+			if (this.hls) {
+				this.hls.destroy();
+				this.hls = undefined;
+			}
+
+			this.hls = new HLS({
 				debug: this.options.debug ?? false,
 				enableWorker: true,
 				lowLatencyMode: false,
@@ -466,8 +477,8 @@ export const coreMethods = {
 
 			this.emit('hls');
 
-			this.hls?.loadSource(encodeURI(url));
-			this.hls?.attachMedia(this.videoElement);
+			this.hls.loadSource(encodeURI(url));
+			this.hls.attachMedia(this.videoElement);
 		}
 		else {
 			this.hls?.destroy();

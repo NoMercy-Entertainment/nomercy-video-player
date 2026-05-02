@@ -250,7 +250,7 @@ export const eventMethods = {
 			this.setMediaAPI();
 		});
 
-		this.once('hls', () => {
+		this.on('hls', () => {
 			if (!this.hls)
 				return;
 
