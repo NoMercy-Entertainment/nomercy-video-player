@@ -152,6 +152,9 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 	declare bufferedRanges: () => TimeRanges;
 	declare seekable: () => TimeRanges;
 	declare timeData: () => KitTimeState;
+	/** Seek to a position expressed as a percentage (0–100) of total duration. V1 parity. */
+	declare seekByPercentage: (pct: number, opts?: ActionOptions) => void;
+
 	declare playbackRate: {
 		(): number;
 		(rate: number): void;
