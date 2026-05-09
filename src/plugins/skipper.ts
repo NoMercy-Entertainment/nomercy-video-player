@@ -45,11 +45,11 @@ export class SkipperPlugin extends Plugin<NMVideoPlayer<any>, SkipperOptions, Sk
 	private active: SkipperKind | null = null;
 
 	override use(): void {
-		this.on('current' as any, () => {
+		this.on('current', () => {
 			this.active = null;
 		});
 
-		this.on('time' as any, (data: { time: number }) => {
+		this.on('time', (data) => {
 			this.onTimeUpdate(data?.time ?? 0);
 		});
 	}

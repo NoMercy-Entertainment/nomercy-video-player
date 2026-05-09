@@ -62,7 +62,7 @@ export class DrmPlugin extends Plugin<NMVideoPlayer<any>, DrmOptions, DrmEvents>
 		}
 		this.supported = true;
 
-		this.on('current' as any, (payload: { item?: unknown }) => {
+		this.on('current', (payload) => {
 			const item = payload?.item as DrmItemHint | undefined;
 			const drm = item?.drm;
 			if (!drm) return;

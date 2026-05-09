@@ -57,13 +57,13 @@ export class OctopusPlugin extends Plugin<NMVideoPlayer<any>, OctopusOptions> {
 	private _fontsForCurrent: string[] | null = null;
 
 	override use(): void {
-		this.on('subtitle' as any, (data: { track: string | number | null }) => {
+		this.on('subtitle', (data) => {
 			void this.applyActive(data?.track);
 		});
 
 		// New playlist item — clear the cached URL + fonts list so the next
 		// `subtitle` event re-resolves against the new item's track list.
-		this.on('current' as any, () => {
+		this.on('current', () => {
 			this.destroy();
 			this._fontsForCurrent = null;
 		});
@@ -250,7 +250,7 @@ export class OctopusPlugin extends Plugin<NMVideoPlayer<any>, OctopusOptions> {
 
 			this.instance = new NMSubtitleOctopus(opts);
 			this.instance.on('rendererReady', () => {
-				this.emit('renderer:ready' as any, { url } as any);
+				this.emit('renderer:ready', { url });
 			});
 			this.instance.on('error', (err: Error) => {
 				this.report({

@@ -238,9 +238,12 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 		// before / between sources. The element doesn't necessarily exist
 		// yet when `current` fires (backend allocation is lazy), so we
 		// remember the wanted poster and re-apply once it's materialised.
-		this.on('current' as any, (data: any) => {
-			const item = data?.item ?? data;
-			const image: string | undefined = item?.image ?? item?.poster ?? item?.thumbnail;
+		this.on('current', (data) => {
+			const item = (data as Record<string, unknown> | undefined);
+			const image: string | undefined = (item?.['item'] as Record<string, string> | undefined)?.image
+				?? (item?.['image'] as string | undefined)
+				?? (item?.['poster'] as string | undefined)
+				?? (item?.['thumbnail'] as string | undefined);
 			this._wantedPoster = image ?? null;
 			this._applyPoster();
 		});
@@ -298,18 +301,18 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 			if (self._phase === 'starting') {
 				const from = self._phase;
 				self._phase = 'playing';
-				this.emit('phase' as any, { from, to: 'playing' } as any);
+				this.emit('phase', { from, to: 'playing' });
 			}
-			this.emit('firstFrame' as any, undefined);
+			this.emit('firstFrame', undefined);
 		});
 		instance.on('ended', () => {
 			const self = this as unknown as { _phase: string; emit: (e: string, d?: any) => void };
 			const from = self._phase;
 			if (from !== 'ended') {
 				self._phase = 'ended';
-				this.emit('phase' as any, { from, to: 'ended' } as any);
+				this.emit('phase', { from, to: 'ended' });
 			}
-			this.emit('ended' as any, undefined);
+			this.emit('ended', undefined);
 		});
 
 		// Sync `_playState` with the actual element. Without this, every
@@ -321,7 +324,7 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 		instance.on('play', () => {
 			if (self._playState !== 'playing') {
 				self._playState = 'playing';
-				this.emit('play' as any, undefined);
+				this.emit('play', undefined);
 			}
 		});
 		instance.on('pause', () => {
@@ -329,7 +332,7 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 			// `ended` listener already moved phase, so don't override it.
 			if (self._playState === 'playing') {
 				self._playState = 'paused';
-				this.emit('pause' as any, undefined);
+				this.emit('pause', undefined);
 			}
 		});
 		// Loading a new source / source removal both invalidate the
@@ -343,7 +346,7 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 			firstFrameEmitted = false;
 			if (self._playState === 'playing') {
 				self._playState = 'paused';
-				this.emit('pause' as any, undefined);
+				this.emit('pause', undefined);
 			}
 		};
 		instance.on('loadstart', onResetToPaused);
@@ -407,7 +410,7 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 			? ctrl.enter(this.container)
 			: ctrl.exit();
 		void action.catch(() => { /* swallow — UI listens to fullscreen event */ });
-		this.emit('fullscreen' as any, { active: wantActive } as any);
+		this.emit('fullscreen', { active: wantActive });
 	}
 	pipState(): PipState;
 	pipState(state: PipState | boolean): void;
@@ -428,7 +431,7 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 		}
 		const action = wantActive ? ctrl.enter(this.videoElement) : ctrl.exit();
 		void action.catch(() => { /* swallow */ });
-		this.emit('pip' as any, { active: wantActive } as any);
+		this.emit('pip', { active: wantActive });
 	}
 	private _theaterActive = false;
 	theaterState(): TheaterState;
@@ -439,7 +442,7 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 		}
 		const wantActive = typeof state === 'boolean' ? state : state === TheaterState.ON;
 		this._theaterActive = wantActive;
-		this.emit('theater' as any, { active: wantActive } as any);
+		this.emit('theater', { active: wantActive });
 	}
 	private _subtitleState: SubtitleState = SubtitleState.OFF;
 	subtitleState(): SubtitleState {
@@ -500,7 +503,7 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 		const idx = order.indexOf(this._aspectRatio);
 		const next = order[(idx + 1) % order.length];
 		this._aspectRatio = next;
-		this.emit('aspectRatio' as any, { value: next } as any);
+		this.emit('aspectRatio', { value: next });
 	}
 
 	// ── Tracks / chapters / quality ── composed in via `mediaTracksMethods` mixin.

@@ -76,17 +76,17 @@ export class LiveTranscodingPlugin extends Plugin<NMVideoPlayer<any>, LiveTransc
 			});
 		});
 
-		this.on('beforeLoad' as any, async (event: any) => {
+		this.on('beforeLoad', async (event) => {
 			const item = event?.data?.item;
 			if (!item) return;
 			this._transcodedTo = 0;
-			this.currentJobId = String(item.id ?? '');
+			this.currentJobId = String((item as { id?: unknown }).id ?? '');
 			// Gate is best-effort — when the server is offline we don't block
 			// the player; producers can wire stricter gating downstream.
 			await this.waitFor(0);
 		});
 
-		this.on('beforeSeek' as any, async (event: any) => {
+		this.on('beforeSeek', async (event) => {
 			const target = event?.data?.time ?? 0;
 			if (target <= this._transcodedTo) return;
 			await this.waitFor(target);
