@@ -1,446 +1,629 @@
-// noinspection JSUnusedGlobalSymbols
 
-import type { VTTData } from 'webvtt-parser';
 
-import { Base } from './player/base';
-import { Logger } from './player/logger';
-import type Plugin from './plugins/plugin';
-import MessagePlugin from './plugins/messagePlugin';
-import type { PluginMap } from './types/plugins';
-
-import { defaultSubtitleStyles } from './player/utils';
+import {
+	BrowserPolicyError,
+	composeMixins,
+	EventEmitter,
+	initPlayerCoreState,
+	playerCoreMethods,
+	resolvePlayerConstructor,
+} from '@nomercy-entertainment/nomercy-player-core';
+import {
+	BufferState,
+	CastState,
+	NetworkState,
+	SetupState,
+	VisibilityState,
+} from '@nomercy-entertainment/nomercy-player-core';
 import type {
-	PlayerConfig,
-	PlaylistItem,
-	PreviewTime,
-	Stretching,
+	ActionOptions,
+	AudioTrack,
+	AuthConfig,
+	IPlatform,
+	BasePlaylistItem,
+	Chapter,
+	CueParser,
+	DeviceCapabilities,
+	IPlayer,
+	LoadOptions,
+	PlaybackMetrics,
+	PlayerExperimental,
+	PlayerPhase,
+	Plugin,
+	QualityLevel,
+	ResolvedUrl,
+	StreamFactory,
+	SubtitleCueChange,
 	SubtitleStyle,
+	SubtitleTrack,
+	TimeState as KitTimeState,
+	Translations,
+	UrlCategory,
+	UrlResolver,
+} from '@nomercy-entertainment/nomercy-player-core';
+import type { IVideoBackend } from './player/video-backend/backend';
+import { Html5VideoBackend } from './player/video-backend/html5VideoBackend';
+import type { VideoEventMap, VideoPlayerConfig, VideoPlaylistItem } from './types';
+import {
+	AudioTrackState,
+	FullscreenState,
+	PipState,
+	PlayState,
+	QualityState,
+	RepeatState,
+	ShuffleState,
+	SubtitleState,
+	TheaterState,
+	VolumeState,
 } from './types';
 
-// Mixin imports
-import { audioMethods } from './player/audio';
-import { chapterMethods } from './player/chapters';
-import { coreMethods } from './player/core';
-import { deprecatedMethods } from './player/deprecated';
-import { displayMethods } from './player/display';
-import { domMethods } from './player/dom';
-import { eventMethods } from './player/events';
-import { floatMethods } from './player/float';
-import { fontMethods } from './player/fonts';
-import { pipMethods } from './player/pip';
-import { playbackMethods } from './player/playback';
-import { playlistMethods } from './player/playlist';
-import { qualityMethods } from './player/quality';
-import { skipperMethods } from './player/skippers';
-import { subtitleMethods } from './player/subtitles';
-import { translationMethods } from './player/translations';
-import { theaterMethods } from './player/theater';
-import { uiStateMethods } from './player/ui-state';
-import { volumeMethods } from './player/volume';
+export type { Stretching, VideoEventMap, VideoPlayerConfig, VideoPlaylistItem } from './types';
+export {
+	AudioTrackState,
+	FullscreenState,
+	PipState,
+	PlayState,
+	QualityState,
+	RepeatState,
+	ShuffleState,
+	SubtitleState,
+	TheaterState,
+	VolumeState,
+} from './types';
 
-const instances = new Map();
+const _instances = new Map<string, NMVideoPlayer<any>>();
 
-const DEFAULT_LEEWAY = 300;
-const DEFAULT_SEEK_INTERVAL = 10;
+/**
+ * Headless video player. Plugin-driven, event-driven, no UI in core.
+ *
+ * Shared player logic (lifecycle, transport, queue, state, volume, time,
+ * plugins, i18n, cue parsers, baseUrl, audioContext, experimental override
+ * surface) is composed onto the prototype from `playerCoreMethods` exported by
+ * `@nomercy-entertainment/nomercy-player-core` — the LOGIC lives there, not
+ * here. NMVideoPlayer adds only:
+ *
+ *  - The per-library registry (own `_instances` Map)
+ *  - The three-form factory constructor + the `videoElement` field
+ *  - Library-typed method declarations (so consumers see `PlayState`, etc.,
+ *    not the kit's internal string token — runtime impl comes from the mixin)
+ *  - Video-specific stubs (fullscreen, pip, theater, subtitle toggles, etc.)
+ */
+export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
+	extends EventEmitter<VideoEventMap>
+	implements IPlayer<VideoEventMap> {
+	readonly playerId: string = '';
+	container: HTMLElement = <HTMLElement>{};
+	videoElement: HTMLVideoElement = <HTMLVideoElement>{};
 
-class NMPlayer<T = Record<string, any>> extends Base<T> {
-	// ── Mixin method declarations (provided via Object.assign on prototype) ──
-	declare createBaseStyles: () => void;
-	declare createSubtitleFontFamily: () => void;
-	declare fetchTranslationsFile: () => Promise<void>;
-	declare _tryFetchTranslation: (url: string) => Promise<string | null>;
-	declare createOverlayElement: () => void;
-	declare styleContainer: () => void;
-	declare createVideoElement: () => void;
-	declare createSubtitleOverlay: () => void;
-	declare resize: () => void;
-	declare _removeEvents: () => void;
-	declare _addEvents: () => void;
-	declare loadPlaylist: () => void;
-	declare removeGainNode: () => void;
-	declare _initFloatObserver: () => void;
-	declare _destroyFloatObserver: () => void;
-	declare _initPipListeners: () => void;
-	declare _destroyPipListeners: () => void;
-	declare _initTheater: () => void;
-	declare _destroyTheater: () => void;
-	declare _initDeprecatedEventForwarders: () => void;
+	get id(): string {
+		return this.playerId;
+	}
 
-	// Setup
-	hls: import('hls.js').default | undefined;
-	gainNode: GainNode | undefined;
-	translations: { [key: string]: string } = {};
-	defaultTranslations: { [key: string]: string } = {};
+	declare options: VideoPlayerConfig<T>;
 
-	// State
-	leftTap: NodeJS.Timeout = <NodeJS.Timeout>{};
-	rightTap: NodeJS.Timeout = <NodeJS.Timeout>{};
-	leeway = DEFAULT_LEEWAY;
-	seekInterval = DEFAULT_SEEK_INTERVAL;
-	tapCount = 0;
-	rewindCount = 0;
-	forwardCount = 0;
-	inactivityTimeout: NodeJS.Timeout | null = null;
-	inactivityTime = 3000;
+	// ── Type-only declarations for the methods composed in from the kit's
+	// `playerCoreMethods`. The bodies live in the kit; these declarations let
+	// consumers see the video-typed contract without runtime cost.
 
-	// Store
-	_chapters: VTTData = <VTTData>{};
-	currentChapterFile = '';
+	declare setup: (config: VideoPlayerConfig<T>) => this;
+	declare ready: () => Promise<void>;
+	declare dispose: () => void;
+	declare setupState: () => SetupState;
+	declare phase: () => PlayerPhase;
+	declare dispatching: () => ReadonlyArray<string>;
 
-	previewTime: PreviewTime[] = [];
+	declare baseUrl: {
+		(): string | undefined;
+		(url: string): void;
+	};
+	declare audioContext: () => AudioContext | undefined;
+	declare experimental: PlayerExperimental;
 
-	fonts: { file: string; mimeType: string }[] = [];
-	currentFontFile = '';
+	declare t: (key: string, vars?: Record<string, string>) => string;
+	declare language: {
+		(): string;
+		(lang: string): Promise<void>;
+	};
+	declare addTranslations: (bundle: Translations) => void;
+	declare translation: {
+		(lang: string, key: string): string | undefined;
+		(lang: string, key: string, value: string): void;
+	};
+	declare removeTranslations: (prefix: string, lang?: string) => void;
 
-	_skippers: any;
-	currentSkipFile = '';
+	declare registerCueParser: (parser: CueParser, prepend?: boolean) => void;
+	declare unregisterCueParser: (id: string) => void;
 
-	currentSubtitleIndex = -1;
-	_subtitles: VTTData = <VTTData>{};
-	currentSubtitleFile = '';
+	declare play: (opts?: ActionOptions) => Promise<void>;
+	declare pause: (opts?: ActionOptions) => Promise<void>;
+	declare stop: (opts?: ActionOptions) => Promise<void>;
+	declare togglePlayback: (opts?: ActionOptions) => Promise<void>;
+	declare next: (opts?: ActionOptions) => Promise<void>;
+	declare previous: (opts?: ActionOptions) => Promise<void>;
+	declare rewind: (seconds?: number, opts?: ActionOptions) => Promise<void>;
+	declare forward: (seconds?: number, opts?: ActionOptions) => Promise<void>;
+	declare restart: (opts?: ActionOptions) => Promise<void>;
 
-	// Playlist functionality
-	_playlist: (PlaylistItem & T)[] = [];
-	currentPlaylistItem: (PlaylistItem & T) = <(PlaylistItem & T)>{} as (PlaylistItem & T);
-	currentIndex = -1;
-	isPlaying = false;
-	_muted: boolean = false;
-	_volume: number = 100;
-	lastTime = 0;
+	declare currentTime: {
+		(): number;
+		(t: number, opts?: ActionOptions): Promise<void>;
+	};
+	declare duration: () => number;
+	declare buffered: () => number;
+	declare bufferedRanges: () => TimeRanges;
+	declare seekable: () => TimeRanges;
+	declare timeData: () => KitTimeState;
+	declare playbackRate: {
+		(): number;
+		(rate: number): void;
+	};
+	declare playbackRates: () => number[];
 
-	lockActive: boolean = false;
-	_readyFired: boolean = false;
+	declare volume: {
+		(): number;
+		(v: number): void;
+	};
+	declare mute: () => void;
+	declare unmute: () => void;
+	declare toggleMute: () => void;
+	declare volumeUp: (step?: number) => void;
+	declare volumeDown: (step?: number) => void;
 
-	plugins: PluginMap = new Map<string, Plugin>() as PluginMap;
+	declare playState: () => PlayState;
+	declare volumeState: () => VolumeState;
+	declare repeatState: {
+		(): RepeatState;
+		(state: RepeatState): void;
+	};
+	declare shuffleState: {
+		(): ShuffleState;
+		(state: ShuffleState | boolean): void;
+	};
 
-	stretchOptions: Array<Stretching> = [
-		'uniform',
-		'fill',
-		'exactfit',
-		'none',
-		'16:9',
-		'4:3',
-	];
+	declare queue: {
+		(): ReadonlyArray<T>;
+		(items: T[], opts?: ActionOptions): void;
+	};
+	declare queueAppend: (item: T | T[], opts?: ActionOptions) => void;
+	declare queuePrepend: (item: T | T[], opts?: ActionOptions) => void;
+	declare queueInsert: (item: T | T[], index: number, opts?: ActionOptions) => void;
+	declare queueRemove: (id: string | number, opts?: ActionOptions) => void;
+	declare queueRemoveAt: (index: number, opts?: ActionOptions) => void;
+	declare queueMove: (from: number, to: number, opts?: ActionOptions) => void;
+	declare queueClear: (opts?: ActionOptions) => void;
+	declare queueShuffle: (opts?: ActionOptions) => void;
+	declare queueSort: (compare: (a: T, b: T) => number, opts?: ActionOptions) => void;
+	declare peekNext: () => T | undefined;
+	declare peekPrevious: () => T | undefined;
+	declare queueLength: () => number;
+	declare queueIndexOf: (id: string | number) => number;
 
-	currentAspectRatio: typeof this.stretchOptions[number] = this.options.stretching ?? 'uniform';
-	allowFullscreen: boolean = true;
-	shouldFloat: boolean = false;
-	firstFrame: boolean = false;
-	_theaterMode: boolean = false;
-	_floatObserver: IntersectionObserver | undefined;
-	_pipVisibilityHandler: (() => void) | undefined;
-	_subtitleStyle: SubtitleStyle = defaultSubtitleStyles;
-	resizeObserver: ResizeObserver = <ResizeObserver>{};
+	declare current: () => T | undefined;
+	declare currentIndex: () => number;
+	declare setCurrent: (target: T | string | number, opts?: ActionOptions) => void;
 
-	// Event arrays (initialized by _initEventArrays in events.ts)
-	_playerEvents: { type: string; handler: EventListener }[] = [];
-	_containerEvents: { type: string; handler: EventListener }[] = [];
+	declare backlog: {
+		(): ReadonlyArray<T>;
+		(items: T[]): void;
+	};
+	declare backlogAppend: (item: T | T[]) => void;
+	declare backlogRemove: (id: string | number) => void;
+	declare backlogClear: () => void;
 
-	// HLS recovery state
-	_hlsRecoveryAttempts = 0;
-	_hlsRecoveryTimer: ReturnType<typeof setTimeout> | null = null;
-
-	// PIP listener references (for cleanup)
-	_pipEnterHandler: (() => void) | undefined;
-	_pipLeaveHandler: (() => void) | undefined;
+	declare addPlugin: <P extends Plugin>(PluginClass: new () => P, opts?: P['opts']) => this;
+	declare getPlugin: <P extends Plugin>(PluginClass: new () => P) => P | undefined;
+	declare getPluginById: (id: string) => Plugin | undefined;
+	declare removePlugin: <P extends Plugin>(PluginClass: new () => P) => void;
+	declare removePluginById: (id: string) => void;
+	declare plugins: () => ReadonlyArray<Plugin>;
+	declare enabledPlugins: () => ReadonlyArray<Plugin>;
 
 	constructor(id?: string | number) {
 		super();
-
-		if (!id && instances.size === 0) {
-			throw new Error('No player element found');
+		// Resolve FIRST so the existing-instance path doesn't waste state init.
+		// Spec §AB: avoid re-initializing core state on a player that's already
+		// fully constructed and possibly mid-pipeline.
+		const resolved = resolvePlayerConstructor(id, _instances, 'NMVideoPlayer');
+		if (resolved.kind === 'existing') {
+			// eslint-disable-next-line no-constructor-return
+			return resolved.instance as unknown as this;
 		}
 
-		if (!id && instances.size > 0) {
-			return instances.values().next().value!;
-		}
-
-		if (typeof id === 'number') {
-			instances.forEach((player, index) => {
-				if (Number.parseInt(index, 10) === id) {
-					return player;
-				}
-			});
-
-			throw new Error('Player not found');
-		}
-
-		if (typeof id !== 'string') {
-			throw new TypeError('Player ID must be a string that matches the ID of a div element on the page or a number representing the index of the player to select');
-		}
-
-		if (instances.has(id)) {
-			return instances.get(id)!;
-		}
-
-		return this.init(id);
+		initPlayerCoreState(this, { className: 'NMVideoPlayer' });
+		(this as { playerId: string }).playerId = resolved.id;
+		this.container = resolved.div;
+		_instances.set(resolved.id, this);
 	}
 
-	init(id: string): this {
-		const container = document.querySelector<HTMLDivElement>(`#${id}`);
+	/** Test-only: clear the registry. Not part of the public API. */
+	static _resetRegistry(): void {
+		_instances.clear();
+	}
 
-		if (!container) {
-			throw new Error(`Player element with ID ${id} not found`);
-		}
+	// ── Stream registration ── composed in via `streamRegistrationMethods` mixin.
+	declare registerStream: (factory: StreamFactory, prepend?: boolean) => this;
+	declare unregisterStream: (id: string) => this;
+	declare streams: () => ReadonlyArray<string>;
+	declare getStreamFactory: (id: string) => StreamFactory | undefined;
 
-		if (container.nodeName !== 'DIV') {
-			throw new Error('Element must be a div element');
-		}
-
-		this.playerId = id;
-		this.container = container;
-
-		this.createBaseStyles();
-		this.createSubtitleFontFamily();
-
-		this.createOverlayElement();
-
-		if (this.options.messagePlugin !== false) {
-			this.registerPlugin('message', new MessagePlugin());
-			this.usePlugin('message');
-		}
-
-		this.styleContainer();
-		this.createVideoElement();
-		this.createSubtitleOverlay();
-
-		this.resizeObserver = new ResizeObserver(() => {
-			this.resize();
+	// ── Backend ──
+	private _backend: IVideoBackend | undefined;
+	backend(): IVideoBackend {
+		if (this._backend) return this._backend;
+		const factory = this.options?.backendFactory;
+		const instance = factory
+			? factory('html5', this.options as VideoPlayerConfig<BasePlaylistItem>)
+			: new Html5VideoBackend(this.container);
+		this._backend = instance;
+		this.videoElement = instance.mediaElement();
+		// Bridge backend element events to player-level phase transitions and
+		// the `firstFrame` / `ended` events the player surface promises.
+		let firstFrameEmitted = false;
+		instance.on('canplay', () => {
+			if (firstFrameEmitted) return;
+			firstFrameEmitted = true;
+			const self = this as unknown as { _phase: string; emit: (e: string, d?: any) => void };
+			if (self._phase === 'starting') {
+				const from = self._phase;
+				self._phase = 'playing';
+				this.emit('phase' as any, { from, to: 'playing' } as any);
+			}
+			this.emit('firstFrame' as any, undefined);
 		});
-		this.resizeObserver.observe(this.container);
+		instance.on('ended', () => {
+			const self = this as unknown as { _phase: string; emit: (e: string, d?: any) => void };
+			const from = self._phase;
+			if (from !== 'ended') {
+				self._phase = 'ended';
+				this.emit('phase' as any, { from, to: 'ended' } as any);
+			}
+			this.emit('ended' as any, undefined);
+		});
 
-		instances.set(id, this);
-
-		this._removeEvents();
-		this._addEvents();
-
-		this._initFloatObserver();
-		this._initPipListeners();
-		this._initTheater();
-		this._initDeprecatedEventForwarders();
-
-		setTimeout(() => {
-			if (this._readyFired)
-				return;
-			this._readyFired = true;
-			this.emit('ready');
-		}, 0);
-
-		return this;
-	}
-
-	registerPlugin(name: string, plugin: any): void {
-		this.plugins.set(name, plugin);
-		plugin.initialize(this);
-		this.logger.debug(`Plugin ${name} registered`);
-	}
-
-	usePlugin(name: string): void {
-		const plugin = this.plugins.get(name);
-		this.logger.debug(`Using plugin: ${name}`);
-		if (plugin) {
-			plugin.use();
-		}
-		else {
-			this.logger.error(`Plugin ${name} is not registered`);
-		}
-	}
-
-	plugin(name: string): Plugin | undefined {
-		return this.plugins.get(name);
-	}
-
-	setup<U = Partial<PlayerConfig>>(options: Partial<PlayerConfig<U>>): NMPlayer<U> {
-		this.options = {
-			...this.options,
-			...options,
+		// Sync `_playState` with the actual element. Without this, every
+		// natural pause (buffering stall, end-of-media, source swap during
+		// load()) leaves `_playState='playing'` lying — `togglePlayback`
+		// then sees `playing` and silently calls `pause()` again, so the
+		// next user "play" click is a no-op.
+		const self = this as unknown as { _playState: string; emit: (e: string, d?: any) => void };
+		instance.on('play', () => {
+			if (self._playState !== 'playing') {
+				self._playState = 'playing';
+				this.emit('play' as any, undefined);
+			}
+		});
+		instance.on('pause', () => {
+			// `pause` fires on natural pause AND right before `ended`; the
+			// `ended` listener already moved phase, so don't override it.
+			if (self._playState === 'playing') {
+				self._playState = 'paused';
+				this.emit('pause' as any, undefined);
+			}
+		});
+		// Loading a new source / source removal both invalidate the
+		// "we're playing" state. `loadstart` fires when the backend
+		// starts loading new media; `emptied` fires when the element's
+		// src is unset (HMR re-mount, manual unload). Both leave the
+		// element paused at currentTime=0, so sync `_playState` to
+		// match — without this, the next togglePlayback sees 'playing'
+		// and silently calls pause() on the already-paused element.
+		const onResetToPaused = () => {
+			firstFrameEmitted = false;
+			if (self._playState === 'playing') {
+				self._playState = 'paused';
+				this.emit('pause' as any, undefined);
+			}
 		};
+		instance.on('loadstart', onResetToPaused);
+		instance.on('emptied', onResetToPaused);
 
-		const logLevel = options.log?.level
-			?? (options.debug ? 'debug' : 'error');
-		this.logger = new Logger({
-			level: logLevel,
-			category: this.playerId,
-			handler: options.log?.handler,
+		// Bridge backend subtitle cue stream to the player's event
+		// surface. Renderers (overlay plugins, debug widgets, a11y
+		// tooling) consume this single channel without caring whether
+		// the cue originated from a native HLS textTrack, a sidecar
+		// VTT (kit-driven), or a future MSE/WebCodecs backend.
+		instance.on('subtitleCue', (data?: SubtitleCueChange) => {
+			if (!data) return;
+			this.emit('subtitleCue', data);
 		});
-
-		this.inactivityTime = this.options.controlsTimeout ?? 3000;
-		this.videoElement.controls = options.controls ?? false;
-
-		this.setupTime = Date.now();
-
-		queueMicrotask(() => {
-			this.fetchTranslationsFile();
-		});
-		this.loadPlaylist();
-
-		return this as unknown as NMPlayer<U>;
+		// `play()` Promise rejection (autoplay block, source swap mid-play)
+		// fires `pause` immediately after the rejected play. The element's
+		// `pause` listener above already handles that, so no extra hook
+		// needed — but we DO need to make sure the kit's `play()` waits
+		// for the backend's actual play promise to resolve. That's the
+		// testbed bridge's job, not the kit's.
+		return instance;
 	}
 
-	setConfig<U>(options: Partial<U & PlayerConfig<any>>) {
-		this.options = { ...this.options, ...options };
+	// ── Loading ── composed in via `loadingMethods` mixin.
+	declare load: (item: T, opts?: LoadOptions) => Promise<void>;
+	declare loadQueue: (url: string, parser?: (raw: string) => T[]) => Promise<void>;
+
+	// ── Video-specific state enums (unimplemented) ──
+	bufferState(): BufferState {
+		const backendState = (this._backend as { state?: () => string } | undefined)?.state?.();
+		switch (backendState) {
+			case 'loading': return BufferState.LOADING;
+			case 'seeking': return BufferState.SEEKING;
+			case 'stalled': return BufferState.STALLED;
+			default: return BufferState.IDLE;
+		}
+	}
+	networkState(): NetworkState {
+		const platform = (this as any).platform?.() as IPlatform | undefined;
+		const monitor = platform?.network;
+		if (!monitor) return NetworkState.ONLINE;
+		if (!monitor.isOnline()) return NetworkState.OFFLINE;
+		const downlink = monitor.downlinkMbps?.();
+		if (typeof downlink === 'number' && downlink > 0 && downlink < 1.5) return NetworkState.SLOW;
+		return NetworkState.ONLINE;
+	}
+	streamState(): string {
+		const backend = this._backend as { state?: () => string } | undefined;
+		if (!backend) return 'idle';
+		return backend.state?.() ?? 'idle';
+	}
+	visibilityState(): VisibilityState {
+		const platform = (this as any).platform?.() as IPlatform | undefined;
+		const visible = platform?.visibility?.isVisible() ?? true;
+		return visible ? VisibilityState.VISIBLE : VisibilityState.HIDDEN;
+	}
+	fullscreenState(): FullscreenState;
+	fullscreenState(state: FullscreenState | boolean): void;
+	fullscreenState(state?: FullscreenState | boolean): FullscreenState | void {
+		const platform = (this as any).platform();
+		const ctrl = platform.fullscreen;
+		if (state === undefined) {
+			return ctrl?.isActive() ? FullscreenState.ON : FullscreenState.OFF;
+		}
+		const wantActive = typeof state === 'boolean' ? state : state === FullscreenState.ON;
+		if (!ctrl) {
+			throw new BrowserPolicyError({
+				code: 'core:policy/fullscreenUnsupported',
+				severity: 'error',
+				scope: { kind: 'core' },
+				message: 'Fullscreen controller not configured. Pass `setup({ platform })` with a fullscreen controller, or use the default `browserPlatform`.',
+			});
+		}
+		const action = wantActive
+			? ctrl.enter(this.container)
+			: ctrl.exit();
+		void action.catch(() => { /* swallow — UI listens to fullscreen event */ });
+		this.emit('fullscreen' as any, { active: wantActive } as any);
+	}
+	pipState(): PipState;
+	pipState(state: PipState | boolean): void;
+	pipState(state?: PipState | boolean): PipState | void {
+		const platform = (this as any).platform();
+		const ctrl = platform.pip;
+		if (state === undefined) {
+			return ctrl?.isActive() ? PipState.ON : PipState.OFF;
+		}
+		const wantActive = typeof state === 'boolean' ? state : state === PipState.ON;
+		if (!ctrl) {
+			throw new BrowserPolicyError({
+				code: 'core:policy/pipUnsupported',
+				severity: 'error',
+				scope: { kind: 'core' },
+				message: 'PiP controller not configured. Pass `setup({ platform })` with a PiP controller, or use the default `browserPlatform`.',
+			});
+		}
+		const action = wantActive ? ctrl.enter(this.videoElement) : ctrl.exit();
+		void action.catch(() => { /* swallow */ });
+		this.emit('pip' as any, { active: wantActive } as any);
+	}
+	private _theaterActive = false;
+	theaterState(): TheaterState;
+	theaterState(state: TheaterState | boolean): void;
+	theaterState(state?: TheaterState | boolean): TheaterState | void {
+		if (state === undefined) {
+			return this._theaterActive ? TheaterState.ON : TheaterState.OFF;
+		}
+		const wantActive = typeof state === 'boolean' ? state : state === TheaterState.ON;
+		this._theaterActive = wantActive;
+		this.emit('theater' as any, { active: wantActive } as any);
+	}
+	private _subtitleState: SubtitleState = SubtitleState.OFF;
+	subtitleState(): SubtitleState {
+		// Real check: any active text track on the video element?
+		const tt = this._backend?.mediaElement?.()?.textTracks;
+		if (tt) {
+			for (let i = 0; i < tt.length; i++) {
+				if (tt[i]!.mode === 'showing') return SubtitleState.ON;
+			}
+		}
+		return this._subtitleState;
+	}
+	private _qualityState: QualityState = QualityState.AUTO;
+	qualityState(): QualityState;
+	qualityState(target: number | 'auto'): void;
+	qualityState(target?: number | 'auto'): QualityState | void {
+		if (target === undefined) return this._qualityState;
+		this._qualityState = target === 'auto' ? QualityState.AUTO : QualityState.MANUAL;
+		const b = this._backend as { setQuality?: (idx: number | 'auto') => void } | undefined;
+		b?.setQuality?.(target);
+		this.emit('qualityState' as any, { state: this._qualityState } as any);
+	}
+	private _audioTrackState: AudioTrackState = AudioTrackState.DEFAULT;
+	audioTrackState(): AudioTrackState;
+	audioTrackState(idx: number): void;
+	audioTrackState(idx?: number): AudioTrackState | void {
+		if (idx === undefined) return this._audioTrackState;
+		this._audioTrackState = AudioTrackState.MANUAL;
+		const b = this._backend as { setAudioTrack?: (idx: number) => void } | undefined;
+		b?.setAudioTrack?.(idx);
+		this.emit('audioTrackState' as any, { state: this._audioTrackState } as any);
 	}
 
-	// Stubs
-	playAd(): void {}
-	requestCast(): void {}
-	stopCasting(): void {}
-
-	dispose(): void {
-		clearTimeout(this.message);
-		clearTimeout(this.leftTap);
-		clearTimeout(this.rightTap);
-		if (this.inactivityTimeout) {
-			clearTimeout(this.inactivityTimeout);
-		}
-		if (this._hlsRecoveryTimer !== null) {
-			clearTimeout(this._hlsRecoveryTimer);
-			this._hlsRecoveryTimer = null;
-		}
-
-		this._removeEvents();
-		this._destroyFloatObserver();
-		this._destroyPipListeners();
-		this._destroyTheater();
-
-		for (const plugin of this.plugins.values()) {
-			this.logger.debug('Disposing plugin');
-			plugin.dispose();
-		}
-
-		this.plugins = new Map<string, Plugin>() as PluginMap;
-
-		if (this.hls) {
-			this.hls.destroy();
-			this.hls = undefined;
-		}
-
-		if (this.gainNode) {
-			this.removeGainNode();
-			this.gainNode = undefined;
-		}
-
-		if (this.container) {
-			this.container.innerHTML = '';
-		}
-
-		instances.delete(this.playerId);
-
-		this.mediaSession?.clearActionHandler();
-		this.mediaSession?.setPlaybackState('none');
-
-		this.resizeObserver.disconnect();
-
-		this._readyFired = false;
-
-		this.emit('dispose');
-
-		this.off('all');
+	// ── Video-specific actions ──
+	toggleFullscreen(): void {
+		const isActive = this.fullscreenState() === FullscreenState.ON;
+		this.fullscreenState(!isActive);
 	}
+	togglePip(): void {
+		const isActive = this.pipState() === PipState.ON;
+		this.pipState(!isActive);
+	}
+	toggleTheater(): void {
+		const isActive = this.theaterState() === TheaterState.ON;
+		this.theaterState(!isActive);
+	}
+	cycleSubtitles(): void {
+		let list: SubtitleTrack[] = [];
+		try { list = this.subtitles(); }
+		catch { /* tracks API not implemented yet — treat as empty */ }
+		if (!list || list.length === 0) return;
+		let current = -1;
+		try {
+			const state = (this as unknown as { subtitleState: () => any }).subtitleState();
+			if (typeof state === 'number') current = state;
+		}
+		catch { /* state unavailable — start from off */ }
+		// Walk: -1 (off) → 0 → 1 → ... → list.length-1 → -1 (off)
+		const next = current >= list.length - 1 ? -1 : current + 1;
+		this.currentSubtitle(next === -1 ? null : next);
+	}
+	cycleAudioTracks(): void {
+		let list: AudioTrack[] = [];
+		try { list = this.audioTracks(); }
+		catch { /* tracks API not implemented yet — treat as empty */ }
+		if (!list || list.length === 0) return;
+		let current = -1;
+		try {
+			const state = (this as unknown as { audioTrackState: () => any }).audioTrackState();
+			if (typeof state === 'number') current = state;
+		}
+		catch { /* state unavailable — start from 0 */ }
+		const next = current >= list.length - 1 ? 0 : current + 1;
+		this.currentAudioTrack(next);
+	}
+	private _aspectRatio: 'uniform' | 'fill' | 'exactfit' | 'none' = 'uniform';
+	cycleAspectRatio(): void {
+		const order: Array<'uniform' | 'fill' | 'exactfit' | 'none'> = ['uniform', 'fill', 'exactfit', 'none'];
+		const idx = order.indexOf(this._aspectRatio);
+		const next = order[(idx + 1) % order.length];
+		this._aspectRatio = next;
+		this.emit('aspectRatio' as any, { value: next } as any);
+	}
+
+	// ── Tracks / chapters / quality ── composed in via `mediaTracksMethods` mixin.
+	declare subtitles: () => SubtitleTrack[];
+	declare currentSubtitle: {
+		(): number | null;
+		(idx: number | null): void;
+	};
+	/**
+	 * Read or write the user's subtitle style. Read returns a copy of
+	 * the current `SubtitleStyle`; write merges the patch onto the
+	 * current style and emits `subtitleStyle` with the merged result.
+	 * Persistence is the responsibility of preference plugins —
+	 * `mediaTracksMethods` only owns the in-memory state + event.
+	 */
+	declare subtitleStyle: {
+		(): SubtitleStyle;
+		(patch: Partial<SubtitleStyle>): void;
+	};
+	declare audioTracks: () => AudioTrack[];
+	declare currentAudioTrack: {
+		(): number | null;
+		(idx: number): void;
+	};
+	declare qualityLevels: () => QualityLevel[];
+	declare currentQuality: {
+		(): number | 'auto';
+		(idx: number | 'auto'): void;
+	};
+	declare chapters: () => Chapter[];
+	declare currentChapter: {
+		(): Chapter | null;
+		(idx: number): void;
+	};
+	declare seekToChapter: (idx: number, opts?: ActionOptions) => void;
+	declare nextChapter: (opts?: ActionOptions) => void;
+	declare previousChapter: (opts?: ActionOptions) => void;
+
+	// ── Device capabilities ── composed in via `deviceMethods` mixin.
+	declare isTv: () => boolean;
+	declare isMobile: () => boolean;
+	declare isDesktop: () => boolean;
+	declare device: () => DeviceCapabilities;
+
+	// ── MediaCapabilities + ABR ── composed in via `abrMethods` mixin.
+	declare canPlay: (profile: { contentType: string; width?: number; height?: number; bitrate?: number; framerate?: number }) => Promise<MediaCapabilitiesDecodingInfo>;
+	declare bandwidth: () => number;
+	declare bandwidthEstimator: {
+		(): (() => number) | undefined;
+		(fn: () => number): void;
+	};
+
+	// ── Audio output device ── composed in via `audioOutputMethods` mixin.
+	declare audioOutputs: () => Promise<MediaDeviceInfo[]>;
+	declare selectAudioOutput: () => Promise<MediaDeviceInfo | null>;
+	declare currentAudioOutput: {
+		(): Promise<string | null>;
+		(deviceId: string): Promise<void>;
+	};
+
+	// ── Cast / handoff ── composed in via `castMethods` mixin.
+	declare castState: () => CastState;
+	declare transferTo: (target: 'cast' | 'airplay' | 'remote-playback') => Promise<void>;
+
+	// ── Auth runtime mutation ── composed in via `authMethods` mixin.
+	declare auth: {
+		(): Readonly<AuthConfig> | undefined;
+		(config: AuthConfig): void;
+		(partial: Partial<AuthConfig>): void;
+	};
+	declare refreshAuth: () => Promise<void>;
+	declare resolveUrl: (url: string, category?: UrlCategory) => Promise<ResolvedUrl>;
+	declare urlResolver: {
+		(): UrlResolver | undefined;
+		(resolver: UrlResolver | undefined): void;
+	};
+
+	// ── Performance metrics / clock / accessibility ── composed in via `metricsMethods` mixin.
+	declare metrics: () => PlaybackMetrics;
+	declare recordMetric: (name: string, value: number) => void;
+	declare now: () => number;
+	declare announce: (text: string, level?: 'polite' | 'assertive') => void;
+
+	// ── DOM construction helpers ── composed via `domMethods` mixin.
+	declare createElement: IPlayer<VideoEventMap>['createElement'];
+	declare createButton: IPlayer<VideoEventMap>['createButton'];
+	declare createSVG: IPlayer<VideoEventMap>['createSVG'];
+	declare addClasses: IPlayer<VideoEventMap>['addClasses'];
+	declare removeClasses: IPlayer<VideoEventMap>['removeClasses'];
 }
 
-// Merge all mixin methods onto prototype
-// prettier-ignore
-Object.assign(NMPlayer.prototype, coreMethods, domMethods, eventMethods, uiStateMethods, playbackMethods, volumeMethods, audioMethods, qualityMethods, subtitleMethods, playlistMethods, chapterMethods, skipperMethods, fontMethods, translationMethods, displayMethods, floatMethods, pipMethods, theaterMethods, deprecatedMethods);
+// Compose every shared player method onto the prototype. The kit's logic
+// gets wired into the class here — no inheritance, no per-library duplication.
+composeMixins(NMVideoPlayer.prototype, ...playerCoreMethods);
 
-// Deprecated getter shims for removed event hook flags (backwards compat with 0.6.x)
-Object.defineProperties(NMPlayer.prototype, {
-	hasPipEventHandler: { get() { return this.hasListeners('pip'); }, configurable: true },
-	hasTheaterEventHandler: { get() { return this.hasListeners('theater') || this.hasListeners('theaterMode'); }, configurable: true },
-	hasBackEventHandler: { get() { return this.hasListeners('back'); }, configurable: true },
-	hasCloseEventHandler: { get() { return this.hasListeners('close'); }, configurable: true },
-});
+// Wrap the kit-composed `dispose` so the video backend (and any HLS
+// instance it holds) tears down with the player. The kit's dispose
+// is backend-agnostic by design — releasing IO surfaces is the player
+// class's responsibility. Without this, every player.dispose() leaks
+// an Hls instance that keeps polling fragments against the orphaned
+// MediaSource, surfaced as `segment_0.ts` requested thousands of
+// times after a single playlist switch in HMR-heavy dev sessions.
+{
+	const composedDispose = NMVideoPlayer.prototype.dispose as () => void;
+	NMVideoPlayer.prototype.dispose = function (this: NMVideoPlayer<BasePlaylistItem>): void {
+		const self = this as unknown as { _backend?: { dispose?: () => void }; videoElement?: HTMLVideoElement };
+		try { self._backend?.dispose?.(); }
+		catch { /* defensive — kit must still finish disposing */ }
+		self._backend = undefined;
+		self.videoElement = undefined;
+		composedDispose.call(this);
+	};
+}
 
-const nmplayer = <Conf extends Partial<PlayerConfig> = Record<string, any>>(id?: string) => new NMPlayer<Conf>(id);
+/**
+ * Factory entry point. Returns the existing instance for a given div id, or
+ * mounts a fresh one. Mirrors the v1 video-player wiki contract.
+ */
+export const nmplayer = <T extends BasePlaylistItem = VideoPlaylistItem>(id?: string | number): NMVideoPlayer<T> => {
+	return new NMVideoPlayer<T>(id);
+};
 
 export default nmplayer;
-
-export { Base } from './player/base';
-export { Logger } from './player/logger';
-export { default as PlayerStorage } from './player/playerStorage';
-
-// Re-export utils for consumers who previously imported from helpers
-export {
-	breakEpisodeTitle,
-	breakLogoTitle,
-	convertToSeconds,
-	defaultSubtitleStyles,
-	edgeStyles,
-	fontFamilies,
-	getEdgeStyle,
-	hslToHex,
-	humanTime,
-	limitSentenceByCharacters,
-	lineBreakShowTitle,
-	namedColors,
-	normalizeHex,
-	pad,
-	parseColorToHex,
-	rgbToHex,
-	toTitleCase,
-	unique,
-} from './player/utils';
-export { default as KeyHandlerPlugin } from './plugins/keyHandlerPlugin';
-export { default as MessagePlugin } from './plugins/messagePlugin';
-export { default as OctopusPlugin } from './plugins/octopusPlugin';
-export { default as Plugin } from './plugins/plugin';
-
-// Re-export types for consumers
-export type {
-	AddClasses,
-	AddClassesReturn,
-	AudioTrack,
-	BaseTrack,
-	CaptionsConfig,
-	Chapter,
-	ChapterTrack,
-	CreateElement,
-	CurrentTrack,
-	EdgeStyle,
-	FloatConfig,
-	Font,
-	FontTrack,
-	GainData,
-	Icon,
-	Level,
-	LogConfig,
-	LogHandler,
-	LogLevel,
-	NMPlayer,
-	OS,
-	PipConfig,
-	PlayerConfig,
-	PlayerEventMap,
-	PlaylistItem,
-	PlayState,
-	PluginMap,
-	PluginRegistry,
-	Position,
-	Preload,
-	PreviewTime,
-	Skipper,
-	SkipperTrack,
-	SpriteTrack,
-	StorageInterface,
-	Stretching,
-	StretchOptions,
-	SubtitleStyle,
-	SubtitleStyleChange,
-	SubtitleTrack,
-	TheaterConfig,
-	ThumbnailTrack,
-	TimeData,
-	TooltipData,
-	Track,
-	TrackKindMap,
-	TrackType,
-	TranslationFileEventData,
-	TranslationsLoadedEventData,
-	TypeMapping,
-	TypeMappings,
-	Version,
-	VisualQualityData,
-	VolumeState,
-	WarningData,
-} from './types';
-export type { VTTData } from 'webvtt-parser';
