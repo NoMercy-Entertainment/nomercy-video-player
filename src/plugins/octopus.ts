@@ -19,8 +19,16 @@ export interface OctopusOptions {
 	renderMode?: NMOctopusOptions['renderMode'];
 	/** Lazy-load subtitle file chunks — useful for huge ASS files. */
 	lazyFileLoading?: boolean;
-	/** Frames to render ahead. */
+	/** Internal scaler ratio. */
 	prescaleFactor?: number;
+	/**
+	 * Frames the renderer pre-computes ahead of `currentTime`. Higher values
+	 * smooth playback through heavy ASS effects at the cost of memory.
+	 * Default `10`.
+	 */
+	renderAhead?: number;
+	/** Toggle debug logging in the upstream worker. */
+	debug?: boolean;
 }
 
 /**
@@ -177,6 +185,8 @@ export class OctopusPlugin extends Plugin<NMVideoPlayer<any>, OctopusOptions> {
 				renderMode: this.opts?.renderMode,
 				lazyFileLoading: this.opts?.lazyFileLoading,
 				prescaleFactor: this.opts?.prescaleFactor,
+				renderAhead: this.opts?.renderAhead ?? 10,
+				debug: this.opts?.debug,
 				workerUrl: this.opts?.workerUrl,
 				legacyWorkerUrl: this.opts?.legacyWorkerUrl,
 				fallbackFont: this.opts?.fallbackFont,
