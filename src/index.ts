@@ -237,19 +237,34 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 		_instances.set(resolved.id, this);
 
 		// Sync the playlist item's `image` to the <video> element's poster
-		// attribute so the player shows the cover art instead of a black
-		// frame before / between sources. Cleared on items without an image
-		// so a poster from a previous item doesn't bleed through.
+		// attribute so the player shows cover art instead of a black frame
+		// before / between sources. The element doesn't necessarily exist
+		// yet when `current` fires (backend allocation is lazy), so we
+		// remember the wanted poster and re-apply once it's materialised.
 		this.on('current' as any, (data: any) => {
 			const item = data?.item ?? data;
 			const image: string | undefined = item?.image ?? item?.poster ?? item?.thumbnail;
-			const el = this.videoElement;
-			if (!el) return;
-			if (image)
-				el.poster = image;
-			else
-				el.removeAttribute('poster');
+			this._wantedPoster = image ?? null;
+			this._applyPoster();
 		});
+	}
+
+	private _wantedPoster: string | null = null;
+
+	/**
+	 * Apply the most recently requested poster to whichever real `<video>`
+	 * element exists in the container. The constructor stores `videoElement`
+	 * as a stub `{}` until the backend lazily allocates the real element, so
+	 * we query the container as the source of truth.
+	 */
+	private _applyPoster(): void {
+		const el = this.container?.querySelector?.('video') as HTMLVideoElement | null;
+		if (!el) return;
+		const want = this._wantedPoster;
+		if (want)
+			el.setAttribute('poster', want);
+		else
+			el.removeAttribute('poster');
 	}
 
 	/** Test-only: clear the registry. Not part of the public API. */
@@ -273,6 +288,9 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 			: new Html5VideoBackend(this.container);
 		this._backend = instance;
 		this.videoElement = instance.mediaElement();
+		// Real element now exists — apply any poster the cursor moved through
+		// while we were lazy.
+		this._applyPoster();
 		// Bridge backend element events to player-level phase transitions and
 		// the `firstFrame` / `ended` events the player surface promises.
 		let firstFrameEmitted = false;
