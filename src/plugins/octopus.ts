@@ -53,16 +53,19 @@ export class OctopusPlugin extends Plugin<NMVideoPlayer<any>, OctopusOptions> {
 
 	private instance: NMSubtitleOctopus | null = null;
 	private currentLoadedUrl: string | null = null;
+	/** Memoised font URL list for the active playlist item. Null = not yet fetched. */
+	private _fontsForCurrent: string[] | null = null;
 
 	override use(): void {
 		this.on('subtitle' as any, (data: { track: string | number | null }) => {
 			void this.applyActive(data?.track);
 		});
 
-		// Track new playlist items — clear the cached URL so the next
-		// `subtitle` event re-resolves against the new item's subtitle list.
-		this.on('playlistItem' as any, () => {
+		// New playlist item — clear the cached URL + fonts list so the next
+		// `subtitle` event re-resolves against the new item's track list.
+		this.on('current' as any, () => {
 			this.destroy();
+			this._fontsForCurrent = null;
 		});
 
 		this.lifecycle.addCleanup(() => this.destroy());
@@ -95,16 +98,18 @@ export class OctopusPlugin extends Plugin<NMVideoPlayer<any>, OctopusOptions> {
 	/**
 	 * Read or write the font list.
 	 *
-	 * `fonts()` — current array of font URLs (empty when none).
-	 * `fonts(urls)` — replace the font list and re-load the active subtitle so
-	 * new fonts apply.
+	 * `fonts()` — currently-resolved font URL list. Reflects per-item
+	 * `fonts.json` once it's been fetched, plus any plugin-level statics.
+	 * `fonts(urls)` — replace the plugin-level static font list and re-load
+	 * the active subtitle so new fonts apply.
 	 */
 	fonts(): readonly string[];
 	fonts(urls: string[]): Promise<void>;
 	fonts(urls?: string[]): readonly string[] | Promise<void> {
 		if (urls === undefined)
-			return this.opts?.fonts ?? [];
+			return this._fontsForCurrent ?? this.opts?.fonts ?? [];
 		this.opts = { ...(this.opts ?? {}), fonts: urls } as OctopusOptions;
+		this._fontsForCurrent = null;
 		const url = this.currentLoadedUrl;
 		if (url) {
 			this.destroy();
@@ -144,9 +149,11 @@ export class OctopusPlugin extends Plugin<NMVideoPlayer<any>, OctopusOptions> {
 	}
 
 	private resolveTrackUrl(track: string | number): string | null {
-		const current = (this.player as unknown as { current?: () => { subtitles?: Array<{ id?: string; url?: string }> } | null }).current;
-		const item = typeof current === 'function' ? current.call(this.player) : null;
-		const list = item?.subtitles ?? [];
+		// Use the player's merged subtitles() list — backend HLS-managed +
+		// sidecar .ass / .vtt tracks. `current().subtitles` doesn't exist;
+		// the kit derives the list from the item's `tracks[]` array.
+		const subtitlesFn = (this.player as unknown as { subtitles?: () => Array<{ id?: string; url?: string }> }).subtitles;
+		const list = typeof subtitlesFn === 'function' ? (subtitlesFn.call(this.player) ?? []) : [];
 
 		if (typeof track === 'number') {
 			return list[track]?.url ?? null;
@@ -154,6 +161,53 @@ export class OctopusPlugin extends Plugin<NMVideoPlayer<any>, OctopusOptions> {
 
 		const match = list.find(t => t.id === track);
 		return match?.url ?? null;
+	}
+
+	/**
+	 * Resolve the active playlist item's font URL list.
+	 *
+	 * Mirrors v1's behaviour: the item carries a `fonts` track whose `file`
+	 * points at a JSON manifest of `[{ file, mimeType }]`; each `file` is
+	 * resolved relative to the manifest's directory. Memoised per item — the
+	 * `current` event resets the cache.
+	 */
+	private async resolveFontsForCurrent(): Promise<string[]> {
+		if (this._fontsForCurrent) return this._fontsForCurrent;
+
+		const cur = (this.player as unknown as { current?: () => { tracks?: Array<{ kind?: string; file?: string }> } | undefined }).current;
+		const item = typeof cur === 'function' ? cur.call(this.player) : undefined;
+		const tracks = Array.isArray(item?.tracks) ? item!.tracks! : [];
+		const fontsTrack = tracks.find(t => t?.kind === 'fonts');
+		const manifestUrl = fontsTrack?.file;
+
+		// No fonts track on this item — fall back to the plugin-level static fonts.
+		if (!manifestUrl) {
+			const fallback = this.opts?.fonts ?? [];
+			this._fontsForCurrent = [...fallback];
+			return this._fontsForCurrent;
+		}
+
+		try {
+			const resolved = await this.resolveUrl(manifestUrl, 'font');
+			const r = await fetch(resolved.href);
+			if (!r.ok) throw new Error(`fonts.json HTTP ${r.status}`);
+			const raw = await r.json() as Array<{ file: string; mimeType?: string }>;
+			const baseFolder = manifestUrl.replace(/\/[^/]*$/u, '');
+			const urls = raw.map(f => `${baseFolder}/${f.file}`);
+			// Concat any plugin-level static fonts after the per-item ones so
+			// consumer overrides remain available even when an item ships a manifest.
+			this._fontsForCurrent = [...urls, ...(this.opts?.fonts ?? [])];
+		}
+		catch (error) {
+			this.report({
+				code: 'plugin:octopus/fonts-manifest-failed',
+				severity: 'warning',
+				context: { manifestUrl },
+				cause: error,
+			});
+			this._fontsForCurrent = [...(this.opts?.fonts ?? [])];
+		}
+		return this._fontsForCurrent;
 	}
 
 	private async load(url: string, prefetched?: ResolvedUrl): Promise<void> {
@@ -170,8 +224,9 @@ export class OctopusPlugin extends Plugin<NMVideoPlayer<any>, OctopusOptions> {
 			// prefetched resolved form when applyActive() already paid for it.
 			const subResolved = prefetched ?? (await this.resolveUrl(url, 'subtitle'));
 			const subUrl = subResolved.href;
+			const fontUrls = await this.resolveFontsForCurrent();
 			const fontResolveds = await Promise.all(
-				(this.opts?.fonts ?? []).map(f => this.resolveUrl(f, 'font')),
+				fontUrls.map(f => this.resolveUrl(f, 'font')),
 			);
 			const fontFiles = fontResolveds.map(r => r.href);
 			const accessToken = await this.resolveAccessToken();
