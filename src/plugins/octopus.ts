@@ -1,14 +1,13 @@
 import { Plugin } from '@nomercy-entertainment/nomercy-player-core';
 import type { ResolvedUrl } from '@nomercy-entertainment/nomercy-player-core';
+import { NMSubtitleOctopus } from '@nomercy-entertainment/nomercy-subtitle-octopus';
+import type { OctopusOptions as NMOctopusOptions } from '@nomercy-entertainment/nomercy-subtitle-octopus';
 import type { NMVideoPlayer } from '../index';
-import SubtitlesOctopus, { type SubtitlesOctopusOptions } from '../../public/js/octopus/subtitles-octopus';
-
-const OCTOPUS_CDN_BASE = 'https://cdn.jsdelivr.net/npm/@nomercy-entertainment/nomercy-video-player@latest/public/js/octopus';
 
 export interface OctopusOptions {
-	/** Worker URL (modern). Defaults to the CDN-hosted bundle. */
+	/** Worker URL (modern). Defaults to the bundled `public/` URL inside the fork. */
 	workerUrl?: string;
-	/** Legacy worker URL for browsers without WebAssembly streaming. */
+	/** Legacy worker URL for browsers without WebAssembly. Optional — modern path only is fine. */
 	legacyWorkerUrl?: string;
 	/** Fallback font URL used when the subtitle requests a font not in `fonts`. */
 	fallbackFont?: string;
@@ -16,33 +15,27 @@ export interface OctopusOptions {
 	fonts?: string[];
 	/** Renderer target FPS. */
 	targetFps?: number;
-	/** Use blend rendering (smoother, slightly heavier). */
-	blendRender?: boolean;
-	/** Lazy-load subtitle file chunks. */
+	/** Render mode — `wasm-blend` (default), `js-blend`, or `lossy`. */
+	renderMode?: NMOctopusOptions['renderMode'];
+	/** Lazy-load subtitle file chunks — useful for huge ASS files. */
 	lazyFileLoading?: boolean;
 	/** Frames to render ahead. */
-	renderAhead?: number;
-	/** Lossy render mode (faster, lower quality). */
-	lossyRender?: boolean;
-}
-
-interface OctopusInstance {
-	worker: Worker;
-	canvasParent: HTMLDivElement;
-	dispose: () => void;
+	prescaleFactor?: number;
 }
 
 /**
- * libass-based ASS/SSA subtitle renderer. Wraps the SubtitleOctopus runtime
- * shipped under `public/js/octopus/`.
+ * libass-based ASS/SSA subtitle renderer. Thin bridge over
+ * `@nomercy-entertainment/nomercy-subtitle-octopus` — the fork carries the
+ * five v1 patches (auth pre-fetch, cross-origin worker, canvas geometry,
+ * lifecycle race-guard, URL resolution) clean-room reimplemented.
  *
  * Activation flow:
  *  - Listens to the player's `subtitle` event. When a track is selected,
  *    resolves its URL from `current().subtitles[idx]` and loads it.
  *  - Non-ASS / non-SSA URLs tear down the renderer (native textTracks handle them).
- *  - ResizeObserver keeps the libass canvas matched to the video element.
+ *  - The package internally handles ResizeObserver against the player container.
  *
- * Consumers can also call `setSubtitle(url)` directly for ASS files that
+ * Consumers can also call `subtitle(url)` directly for ASS files that
  * aren't part of the playlist item's `subtitles` array.
  */
 export class OctopusPlugin extends Plugin<NMVideoPlayer<any>, OctopusOptions> {
@@ -50,9 +43,8 @@ export class OctopusPlugin extends Plugin<NMVideoPlayer<any>, OctopusOptions> {
 	static override readonly version: string = '2.0.0';
 	static override readonly description: string = 'libass / SubtitleOctopus integration for ASS/SSA subtitle rendering';
 
-	private instance: OctopusInstance | null = null;
+	private instance: NMSubtitleOctopus | null = null;
 	private currentLoadedUrl: string | null = null;
-	private resizeObserver: ResizeObserver | null = null;
 
 	override use(): void {
 		this.on('subtitle' as any, (data: { track: string | number | null }) => {
@@ -64,15 +56,6 @@ export class OctopusPlugin extends Plugin<NMVideoPlayer<any>, OctopusOptions> {
 		this.on('playlistItem' as any, () => {
 			this.destroy();
 		});
-
-		if (typeof ResizeObserver !== 'undefined') {
-			this.resizeObserver = new ResizeObserver(() => this.resize());
-			this.resizeObserver.observe(this.player.container);
-			this.lifecycle.addCleanup(() => {
-				this.resizeObserver?.disconnect();
-				this.resizeObserver = null;
-			});
-		}
 
 		this.lifecycle.addCleanup(() => this.destroy());
 	}
@@ -123,7 +106,7 @@ export class OctopusPlugin extends Plugin<NMVideoPlayer<any>, OctopusOptions> {
 	}
 
 	/** Raw renderer handle for advanced consumers. Plugin retains lifecycle ownership. */
-	renderer(): unknown {
+	renderer(): NMSubtitleOctopus | null {
 		return this.instance;
 	}
 
@@ -166,20 +149,17 @@ export class OctopusPlugin extends Plugin<NMVideoPlayer<any>, OctopusOptions> {
 	}
 
 	private async load(url: string, prefetched?: ResolvedUrl): Promise<void> {
-		// Same subtitle already mounted — no-op.
 		if (url === this.currentLoadedUrl && this.instance) return;
 
 		this.destroy();
 		this.currentLoadedUrl = url;
 
 		try {
-			// Race guard: if `destroy()` ran between then and now, abort.
 			if (this.currentLoadedUrl !== url) return;
 
-			// Worker can't carry custom Authorization headers — push auth
-			// through the player's URL resolver so query-string / signed-URL
-			// schemes reach libass intact. Reuse a prefetched resolved form
-			// when applyActive() already paid for the round-trip.
+			// Push subtitle + font URLs through the player's URL resolver so
+			// query-string / signed-URL schemes reach libass intact. Reuse a
+			// prefetched resolved form when applyActive() already paid for it.
 			const subResolved = prefetched ?? (await this.resolveUrl(url, 'subtitle'));
 			const subUrl = subResolved.href;
 			const fontResolveds = await Promise.all(
@@ -188,41 +168,33 @@ export class OctopusPlugin extends Plugin<NMVideoPlayer<any>, OctopusOptions> {
 			const fontFiles = fontResolveds.map(r => r.href);
 			const accessToken = await this.resolveAccessToken();
 
-			// Drop any stale libass canvases that survived a hot-reload.
-			(this.player.container.querySelectorAll('.libassjs-canvas-parent') as NodeListOf<HTMLDivElement>)
-				.forEach(el => el.remove());
-
-			const config = (this.player as unknown as { options?: { debug?: boolean } }).options ?? {};
-
-			const opts: SubtitlesOctopusOptions = {
+			const opts: NMOctopusOptions = {
 				video: this.player.videoElement,
-				subUrl,
+				trackUrl: subUrl,
 				fonts: fontFiles,
-				lossyRender: this.opts?.lossyRender,
 				accessToken,
 				targetFps: this.opts?.targetFps,
-				debug: config.debug,
-				blendRender: this.opts?.blendRender,
+				renderMode: this.opts?.renderMode,
 				lazyFileLoading: this.opts?.lazyFileLoading,
-				renderAhead: this.opts?.renderAhead,
-				workerUrl: this.opts?.workerUrl ?? `${OCTOPUS_CDN_BASE}/subtitles-octopus-worker.js`,
-				legacyWorkerUrl: this.opts?.legacyWorkerUrl ?? `${OCTOPUS_CDN_BASE}/subtitles-octopus-worker-legacy.js`,
-				fallbackFont: this.opts?.fallbackFont ?? `${OCTOPUS_CDN_BASE}/default.ttf`,
-				onReady: () => {
-					this.emit('ready' as any, { url } as any);
-				},
-				onError: (event: unknown) => {
-					this.report({
-						code: 'plugin:octopus/render-error',
-						severity: 'warning',
-						context: { url },
-						cause: event,
-					});
-				},
+				prescaleFactor: this.opts?.prescaleFactor,
+				workerUrl: this.opts?.workerUrl,
+				legacyWorkerUrl: this.opts?.legacyWorkerUrl,
+				fallbackFont: this.opts?.fallbackFont,
+				geometrySource: this.player.container,
 			};
 
-			this.instance = new SubtitlesOctopus(opts) as unknown as OctopusInstance;
-			this.resize();
+			this.instance = new NMSubtitleOctopus(opts);
+			this.instance.on('rendererReady', () => {
+				this.emit('renderer:ready' as any, { url } as any);
+			});
+			this.instance.on('error', (err: Error) => {
+				this.report({
+					code: 'plugin:octopus/render-error',
+					severity: 'warning',
+					context: { url },
+					cause: err,
+				});
+			});
 		}
 		catch (error) {
 			this.currentLoadedUrl = null;
@@ -241,36 +213,21 @@ export class OctopusPlugin extends Plugin<NMVideoPlayer<any>, OctopusOptions> {
 		this.instance = null;
 		if (!inst) return;
 		try {
-			inst.worker?.terminate();
-			if (inst.canvasParent) inst.dispose();
+			inst.dispose();
 		}
 		catch {
-			//
+			// Defensive — never let a teardown error escape the player.
 		}
-	}
-
-	private resize(): void {
-		const inst = this.instance;
-		if (!inst?.canvasParent) return;
-		const ve = this.player.videoElement;
-		if (!ve) return;
-		const rect = ve.getBoundingClientRect?.();
-		if (!rect) return;
-		inst.canvasParent.style.width = `${rect.width}px`;
-		inst.canvasParent.style.height = `${rect.height}px`;
-		inst.canvasParent.style.position = 'absolute';
-		inst.canvasParent.style.top = `${ve.offsetTop}px`;
-		inst.canvasParent.style.left = `${ve.offsetLeft}px`;
 	}
 
 	/**
-	 * Resolve the live bearer token. Reads through `player.getAuth()` so token
-	 * refreshes (`setAuth` / `updateAuth` / `refreshAuth`) propagate — reading
+	 * Resolve the live bearer token. Reads through `player.auth()` so token
+	 * refreshes (`auth()` setter / `refreshAuth`) propagate — reading
 	 * `options.auth` would freeze on the setup-time value.
 	 */
 	private async resolveAccessToken(): Promise<string | undefined> {
-		const getAuth = (this.player as unknown as { getAuth?: () => { bearerToken?: unknown } | undefined }).getAuth;
-		const live = typeof getAuth === 'function' ? getAuth.call(this.player) : undefined;
+		const auth = (this.player as unknown as { auth?: () => { bearerToken?: unknown } | undefined }).auth;
+		const live = typeof auth === 'function' ? auth.call(this.player) : undefined;
 		const v = live?.bearerToken;
 		if (!v) return undefined;
 		if (typeof v === 'string') return v;
