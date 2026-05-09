@@ -4,6 +4,7 @@ import { Plugin } from '@nomercy-entertainment/nomercy-player-core';
 import type { IRealtimeChannel } from '@nomercy-entertainment/nomercy-player-core';
 import type { NMVideoPlayer } from '../index';
 
+/** Options for the video {@link LiveTranscodingPlugin}. */
 export interface LiveTranscodingOptions {
 	/** Server endpoint that owns the transcoding job lifecycle (typically WebSocket). */
 	controlUrl?: string;
@@ -24,6 +25,7 @@ export interface LiveTranscodingOptions {
 	preferredHeight?: number;
 }
 
+/** Events emitted by the video {@link LiveTranscodingPlugin}. */
 export interface LiveTranscodingEvents {
 	'job:started': { jobId: string; sourceUrl: string };
 	'job:progress': { jobId: string; transcodedSeconds: number; totalSeconds?: number; variantsReady: string[] };
@@ -61,6 +63,7 @@ export class LiveTranscodingPlugin extends Plugin<NMVideoPlayer<any>, LiveTransc
 	private _transcodedTo = 0;
 	private currentJobId: string | undefined;
 
+	/** Opens the control WebSocket and wires `beforeLoad` / `beforeSeek` transcoder-ready gates. */
 	override use(): void {
 		const url = this.opts?.wsUrl ?? this.opts?.controlUrl;
 		if (!url) return;
@@ -93,6 +96,7 @@ export class LiveTranscodingPlugin extends Plugin<NMVideoPlayer<any>, LiveTransc
 		});
 	}
 
+	/** Drops the WebSocket channel reference and resets transcoding progress state. */
 	override dispose(): void {
 		this.channel = undefined;
 		this._transcodedTo = 0;
@@ -159,4 +163,5 @@ export class LiveTranscodingPlugin extends Plugin<NMVideoPlayer<any>, LiveTransc
 	}
 }
 
+/** Plugin alias for the video {@link LiveTranscodingPlugin}. Pass to `addPlugin(liveTranscodingPlugin)`. */
 export const liveTranscodingPlugin = LiveTranscodingPlugin;

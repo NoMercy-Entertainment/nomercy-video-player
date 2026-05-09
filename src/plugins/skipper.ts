@@ -2,18 +2,22 @@ import { Plugin } from '@nomercy-entertainment/nomercy-player-core';
 import type { NMVideoPlayer } from '../index';
 import type { VideoPlaylistItem } from '../types';
 
+/** Identifies which segment type the skipper acts on. */
 export type SkipperKind = 'intro' | 'recap' | 'credits';
 
+/** Start and end timestamps (in seconds) of a skippable segment. */
 export interface SkipperRange {
 	start: number;
 	end: number;
 }
 
+/** A single skippable segment resolved from the playlist item. */
 export interface SkipperEntry {
 	kind: SkipperKind;
 	range: SkipperRange;
 }
 
+/** Options for {@link SkipperPlugin}. */
 export interface SkipperOptions {
 	/** Auto-skip these kinds without user intervention. */
 	autoSkip?: ReadonlyArray<SkipperKind>;
@@ -21,6 +25,7 @@ export interface SkipperOptions {
 	revealAfterMs?: number;
 }
 
+/** Events emitted by {@link SkipperPlugin}. */
 export interface SkipperEvents {
 	'skipper:available': { kind: SkipperKind; range: SkipperRange };
 	'skipper:hidden': { kind: SkipperKind };
@@ -44,6 +49,7 @@ export class SkipperPlugin extends Plugin<NMVideoPlayer<any>, SkipperOptions, Sk
 
 	private active: SkipperKind | null = null;
 
+	/** Attaches `current` and `time` listeners to track which skipper range is active. */
 	override use(): void {
 		this.on('current', () => {
 			this.active = null;
@@ -130,4 +136,5 @@ export class SkipperPlugin extends Plugin<NMVideoPlayer<any>, SkipperOptions, Sk
 	}
 }
 
+/** Plugin alias for {@link SkipperPlugin}. Pass to `addPlugin(skipperPlugin)`. */
 export const skipperPlugin = SkipperPlugin;

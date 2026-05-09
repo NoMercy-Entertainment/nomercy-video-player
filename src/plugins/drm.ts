@@ -1,6 +1,7 @@
 import { DrmError, Plugin } from '@nomercy-entertainment/nomercy-player-core';
 import type { NMVideoPlayer } from '../index';
 
+/** Options for the video {@link DrmPlugin}. */
 export interface DrmOptions {
 	/** EME key system identifier — `'com.widevine.alpha' | 'com.apple.fps' | 'com.microsoft.playready'` etc. */
 	keySystem: string;
@@ -18,6 +19,7 @@ export interface DrmOptions {
 	hdcpRequired?: 'type-0' | 'type-1' | 'none';
 }
 
+/** Events emitted by the video {@link DrmPlugin}. */
 export interface DrmEvents {
 	'key:requested': { sessionId: string; initData: ArrayBuffer };
 	'key:granted': { sessionId: string };
@@ -54,6 +56,7 @@ export class DrmPlugin extends Plugin<NMVideoPlayer<any>, DrmOptions, DrmEvents>
 
 	private supported = false;
 
+	/** Probes EME availability and wires the `current` listener to trigger the key-system handshake. */
 	override use(): void {
 		const nav: Navigator | undefined = typeof navigator !== 'undefined' ? navigator : undefined;
 		if (!nav || typeof (nav as Navigator & { requestMediaKeySystemAccess?: unknown }).requestMediaKeySystemAccess !== 'function') {
@@ -70,6 +73,7 @@ export class DrmPlugin extends Plugin<NMVideoPlayer<any>, DrmOptions, DrmEvents>
 		});
 	}
 
+	/** Resets EME support state on teardown. */
 	override dispose(): void {
 		this.supported = false;
 	}
@@ -146,4 +150,5 @@ export class DrmPlugin extends Plugin<NMVideoPlayer<any>, DrmOptions, DrmEvents>
 	}
 }
 
+/** Plugin alias for the video {@link DrmPlugin}. Pass to `addPlugin(drmPlugin)`. */
 export const drmPlugin = DrmPlugin;

@@ -4,6 +4,7 @@ import { NMSubtitleOctopus } from '@nomercy-entertainment/nomercy-subtitle-octop
 import type { OctopusOptions as NMOctopusOptions } from '@nomercy-entertainment/nomercy-subtitle-octopus';
 import type { NMVideoPlayer } from '../index';
 
+/** Options for {@link OctopusPlugin}. */
 export interface OctopusOptions {
 	/** Worker URL (modern). Defaults to the bundled `public/` URL inside the fork. */
 	workerUrl?: string;
@@ -56,6 +57,7 @@ export class OctopusPlugin extends Plugin<NMVideoPlayer<any>, OctopusOptions> {
 	/** Memoised font URL list for the active playlist item. Null = not yet fetched. */
 	private _fontsForCurrent: string[] | null = null;
 
+	/** Wires `subtitle` and `current` listeners to load ASS/SSA tracks into the libass renderer. */
 	override use(): void {
 		this.on('subtitle', (data) => {
 			void this.applyActive(data?.track);
@@ -71,6 +73,7 @@ export class OctopusPlugin extends Plugin<NMVideoPlayer<any>, OctopusOptions> {
 		this.lifecycle.addCleanup(() => this.destroy());
 	}
 
+	/** Disposes the libass renderer instance and clears internal URL and font caches. */
 	override dispose(): void {
 		this.destroy();
 	}
@@ -309,4 +312,5 @@ export class OctopusPlugin extends Plugin<NMVideoPlayer<any>, OctopusOptions> {
 	}
 }
 
+/** Plugin alias for {@link OctopusPlugin}. Pass to `addPlugin(octopusPlugin)`. */
 export const octopusPlugin = OctopusPlugin;

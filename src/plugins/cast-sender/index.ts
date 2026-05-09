@@ -28,10 +28,12 @@ export class CastSenderPlugin extends BaseCastSenderPlugin<NMVideoPlayer<any>, V
 	static override readonly description: string = 'Chromecast sender — full media bridge for video';
 	static override readonly translations: Translations = translationsFromGlob('./i18n/*.ts');
 
+	/** Returns `'video/mp4'` as the default content type for video items. */
 	protected override defaultContentType(): string {
 		return 'video/mp4';
 	}
 
+	/** Builds a `TvShowMediaMetadata` or `GenericMediaMetadata` from the video item. */
 	protected override async buildMetadata(
 		item: VideoPlaylistItem,
 		ctors: ChromeCastMediaCtors & {
@@ -67,4 +69,5 @@ export class CastSenderPlugin extends BaseCastSenderPlugin<NMVideoPlayer<any>, V
 	}
 }
 
+/** Plugin alias for the video {@link CastSenderPlugin}. Pass to `addPlugin(castSenderPlugin)`. */
 export const castSenderPlugin = CastSenderPlugin;
