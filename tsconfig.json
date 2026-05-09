@@ -10,7 +10,8 @@
 		"outDir": "dist",
 		"esModuleInterop": true,
 		"forceConsistentCasingInFileNames": true,
-		"skipLibCheck": true
+		"skipLibCheck": true,
+		"types": ["vitest/globals", "vite/client"]
 	},
 	"include": [
 		"src/**/*"

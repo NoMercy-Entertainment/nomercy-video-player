@@ -3,7 +3,6 @@ import { resolve } from 'node:path';
 import { defineConfig } from 'vite';
 import dts from 'vite-plugin-dts';
 
-// noinspection JSUnusedGlobalSymbols
 export default defineConfig({
 	base: '/',
 	publicDir: resolve(__dirname, 'public'),

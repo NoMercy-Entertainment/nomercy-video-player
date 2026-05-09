@@ -1,27 +1,24 @@
 import antfu from '@antfu/eslint-config';
 
 export default antfu({
-	ignores: ['wiki/**', 'public/js/**', 'README.md'],
+	ignores: [
+		'wiki/**',
+		'public/js/**',
+		'README.md',
+		// Linting `eslint.config.js` itself triggers a full config-cache rebuild
+		// on save (~70s on Windows with antfu's plugin set). Run `npx eslint
+		// eslint.config.js` manually when editing this file.
+		'eslint.config.js',
+	],
 	typescript: {
 		overrides: {
-			'@typescript-eslint/ban-ts-comment': 'off',
-			'@typescript-eslint/no-explicit-any': 'off',
-			'antfu/top-level-function': 'off',
 			'no-async-promise-executor': 'off',
-			'no-console': 'off',
 			'no-extend-native': 'off',
-			'node/prefer-global/process': 'off',
-			'perfectionist/sort-imports': 'off',
-			'ts/no-unsafe-function-type': 'off',
 			'ts/method-signature-style': 'off',
 			'unused-imports/no-unused-vars': 'warn',
 		},
 	},
 	js: {
-		overrides: {
-			'no-console': 'off',
-			'no-debugger': 'off',
-		},
 	},
 	test: {
 		overrides: {

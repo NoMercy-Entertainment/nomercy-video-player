@@ -198,9 +198,11 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 	declare queueLength: () => number;
 	declare queueIndexOf: (id: string | number) => number;
 
-	declare current: () => T | undefined;
+	declare current: {
+		(): T | undefined;
+		(target: T | string | number, opts?: ActionOptions): void;
+	};
 	declare currentIndex: () => number;
-	declare setCurrent: (target: T | string | number, opts?: ActionOptions) => void;
 
 	declare backlog: {
 		(): ReadonlyArray<T>;
