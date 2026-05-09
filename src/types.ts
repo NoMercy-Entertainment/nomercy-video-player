@@ -32,7 +32,7 @@ export interface SkipperData {
 export interface VideoPlaylistItem extends BasePlaylistItem {
 	title?: string;
 	url?: string;
-	poster?: string;
+	image?: string;
 	duration?: number;
 	subtitles?: SubtitleTrackRef[];
 	audioTracks?: AudioTrackRef[];
@@ -81,17 +81,8 @@ export enum SubtitleState {
 	ON = 'on',
 }
 
-/** Returned by `player.qualityState()`. */
-export enum QualityState {
-	AUTO = 'auto',
-	MANUAL = 'manual',
-}
-
-/** Returned by `player.audioTrackState()`. */
-export enum AudioTrackState {
-	DEFAULT = 'default',
-	MANUAL = 'manual',
-}
+/** Re-exported from kit — canonical definition lives in nomercy-player-core. */
+export { AudioTrackState, QualityState } from '@nomercy-entertainment/nomercy-player-core';
 
 /** Returned by `player.repeatState()`. */
 export enum RepeatState {

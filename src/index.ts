@@ -8,30 +8,26 @@ import {
 	playerCoreMethods,
 	resolvePlayerConstructor,
 } from '@nomercy-entertainment/nomercy-player-core';
-import {
-	BufferState,
-	CastState,
-	NetworkState,
-	SetupState,
-	VisibilityState,
-} from '@nomercy-entertainment/nomercy-player-core';
 import type {
 	ActionOptions,
 	AudioTrack,
 	AuthConfig,
-	IPlatform,
 	BasePlaylistItem,
+	BufferState,
+	CastState,
 	Chapter,
 	CueParser,
 	DeviceCapabilities,
 	IPlayer,
 	LoadOptions,
+	NetworkState,
 	PlaybackMetrics,
 	PlayerExperimental,
 	PlayerPhase,
 	Plugin,
 	QualityLevel,
 	ResolvedUrl,
+	SetupState,
 	StreamFactory,
 	SubtitleCueChange,
 	SubtitleStyle,
@@ -40,6 +36,7 @@ import type {
 	Translations,
 	UrlCategory,
 	UrlResolver,
+	VisibilityState,
 } from '@nomercy-entertainment/nomercy-player-core';
 import type { IVideoBackend } from './player/video-backend/backend';
 import { Html5VideoBackend } from './player/video-backend/html5VideoBackend';
@@ -374,35 +371,21 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 	declare load: (item: T, opts?: LoadOptions) => Promise<void>;
 	declare loadQueue: (url: string, parser?: (raw: string) => T[]) => Promise<void>;
 
-	// ── Video-specific state enums (unimplemented) ──
-	bufferState(): BufferState {
-		const backendState = (this._backend as { state?: () => string } | undefined)?.state?.();
-		switch (backendState) {
-			case 'loading': return BufferState.LOADING;
-			case 'seeking': return BufferState.SEEKING;
-			case 'stalled': return BufferState.STALLED;
-			default: return BufferState.IDLE;
-		}
-	}
-	networkState(): NetworkState {
-		const platform = (this as any).platform?.() as IPlatform | undefined;
-		const monitor = platform?.network;
-		if (!monitor) return NetworkState.ONLINE;
-		if (!monitor.isOnline()) return NetworkState.OFFLINE;
-		const downlink = monitor.downlinkMbps?.();
-		if (typeof downlink === 'number' && downlink > 0 && downlink < 1.5) return NetworkState.SLOW;
-		return NetworkState.ONLINE;
-	}
-	streamState(): string {
-		const backend = this._backend as { state?: () => string } | undefined;
-		if (!backend) return 'idle';
-		return backend.state?.() ?? 'idle';
-	}
-	visibilityState(): VisibilityState {
-		const platform = (this as any).platform?.() as IPlatform | undefined;
-		const visible = platform?.visibility?.isVisible() ?? true;
-		return visible ? VisibilityState.VISIBLE : VisibilityState.HIDDEN;
-	}
+	// ── Shared state methods ── composed in via `playerStateMethods` mixin.
+	declare bufferState: () => BufferState;
+	declare networkState: () => NetworkState;
+	declare streamState: () => string;
+	declare visibilityState: () => VisibilityState;
+	declare qualityState: {
+		(): QualityState;
+		(target: number | 'auto'): void;
+	};
+	declare audioTrackState: {
+		(): AudioTrackState;
+		(idx: number): void;
+	};
+
+	// ── Video-specific state ──
 	fullscreenState(): FullscreenState;
 	fullscreenState(state: FullscreenState | boolean): void;
 	fullscreenState(state?: FullscreenState | boolean): FullscreenState | void {
@@ -469,27 +452,6 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 		}
 		return this._subtitleState;
 	}
-	private _qualityState: QualityState = QualityState.AUTO;
-	qualityState(): QualityState;
-	qualityState(target: number | 'auto'): void;
-	qualityState(target?: number | 'auto'): QualityState | void {
-		if (target === undefined) return this._qualityState;
-		this._qualityState = target === 'auto' ? QualityState.AUTO : QualityState.MANUAL;
-		const b = this._backend as { setQuality?: (idx: number | 'auto') => void } | undefined;
-		b?.setQuality?.(target);
-		this.emit('qualityState' as any, { state: this._qualityState } as any);
-	}
-	private _audioTrackState: AudioTrackState = AudioTrackState.DEFAULT;
-	audioTrackState(): AudioTrackState;
-	audioTrackState(idx: number): void;
-	audioTrackState(idx?: number): AudioTrackState | void {
-		if (idx === undefined) return this._audioTrackState;
-		this._audioTrackState = AudioTrackState.MANUAL;
-		const b = this._backend as { setAudioTrack?: (idx: number) => void } | undefined;
-		b?.setAudioTrack?.(idx);
-		this.emit('audioTrackState' as any, { state: this._audioTrackState } as any);
-	}
-
 	// ── Video-specific actions ──
 	toggleFullscreen(): void {
 		const isActive = this.fullscreenState() === FullscreenState.ON;
