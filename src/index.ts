@@ -235,6 +235,21 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 		(this as { playerId: string }).playerId = resolved.id;
 		this.container = resolved.div;
 		_instances.set(resolved.id, this);
+
+		// Sync the playlist item's `image` to the <video> element's poster
+		// attribute so the player shows the cover art instead of a black
+		// frame before / between sources. Cleared on items without an image
+		// so a poster from a previous item doesn't bleed through.
+		this.on('current' as any, (data: any) => {
+			const item = data?.item ?? data;
+			const image: string | undefined = item?.image ?? item?.poster ?? item?.thumbnail;
+			const el = this.videoElement;
+			if (!el) return;
+			if (image)
+				el.poster = image;
+			else
+				el.removeAttribute('poster');
+		});
 	}
 
 	/** Test-only: clear the registry. Not part of the public API. */
