@@ -18,6 +18,7 @@ import type {
 	Chapter,
 	CueParser,
 	DeviceCapabilities,
+	IPlatform,
 	IPlayer,
 	LoadOptions,
 	NetworkState,
@@ -108,6 +109,7 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 	declare setupState: () => SetupState;
 	declare phase: () => PlayerPhase;
 	declare dispatching: () => ReadonlyArray<string>;
+	declare platform: () => IPlatform;
 
 	declare baseUrl: {
 		(): string | undefined;
@@ -392,7 +394,7 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 	fullscreenState(): FullscreenState;
 	fullscreenState(state: FullscreenState | boolean): void;
 	fullscreenState(state?: FullscreenState | boolean): FullscreenState | void {
-		const platform = (this as any).platform();
+		const platform = (this as unknown as { platform(): IPlatform }).platform();
 		const ctrl = platform.fullscreen;
 		if (state === undefined) {
 			return ctrl?.isActive() ? FullscreenState.ON : FullscreenState.OFF;
@@ -415,7 +417,7 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 	pipState(): PipState;
 	pipState(state: PipState | boolean): void;
 	pipState(state?: PipState | boolean): PipState | void {
-		const platform = (this as any).platform();
+		const platform = (this as unknown as { platform(): IPlatform }).platform();
 		const ctrl = platform.pip;
 		if (state === undefined) {
 			return ctrl?.isActive() ? PipState.ON : PipState.OFF;
