@@ -32,7 +32,15 @@ export interface SkipperData {
 export interface VideoPlaylistItem extends BasePlaylistItem {
 	title?: string;
 	url?: string;
+	/**
+	 * Cover art / poster URL. Surfaced on the `<video>` element's `poster`
+	 * attribute and as MediaSession / cast metadata artwork. `image`,
+	 * `poster`, and `thumbnail` are all accepted (read in that order) so
+	 * consumers can use whichever field name their backend exposes.
+	 */
 	image?: string;
+	poster?: string;
+	thumbnail?: string;
 	duration?: number;
 	subtitles?: SubtitleTrackRef[];
 	audioTracks?: AudioTrackRef[];
