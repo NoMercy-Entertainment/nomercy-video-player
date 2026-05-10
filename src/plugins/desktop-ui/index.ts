@@ -40,7 +40,6 @@ import {
     renderSubsPane,
     renderSubtitleSettingsPane,
     type AudioTrackLite,
-    type ChapterLite,
     type MenuFrameRefs,
     type MenuRenderState,
     type QualityLevelLite,
@@ -55,34 +54,27 @@ export interface DesktopUiOptions {
     imageBaseUrl?: string;
 }
 
-function tsToSeconds(ts: string): number {
-    const parts = ts.trim().split(':').map(Number);
-    if (parts.length === 3) return parts[0]! * 3600 + parts[1]! * 60 + parts[2]!;
-    if (parts.length === 2) return parts[0]! * 60 + parts[1]!;
-    return Number(ts) || 0;
+interface SidecarTrackEntry {
+    kind?: string;
+    file?: string;
 }
 
-function parseChaptersVtt(text: string): ChapterLite[] {
-    const lines = text.replace(/\r\n/g, '\n').split('\n');
-    const out: ChapterLite[] = [];
-    let i = 0;
-    if (lines[0]?.trim().startsWith('WEBVTT')) i = 1;
-    let index = 0;
-    while (i < lines.length) {
-        const line = lines[i]!.trim();
-        if (!line || line.startsWith('NOTE')) { i++; continue; }
-        let cueLine = line;
-        if (!cueLine.includes('-->') && i + 1 < lines.length) { i++; cueLine = lines[i]!.trim(); }
-        const m = cueLine.match(/^([\d:.]+)\s*-->\s*([\d:.]+)/);
-        if (!m) { i++; continue; }
-        const start = tsToSeconds(m[1]!);
-        const end = tsToSeconds(m[2]!);
-        i++;
-        const titleParts: string[] = [];
-        while (i < lines.length && lines[i]!.trim() !== '') { titleParts.push(lines[i]!.trim()); i++; }
-        out.push({ index: index++, start, end, title: titleParts.join(' ') });
-    }
-    return out;
+interface ItemWithSidecarTracks {
+    tracks: SidecarTrackEntry[];
+}
+
+function hasTrackArray(item: unknown): item is ItemWithSidecarTracks {
+    return (
+        item !== null
+        && typeof item === 'object'
+        && 'tracks' in item
+        && Array.isArray((item as Record<string, unknown>).tracks)
+    );
+}
+
+function readSidecarTracks(item: unknown): SidecarTrackEntry[] | undefined {
+    if (!hasTrackArray(item)) return undefined;
+    return item.tracks;
 }
 
 
@@ -135,10 +127,6 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
     /** Sprite preview thumbnails for the current playlist item. */
     private spriteSet: SpriteSet | null = null;
     private spriteLoadId = 0;
-
-    /** Chapters loaded from the current item's VTT track. Empty until fetched. */
-    private _loadedChapters: ChapterLite[] = [];
-    private chapterLoadId = 0;
 
     /** v2's subtitleState/audioTrackState/qualityState methods return
      *  ON/OFF/AUTO/MANUAL enums — not the active track index. The menu
@@ -416,6 +404,11 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
             this.repaintQualityIfOpen();
         });
 
+        this.on('chapters', () => {
+            this.renderChapterMarkers();
+            this.refreshCapabilityVisibility();
+        });
+
         this.on('duration', (d) => this.applyDuration(d.duration));
         this.on('time', (d) => this.applyTime(d.time));
 
@@ -553,7 +546,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
             const popOffsetPct = this.clampPopOffset(scrub.scrubTime);
             this.sliderPop.style.left = `${popOffsetPct}%`;
 
-            const chapters = this.getChapters();
+            const chapters = this.player.chapters();
             if (chapters.length === 0) {
                 this.sliderHover.style.width = `${scrub.scrubTime}%`;
             } else {
@@ -646,50 +639,29 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
 
     private handleCurrentChange(item: VideoPlaylistItem | undefined | null): void {
         if (this.titleText) this.titleText.textContent = item?.title ?? '';
-        this._loadedChapters = [];
+
         this.refreshChaptersAndDuration();
         this.refreshCapabilityVisibility();
         this.repaintPlaylistIfOpen();
         void this.loadSpritesForItem(item);
-        void this.loadChaptersForItem(item);
-    }
-
-    private async loadChaptersForItem(item: VideoPlaylistItem | undefined | null): Promise<void> {
-        const myToken = ++this.chapterLoadId;
-        const tracks = (item as any)?.tracks as Array<{ kind?: string; file?: string }> | undefined;
-        if (!tracks) return;
-        const chapTrack = tracks.find(t => t?.kind === 'chapters' && typeof t.file === 'string');
-        if (!chapTrack?.file) return;
-
-        try {
-            const r = await fetch(chapTrack.file);
-            if (!r.ok) return;
-            const text = await r.text();
-            if (myToken !== this.chapterLoadId) return;
-            this._loadedChapters = parseChaptersVtt(text);
-        }
-        catch { return; }
-
-        this.refreshChaptersAndDuration();
-        this.refreshCapabilityVisibility();
     }
 
     private async loadSpritesForItem(item: VideoPlaylistItem | undefined | null): Promise<void> {
         const myToken = ++this.spriteLoadId;
         this.spriteSet = null;
-        
+
         this.sliderPopImage.style.backgroundImage = '';
         this.sliderPopImage.style.backgroundPosition = '';
         this.sliderPopImage.style.width = '';
         this.sliderPopImage.style.height = '';
 
-        const tracks = (item as any)?.tracks as Array<{ kind?: string; file?: string }> | undefined;
+        const tracks = readSidecarTracks(item);
         if (!tracks) return;
         const thumbsTrack = tracks.find(t => t?.kind === 'thumbnails' && typeof t.file === 'string');
         if (!thumbsTrack?.file) return;
 
         const set = await loadSpriteSet(thumbsTrack.file);
-        if (myToken !== this.spriteLoadId) return; // a newer item took over
+        if (myToken !== this.spriteLoadId) return;
         if (!set) return;
 
         this.spriteSet = set;
@@ -713,7 +685,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
 
     /** Build segmented chapter-marker DOM, mirroring v1's createChapterMarker. */
     private renderChapterMarkers(): void {
-        const chapters = this.getChapters();
+        const chapters = this.player.chapters();
         const dur = this.resolveDuration();
         this.chapterBar.replaceChildren();
         this.chapterRefs = [];
@@ -776,15 +748,8 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
         }
     }
 
-    private getChapters(): ChapterLite[] {
-        const fromPlayer = ((this.player as any).chapters?.() ?? []) as ChapterLite[];
-        if (fromPlayer.length > 0) return fromPlayer;
-        return this._loadedChapters;
-    }
-
     private findChapterTitle(time: number): string | undefined {
-        const chapters = this.getChapters();
-        return chapters.find(c => time >= c.start && time <= c.end)?.title;
+        return this.player.chapters().find(c => time >= c.start && time <= c.end)?.title;
     }
 
     private resolveDuration(): number {
@@ -896,7 +861,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
         this.subsBtn.hidden = subsCount === 0;
         this.audioBtn.hidden = audios.length <= 1;
         this.qualityBtn.hidden = levels.length < 2;
-        const chapters = this.getChapters();
+        const chapters = this.player.chapters();
         this.chapBackBtn.hidden = chapters.length === 0;
         this.chapFwdBtn.hidden = chapters.length === 0;
 
@@ -925,7 +890,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
         this.setDisabled(this.rewindBtn, t <= 0);
         this.setDisabled(this.forwardBtn, dur > 0 && t >= dur - 0.25);
 
-        const chapters = this.getChapters();
+        const chapters = this.player.chapters();
         const hasPrevChap = chapters.some(c => c.start < t - 1);
         const hasNextChap = chapters.some(c => c.start > t + 1);
         this.setDisabled(this.chapBackBtn, !hasPrevChap);
@@ -963,19 +928,19 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
     }
 
     private previousChapter(): void {
-        const chapters = this.getChapters();
+        const chapters = this.player.chapters();
         const t = this.player.currentTime?.() ?? 0;
         for (let i = chapters.length - 1; i >= 0; i--) {
-            if (chapters[i].start < t - 1) { void this.player.currentTime?.(chapters[i].start); return; }
+            if (chapters[i]!.start < t - 1) { void this.player.currentTime?.(chapters[i]!.start); return; }
         }
         void this.player.currentTime?.(0);
     }
 
     private nextChapter(): void {
-        const chapters = this.getChapters();
+        const chapters = this.player.chapters();
         const t = this.player.currentTime?.() ?? 0;
         for (let i = 0; i < chapters.length; i++) {
-            if (chapters[i].start > t + 1) { void this.player.currentTime?.(chapters[i].start); return; }
+            if (chapters[i]!.start > t + 1) { void this.player.currentTime?.(chapters[i]!.start); return; }
         }
     }
 

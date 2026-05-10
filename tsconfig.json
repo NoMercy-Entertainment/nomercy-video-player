@@ -11,7 +11,12 @@
 		"esModuleInterop": true,
 		"forceConsistentCasingInFileNames": true,
 		"skipLibCheck": true,
-		"types": ["vitest/globals", "vite/client"]
+		"types": ["vitest/globals", "vite/client"],
+		"baseUrl": ".",
+		"paths": {
+			"@nomercy-entertainment/nomercy-video-player": ["./src/index.ts"],
+			"@nomercy-entertainment/nomercy-player-core": ["./node_modules/@nomercy-entertainment/nomercy-player-core/dist/index.d.ts"]
+		}
 	},
 	"include": [
 		"src/**/*"
