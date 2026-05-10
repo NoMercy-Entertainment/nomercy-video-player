@@ -51,9 +51,9 @@ export const desktopUiCss = `
     display: flex; align-items: center; justify-content: center; backdrop-filter: blur(2px);
     transition: background 0.18s ease, transform 0.18s ease, opacity 0.18s ease;
 }
-.nm-center-btn:hover { background: rgba(255,255,255,0.20); transform: scale(1.08); }
+.nm-center-btn:hover { background: rgba(255,255,255,0.15); transform: scale(1.08); }
 .nm-center.nm-playing .nm-center-btn { opacity: 0; }
-.nmplayer-active:hover .nm-center-btn { opacity: 1; }
+.active:hover .nm-center-btn { opacity: 1; }
 .nm-spinner { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; pointer-events: none; }
 .nm-spinner svg { width: 56px; height: 56px; animation: nm-spin 0.9s linear infinite; }
 .nomercyplayer.buffering .nm-spinner { display: flex; }
@@ -613,9 +613,9 @@ export const desktopUiCss = `
 }
 
 /* ── Active / inactive overlay states ─────────────────────────────── */
-.nmplayer-active .nm-top-bar, .nmplayer-active .bottom-bar { opacity: 1; transform: translateY(0); }
-.nmplayer-inactive .nm-top-bar { opacity: 0; transform: translateY(-100%); pointer-events: none; }
-.nmplayer-inactive .bottom-bar { opacity: 0; transform: translateY(100%); pointer-events: none; }
+.active .nm-top-bar, .active .bottom-bar { opacity: 1; transform: translateY(0); }
+.inactive .nm-top-bar { opacity: 0; transform: translateY(-100%); pointer-events: none; }
+.inactive .bottom-bar { opacity: 0; transform: translateY(100%); pointer-events: none; }
 `;
 
 export function ensureDesktopUiStyles(): void {

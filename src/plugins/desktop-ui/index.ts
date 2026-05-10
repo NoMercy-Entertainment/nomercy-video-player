@@ -207,6 +207,8 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
 
     private inactivityToken: number | null = null;
     private cachedDuration = 0;
+    private _lastMouseX = -1;
+    private _lastMouseY = -1;
 
     override use(): void {
         ensureDesktopUiStyles();
@@ -362,7 +364,15 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
     private wireEvents(): void {
         const container = this.player.container;
         if (container) {
-            this.listen(container, 'mousemove', () => this.bumpActivity());
+            this.listen(container, 'mousemove', (e: Event) => {
+                const me = e as MouseEvent;
+                const dx = me.clientX - this._lastMouseX;
+                const dy = me.clientY - this._lastMouseY;
+                if (Math.abs(dx) < 2 && Math.abs(dy) < 2) return;
+                this._lastMouseX = me.clientX;
+                this._lastMouseY = me.clientY;
+                this.bumpActivity();
+            });
             this.listen(container, 'mousedown', () => this.bumpActivity());
             this.listen(container, 'pointerdown', () => this.bumpActivity());
             this.listen(container, 'keydown', () => this.bumpActivity());
@@ -633,7 +643,6 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
         this.centerBtn.innerHTML = svgFromIcon(playing ? fluentIcons.pause : fluentIcons.bigPlay, 32);
         this.playBtn.title = icon.title || (playing ? 'Pause' : 'Play');
         this.playBtn.setAttribute('aria-label', playing ? 'Pause' : 'Play');
-        this.bumpActivity();
     }
 
     /**
@@ -1033,6 +1042,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
     // ── Activity / auto-hide ────────────────────────────────────────
     private bumpActivity(): void {
         this.player.emit('activity', { active: true });
+
         if (this.inactivityToken !== null) clearTimeout(this.inactivityToken);
         const ms = this.opts?.inactivityMs ?? 4000;
         this.inactivityToken = this.timeout(() => this.maybeHide(), ms);
@@ -1041,6 +1051,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
     private maybeHide(): void {
         if (!this.player.playState || this.player.playState() !== 'playing') return;
         if (this.menuOpen) return;
+
         this.player.emit('activity', { active: false });
     }
 }
