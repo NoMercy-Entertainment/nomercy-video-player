@@ -128,7 +128,6 @@ function readSidecarTracks(item: unknown): SidecarTrackEntry[] | undefined {
 }
 
 
-
 export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions> {
     static override readonly id: string = 'desktop-ui';
     static override readonly version: string = '2.0.0';
