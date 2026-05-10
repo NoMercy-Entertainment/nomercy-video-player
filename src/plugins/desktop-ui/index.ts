@@ -26,7 +26,7 @@
  */
 
 import { Plugin } from '@nomercy-entertainment/nomercy-player-core';
-import type { NMVideoPlayer, VideoPlaylistItem } from '@nomercy-entertainment/nomercy-video-player';
+import type { NMVideoPlayer, VideoEventMap, VideoPlaylistItem } from '@nomercy-entertainment/nomercy-video-player';
 
 import { fluentIcons, svgFromIcon } from './icons';
 import { ensureDesktopUiStyles } from './styles';
@@ -52,9 +52,6 @@ export interface DesktopUiOptions {
     hideTitle?: boolean;
     disableClickToPause?: boolean;
     inactivityMs?: number;
-    /** Base URL for relative image paths in the playlist menu's
-     *  thumbnails (e.g. TMDB `/w780/<hash>.jpg`). Empty string uses the
-     *  paths verbatim. */
     imageBaseUrl?: string;
 }
 
@@ -76,12 +73,11 @@ interface ChapterMarkerRef {
     progress: HTMLDivElement;
 }
 
-export class DesktopUiPlugin extends Plugin<NMVideoPlayer, DesktopUiOptions> {
+export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions> {
     static override readonly id: string = 'desktop-ui';
     static override readonly version: string = '2.0.0';
     static override readonly description: string = 'Official desktop UI overlay (v2 rewrite)';
 
-    private overlay!: HTMLDivElement;
     private titleBar!: HTMLDivElement;
     private titleText!: HTMLSpanElement;
     private centerWrap!: HTMLDivElement;
@@ -121,6 +117,11 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer, DesktopUiOptions> {
     private isMouseDown = false;
     private isScrubbing = false;
 
+    /** True when the user explicitly picked a non-auto quality level via the
+     *  menu. Resets to false when "Auto" is picked. HLS level-switched events
+     *  never touch this flag — it tracks user INTENT, not the actual level. */
+    private _userPickedQuality = false;
+
     // ── transport buttons ───────────────────────────────────────────
     private playBtn!: HTMLButtonElement;
     private prevBtn!: HTMLButtonElement;
@@ -139,12 +140,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer, DesktopUiOptions> {
     private audioBtn!: HTMLButtonElement;
     private theaterBtn!: HTMLButtonElement;
     private pipBtn!: HTMLButtonElement;
-    /** Playlist button — opens the playlist sub-menu directly (skipping
-     *  the main category picker). Mirrors v1's `createPlaylistsButton`. */
     private playlistBtn!: HTMLButtonElement;
-    /** Cog/settings button — opens the main menu (the picker that lists
-     *  Audio / Subtitles / Quality / Speed / Playlist) rather than
-     *  jumping straight to a single sub-menu. */
     private settingsBtn!: HTMLButtonElement;
     private fsBtn!: HTMLButtonElement;
 
@@ -164,14 +160,12 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer, DesktopUiOptions> {
         this.bumpActivity();
     }
 
-    // No dispose() — kit auto-cleans `this.mount()` divs, `this.listen()`
-    // listeners, `this.timeout()` tokens, and `this.on()` handlers.
-
     // ── DOM construction ─────────────────────────────────────────────────
     private buildDom(): void {
         const root = this.mount('overlay');
-        this.overlay = root;
-        this.player.addClasses(root, ['nmplayer-desktop-ui-overlay', 'nmplayer-active']);
+        this.player.addClasses(root, ['nmplayer-desktop-ui-overlay']);
+
+        this.player.container.classList.add('nomercyplayer');
 
         if (!this.opts?.hideTitle) this.titleBar = this.buildTitleBar(root);
         this.centerWrap = this.buildCenter(root);
@@ -235,9 +229,6 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer, DesktopUiOptions> {
     }
 
     private buildBottomRow(parent: HTMLElement): void {
-        // v1 order: playback, previous, seek-back, seek-forward, chapter-back,
-        // chapter-forward, next, volume-container, current-time, divider,
-        // remaining-time, theater, pip, speed, subs, audio, quality, fullscreen.
 
         this.playBtn = this.iconBtn('playback', 'play');
         parent.appendChild(this.playBtn);
@@ -269,8 +260,6 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer, DesktopUiOptions> {
         this.volSlider.value = '100';
         this.volSlider.setAttribute('aria-label', 'Volume');
 
-        // Current-time / divider / remaining-time push the settings
-        // cluster to the right via the divider's flex:1.
         this.currentTimeEl = this.player.createElement('div', 'current-time')
             .addClasses(['current-time', 'time'])
             .appendTo(parent).get();
@@ -285,8 +274,6 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer, DesktopUiOptions> {
             .appendTo(parent).get();
         this.remainingTimeEl.textContent = '0:00';
 
-        // Settings cluster (right). v1 ordering: theater, pip, speed, subs,
-        // audio, quality, settings (cog), fullscreen.
         this.theaterBtn = this.iconBtn('theater', 'theater');
         parent.appendChild(this.theaterBtn);
         this.pipBtn = this.iconBtn('pip', 'pipEnter');
@@ -376,55 +363,68 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer, DesktopUiOptions> {
             });
         }
 
-        this.on('play' as any, () => this.setPlayingState(true));
-        this.on('pause' as any, () => this.setPlayingState(false));
-        this.on('current' as any, (d: any) => this.handleCurrentChange(d?.item ?? d));
-        this.on('mediaReady' as any, () => this.refreshChaptersAndDuration());
-        this.on('duration' as any, (d: any) => this.applyDuration(typeof d === 'number' ? d : d?.duration ?? 0));
-        this.on('time' as any, (d: any) => {
-            const t = typeof d === 'number' ? d : (d?.time ?? 0);
-            this.applyTime(t);
+        this.on('play', () => this.setPlayingState(true));
+        this.on('pause', () => this.setPlayingState(false));
+        this.on('ended', () => this.setPlayingState(false));
+        this.on('current', (d) => this.handleCurrentChange(d.item));
+
+        // mediaReady: refresh chapters + duration, then sync all track lists
+        // (subtitles / audio / quality) that may have changed with the new source.
+        this.on('mediaReady', () => {
+            this.refreshChaptersAndDuration();
+            this.syncActiveIndexes();
+            this.applySubsIcon();
+            this.applyQualityIcon();
+            this.refreshCapabilityVisibility();
+            this.repaintSubsIfOpen();
+            this.repaintAudioIfOpen();
+            this.repaintQualityIfOpen();
         });
-        // Kit volume payload is `{ level: 0..1 }`. The desktop UI works
-        // in percent (0..100), so scale at the boundary. Listener
-        // parameters are inferred from the event map — no annotations.
+
+        this.on('duration', (d) => this.applyDuration(d.duration));
+        this.on('time', (d) => this.applyTime(d.time));
+
         this.on('volume', (d) => {
             const level = typeof d?.level === 'number' ? d.level : this.player.volume?.() ?? 1;
             this.applyVolume(level);
         });
         this.on('mute', (d) => this.applyMuted(d?.muted ?? this.player.volumeState?.() === 'muted'));
-        this.on('rate' as any, (d: any) => {
-            this.applyRate(d?.rate ?? this.player.playbackRate?.());
+
+        // 'backend:ratechange' is the correct player-level event — emitted by
+        // base-player.ts:playbackRate() and carried on the typed event map.
+        this.on('backend:ratechange', (d) => {
+            this.applyRate(d.rate);
             this.repaintSpeedIfOpen();
         });
-        this.on('subtitleList' as any, () => { this.syncActiveIndexes(); this.applySubsIcon(); this.refreshCapabilityVisibility(); this.repaintSubsIfOpen(); });
+
         // v2 emits 'subtitle' (not 'subtitleChanged') with `{ track: idx | null }`.
-        this.on('subtitle' as any, (d: any) => {
-            const idx = d?.track;
+        this.on('subtitle', (d) => {
+            const idx = d.track;
             this.activeSubtitleIdx = (typeof idx === 'number' && idx >= 0) ? idx : -1;
             this.applySubsIcon();
             this.repaintSubsIfOpen();
         });
-        this.on('audioTracks' as any, () => { this.syncActiveIndexes(); this.refreshCapabilityVisibility(); this.repaintAudioIfOpen(); });
+
         // v2 emits 'audioTrack' (not 'audioTrackChanged') with `{ id: idx }`.
-        this.on('audioTrack' as any, (d: any) => {
-            const idx = d?.id;
-            this.activeAudioIdx = typeof idx === 'number' ? idx : -1;
+        this.on('audioTrack', (d) => {
+            this.activeAudioIdx = typeof d.id === 'number' ? d.id : -1;
             this.repaintAudioIfOpen();
         });
-        this.on('levels' as any, () => { this.syncActiveIndexes(); this.refreshCapabilityVisibility(); this.repaintQualityIfOpen(); });
-        // HLS backend bridge fires 'level-switched' with the selected level.
-        this.on('level-switched' as any, (d: any) => {
-            const idx = d?.level ?? d?.index ?? d;
-            const isAuto = (this.player as any).qualityState?.() === 'auto' || (this.player as any).qualityState?.() === 0;
-            this.activeQualityIdx = isAuto ? 'auto' : (typeof idx === 'number' ? idx : 'auto');
+
+        // HLS backend bridge fires 'level-switched' with the selected level index.
+        this.on('level-switched', (d) => {
+            const isAuto = this.player.qualityState() === 'auto';
+            this.activeQualityIdx = isAuto ? 'auto' : (typeof d.level === 'number' ? d.level : 'auto');
+            this.applyQualityIcon();
             this.repaintQualityIfOpen();
         });
-        this.on('waiting' as any, () => this.overlay.classList.add('nm-buffering'));
-        this.on('playing' as any, () => this.overlay.classList.remove('nm-buffering'));
-        this.on('canplay' as any, () => this.overlay.classList.remove('nm-buffering'));
-        this.on('stalled' as any, () => this.overlay.classList.add('nm-buffering'));
-        this.on('fullscreen' as any, () => this.applyFullscreen());
+
+        this.onVideo('fullscreen', () => {
+            this.applyFullscreen();
+        });
+        this.onVideo('pip', () => {
+            this.applyPipIcon(Boolean(document.pictureInPictureElement));
+        });
 
         this.listen(this.centerBtn, 'click', () => { void this.player.togglePlayback(); this.bumpActivity(); });
         this.listen(this.playBtn, 'click', () => { void this.player.togglePlayback(); this.bumpActivity(); });
@@ -455,8 +455,6 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer, DesktopUiOptions> {
         this.listen(this.pipBtn, 'click', () => { void (this.player as any).togglePip?.(); });
         this.listen(this.fsBtn, 'click', () => { void this.player.toggleFullscreen?.(); });
 
-        // PiP enter/leave events fire on the <video> element itself; the
-        // kit doesn't bridge them to player events, so we listen direct.
         const videoEl = (this.player as any).videoElement as HTMLVideoElement | undefined;
         if (videoEl) {
             this.listen(videoEl, 'enterpictureinpicture', () => this.applyPipIcon(true));
@@ -562,6 +560,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer, DesktopUiOptions> {
         this.applyMuted((this.player as any).volumeState?.() === 'muted');
         this.applyRate(this.player.playbackRate?.() ?? 1);
         this.applySubsIcon();
+        this.applyQualityIcon();
         this.applyPipIcon(Boolean((document as any).pictureInPictureElement));
         const cur = this.player.current?.();
         if (cur) this.handleCurrentChange(cur);
@@ -580,6 +579,22 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer, DesktopUiOptions> {
         this.bumpActivity();
     }
 
+    /**
+     * Subscribe to a video-specific player event (`VideoEventMap` key that is
+     * not part of `BaseEventMap`). TypeScript's conditional-type inference cannot
+     * resolve `PlayerEventMap<NMVideoPlayer<any>>` to `VideoEventMap` inside
+     * `Plugin.on()` due to class-complexity limitations, so this helper types the
+     * call directly against `VideoEventMap` and registers the same lifecycle
+     * cleanup that `Plugin.on()` would.
+     */
+    private onVideo<K extends keyof VideoEventMap>(
+        event: K,
+        fn: (data: VideoEventMap[K]) => void,
+    ): void {
+        this.player.on(event, fn);
+        this.lifecycle.addCleanup(() => { this.player.off(event, fn); });
+    }
+
     private handleCurrentChange(item: VideoPlaylistItem | undefined | null): void {
         if (this.titleText) this.titleText.textContent = item?.title ?? '';
         this.refreshChaptersAndDuration();
@@ -588,14 +603,10 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer, DesktopUiOptions> {
         void this.loadSpritesForItem(item);
     }
 
-    /** Look up sprite + thumbnails tracks on the current item, parse the
-     *  VTT, preload the sprite image. The sliderPopImage div paints its
-     *  background-image from the loaded set on the next hover. */
     private async loadSpritesForItem(item: VideoPlaylistItem | undefined | null): Promise<void> {
         const myToken = ++this.spriteLoadId;
         this.spriteSet = null;
-        // Reset the slider-pop-image styles so a stale sprite doesn't bleed
-        // into the next item.
+        
         this.sliderPopImage.style.backgroundImage = '';
         this.sliderPopImage.style.backgroundPosition = '';
         this.sliderPopImage.style.width = '';
@@ -613,9 +624,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer, DesktopUiOptions> {
         this.spriteSet = set;
         this.sliderPopImage.style.backgroundImage = `url('${set.spriteUrl}')`;
     }
-
-    /** Paint the slider-pop-image background-position + size from the
-     *  cue covering `time`. No-op when sprites aren't loaded for this item. */
+    
     private paintSpriteAt(time: number): void {
         if (!this.spriteSet) return;
         const cue = lookupCue(this.spriteSet, time);
@@ -768,9 +777,20 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer, DesktopUiOptions> {
     }
 
     private applyRate(rate: number): void {
-        const path = this.speedBtn.querySelector('path');
-        if (!path) return;
-        path.setAttribute('d', rate === 1 ? fluentIcons.speed.normal : fluentIcons.speed.hover);
+        const icon = rate === 1
+            ? fluentIcons.speed
+            : { ...fluentIcons.speed, normal: fluentIcons.speed.hover };
+        this.speedBtn.innerHTML = svgFromIcon(icon);
+        this.speedBtn.setAttribute('aria-label', rate === 1 ? 'Speed (1x)' : `Speed (${rate}x)`);
+    }
+
+    private applyQualityIcon(): void {
+        const active = this.activeQualityIdx !== 'auto';
+        const icon = active
+            ? { ...fluentIcons.quality, normal: fluentIcons.quality.hover }
+            : fluentIcons.quality;
+        this.qualityBtn.innerHTML = svgFromIcon(icon);
+        this.qualityBtn.setAttribute('aria-label', active ? 'Quality (manual)' : 'Quality (auto)');
     }
 
     private applyFullscreen(): void {
@@ -788,25 +808,19 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer, DesktopUiOptions> {
     }
 
     private applyPipIcon(active: boolean): void {
+        const label = active ? 'Exit picture-in-picture' : 'Picture-in-picture';
         this.pipBtn.innerHTML = svgFromIcon(active ? fluentIcons.pipExit : fluentIcons.pipEnter);
-        this.pipBtn.setAttribute('aria-label', active ? 'Exit picture-in-picture' : 'Picture-in-picture');
+        this.pipBtn.setAttribute('aria-label', label);
+        this.pipBtn.title = label;
     }
 
     private refreshCapabilityVisibility(): void {
-        // The kit's `subtitles()` already returns the union of HLS-managed
-        // tracks and playlist-declared sidecar VTTs, so a single read
-        // gives us the right count for both the bottom-row button and
-        // the main-menu entry.
         const subs = (this.player.subtitles?.() ?? []) as SubtitleTrackLite[];
         const subsCount = subs.length;
 
         const audios = (this.player.audioTracks?.() ?? []) as AudioTrackLite[];
         const levels = ((this.player as any).qualityLevels?.() ?? []) as QualityLevelLite[];
 
-        // Settings buttons hide when the *category* doesn't apply (no subs,
-        // single quality, etc). The transport buttons stay visible so the
-        // bottom row keeps a stable layout — they get *disabled* in
-        // `refreshTransportEnablement` based on per-tick conditions.
         this.subsBtn.hidden = subsCount === 0;
         this.audioBtn.hidden = audios.length === 0;
         this.qualityBtn.hidden = levels.length < 2;
@@ -825,9 +839,6 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer, DesktopUiOptions> {
         this.refreshTransportEnablement();
     }
 
-    /** Reactive enable/disable on transport buttons. Called whenever the
-     *  preconditions might have changed: time tick, item change, queue
-     *  edits. Mirrors v1's per-button event handlers but consolidated. */
     private refreshTransportEnablement(): void {
         const idx = this.safeCurrentIndex();
         const len = this.safeQueueLength();
@@ -927,19 +938,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer, DesktopUiOptions> {
         for (const pane of Object.values(this.menus.panes)) pane.classList.remove('is-open');
         try { this.menus.frameDialog.close?.(); } catch { /* already closed */ }
     }
-
-    /**
-     * Pull the live active indexes from authoritative sources:
-     *
-     *   audio    → hls.audioTrack          (or `default` flag, or 0)
-     *   subs     → hls.subtitleTrack       (or -1 when no track is active)
-     *   quality  → hls.currentLevel        (or 'auto' when state is auto)
-     *
-     * We previously only updated these from the kit's `subtitle` /
-     * `audioTrack` / `level-switched` events, which only fire on user
-     * action — so the menu showed nothing as active when the player had
-     * just auto-picked a default track. This routine fills that gap.
-     */
+    
     private syncActiveIndexes(): void {
         const be = (this.player as any).backend?.();
         const hls = be?.hls;
@@ -957,11 +956,6 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer, DesktopUiOptions> {
             }
         }
 
-        // Subtitles — only sync from HLS when HLS actually owns the
-        // subtitle tracks. For sidecar-VTT items (the kit returns
-        // []), HLS has no entries and `hls.subtitleTrack` is always
-        // -1, which would clobber the user's menu pick on every
-        // repaint. Trust the locally-tracked index in that case.
         const hlsHasSubs = (hls?.subtitleTracks?.length ?? 0) > 0;
         if (hlsHasSubs) {
             const subState = (this.player as any).subtitleState?.();
@@ -985,10 +979,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer, DesktopUiOptions> {
     }
 
     private menuState(): MenuRenderState {
-        // Refresh from the player every time the menu paints. The locally
-        // cached values still drive instant feedback when the user picks
-        // an option, but if anything else changes them (HLS auto-switch,
-        // keyboard shortcut, etc.) the menu reflects it.
+        
         this.syncActiveIndexes();
         return {
             subtitleIdx: this.activeSubtitleIdx,
@@ -1023,8 +1014,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer, DesktopUiOptions> {
 
     // ── Activity / auto-hide ────────────────────────────────────────
     private bumpActivity(): void {
-        this.overlay.classList.add('nmplayer-active');
-        this.overlay.classList.remove('nmplayer-inactive');
+        this.player.emit('activity', { active: true });
         if (this.inactivityToken !== null) clearTimeout(this.inactivityToken);
         const ms = this.opts?.inactivityMs ?? 4000;
         this.inactivityToken = this.timeout(() => this.maybeHide(), ms);
@@ -1033,8 +1023,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer, DesktopUiOptions> {
     private maybeHide(): void {
         if (!this.player.playState || this.player.playState() !== 'playing') return;
         if (this.menuOpen) return;
-        this.overlay.classList.remove('nmplayer-active');
-        this.overlay.classList.add('nmplayer-inactive');
+        this.player.emit('activity', { active: false });
     }
 }
 
