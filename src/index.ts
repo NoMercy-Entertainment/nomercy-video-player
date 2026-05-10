@@ -417,13 +417,19 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 	};
 
 	// ── Video-specific state ──
+
+	private _fullscreenActive = false;
+
 	fullscreenState(): FullscreenState;
 	fullscreenState(state: FullscreenState | boolean): void;
 	fullscreenState(state?: FullscreenState | boolean): FullscreenState | void {
 		const platform = (this as unknown as { platform(): IPlatform }).platform();
 		const ctrl = platform.fullscreen;
 		if (state === undefined) {
-			return ctrl?.isActive() ? FullscreenState.ON : FullscreenState.OFF;
+			// Prefer browser truth when available; fall back to tracked state for
+			// environments where requestFullscreen is rejected (headless, sandboxed).
+			if (ctrl?.isActive()) return FullscreenState.ON;
+			return this._fullscreenActive ? FullscreenState.ON : FullscreenState.OFF;
 		}
 		const wantActive = typeof state === 'boolean' ? state : state === FullscreenState.ON;
 		if (!ctrl) {
@@ -434,6 +440,7 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 				message: 'Fullscreen controller not configured. Pass `setup({ platform })` with a fullscreen controller, or use the default `browserPlatform`.',
 			});
 		}
+		this._fullscreenActive = wantActive;
 		const action = wantActive
 			? ctrl.enter(this.container)
 			: ctrl.exit();
@@ -441,13 +448,16 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 		this.emit('fullscreen', { active: wantActive });
 	}
 
+	private _pipActive = false;
+
 	pipState(): PipState;
 	pipState(state: PipState | boolean): void;
 	pipState(state?: PipState | boolean): PipState | void {
 		const platform = (this as unknown as { platform(): IPlatform }).platform();
 		const ctrl = platform.pip;
 		if (state === undefined) {
-			return ctrl?.isActive() ? PipState.ON : PipState.OFF;
+			if (ctrl?.isActive()) return PipState.ON;
+			return this._pipActive ? PipState.ON : PipState.OFF;
 		}
 		const wantActive = typeof state === 'boolean' ? state : state === PipState.ON;
 		if (!ctrl) {
@@ -458,6 +468,7 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 				message: 'PiP controller not configured. Pass `setup({ platform })` with a PiP controller, or use the default `browserPlatform`.',
 			});
 		}
+		this._pipActive = wantActive;
 		const action = wantActive ? ctrl.enter(this.videoElement) : ctrl.exit();
 		void action.catch(() => { /* swallow */ });
 		this.emit('pip', { active: wantActive });
