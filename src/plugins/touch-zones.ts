@@ -1,6 +1,27 @@
 /**
- * Touch / click zones plugin.
- * z-index: 10 — sits above the video element (z-0) but below the desktop UI overlay (z-20).
+ * Touch / click zones plugin for the video player.
+ *
+ * Renders a transparent tap-zone overlay that sits at z-index 10 — above the
+ * video element (z-index 0) but below the desktop UI controls overlay (z-index 20).
+ * This ordering is intentional: touch zones intercept taps before they reach
+ * the video element, but control buttons on the desktop-ui layer remain clickable.
+ *
+ * Layout: 3-column × 6-row CSS grid.
+ *   col 1 (left third)  — seek backward zone
+ *   col 2 (centre)      — play/pause + fullscreen zone
+ *   col 3 (right third) — seek forward zone
+ * On mobile (detected via `ontouchstart` / `maxTouchPoints`) two extra zones are
+ * added in col 2, rows 1–2 (volume up) and rows 5–6 (volume down), pushing the
+ * play/pause zone to rows 3–5.
+ *
+ * Single-tap vs double-tap behaviour:
+ *   Left / right zones:  single-tap hides controls; double-tap seeks ±seekSeconds.
+ *   Centre zone:         single-tap toggles play/pause; double-tap toggles fullscreen.
+ *   Volume zones (mobile only): single-tap hides controls; double-tap adjusts volume.
+ *
+ * Integration: emits `player.emit('activity', { active })` to notify the
+ * desktop-ui plugin that controls should be shown or hidden. All other calls
+ * go through the typed player surface (rewind, forward, togglePlayback, etc.).
  */
 
 import { Plugin } from '@nomercy-entertainment/nomercy-player-core';
