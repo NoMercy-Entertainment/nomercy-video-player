@@ -209,7 +209,13 @@ function buttonVisible(
 }
 
 
-export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions> {
+/** Events emitted by {@link DesktopUiPlugin} under the `plugin:desktop-ui:` namespace. */
+export interface DesktopUiEvents {
+    'shortcuts-toggle': undefined;
+}
+
+
+export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions, DesktopUiEvents> {
     static override readonly id: string = 'desktop-ui';
     static override readonly version: string = '2.0.0';
     static override readonly description: string = 'Official desktop UI overlay (v2 rewrite)';
@@ -858,7 +864,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
             });
         }
 
-        this.on('plugin:desktop-ui:shortcuts-toggle', () => this.toggleShortcuts());
+        this.on(DesktopUiPlugin, 'shortcuts-toggle', () => this.toggleShortcuts());
 
         this.on('play', () => this.setPlayingState(true));
         this.on('pause', () => this.setPlayingState(false));
