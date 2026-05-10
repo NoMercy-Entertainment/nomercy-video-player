@@ -263,8 +263,10 @@ export const desktopUiCss = `
     pointer-events: auto;
     position: relative;
     transition: background 0.15s ease, transform 0.15s ease;
+    /* Hover tint: 12% white — perceptibly lighter than resting without flashing white. */
+    --nm-btn-hover-bg: color-mix(in srgb, #fff 12%, rgba(0,0,0,0));
 }
-.nm-btn:hover { background: rgba(255,255,255,0.10); }
+.nm-btn:hover { background: var(--nm-btn-hover-bg, rgba(255,255,255,0.12)); }
 .nm-btn:hover svg { transform: scale(1.10); }
 .nm-btn:focus-visible { outline: 2px solid rgba(255,255,255,0.5); outline-offset: -2px; }
 .nm-btn[hidden] { display: none !important; }
@@ -299,6 +301,40 @@ export const desktopUiCss = `
 .volume-container:hover .volume-slider,
 .volume-container:focus-within .volume-slider { width: 80px; opacity: 1; margin: 0 8px; }
 .volume-slider::-webkit-slider-thumb { appearance: none; width: 12px; height: 12px; background: #fff; border-radius: 50%; }
+
+/* ── Vertical volume slider (popup above mute button) ───────────── */
+.volume-container { position: relative; }
+
+/* Hide the horizontal slider when vertical mode is active. */
+.volume-container-vertical .volume-slider { display: none; }
+
+.volume-slider-vertical {
+    display: none;
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(20, 22, 30, 0.92);
+    border-radius: 8px;
+    padding: 12px 10px;
+    z-index: 90;
+    backdrop-filter: blur(4px);
+    align-items: center;
+    justify-content: center;
+}
+.volume-slider-vertical.volume-slider-vertical-open { display: flex; }
+
+.volume-slider-vertical-input {
+    appearance: none;
+    writing-mode: vertical-lr;
+    direction: rtl;
+    width: 4px;
+    height: 80px;
+    background: linear-gradient(to top, #fff 0%, #fff var(--vol-pct, 100%), rgba(255,255,255,0.30) var(--vol-pct, 100%));
+    border-radius: 9999px;
+    cursor: pointer;
+}
+.volume-slider-vertical-input::-webkit-slider-thumb { appearance: none; width: 12px; height: 12px; background: #fff; border-radius: 50%; }
 
 /* ── Time labels ─────────────────────────────────────────────────── */
 .time {
@@ -496,6 +532,9 @@ export const desktopUiCss = `
     width: 100%;
 }
 #playlist-menu.playlist-menu.is-open { display: flex; }
+
+/* Flat playlist (no seasons) — cap width so cards don't stretch too wide. */
+#playlist-menu.playlist-menu.playlist-flat { max-width: min(34rem, calc(100% - 2rem)); }
 .seasons-pane {
     width: 33%;
     min-width: 13rem;
@@ -637,7 +676,58 @@ export const desktopUiCss = `
     backdrop-filter: blur(4px);
 }
 .nm-tooltip.nm-tooltip-visible { opacity: 1; }
+
+/* ── Keyboard shortcuts overlay ──────────────────────────────────── */
+.nm-shortcuts-overlay {
+    display: none;
+    position: absolute;
+    inset: 0;
+    z-index: 50;
+    align-items: center;
+    justify-content: center;
+    background: rgba(10, 12, 18, 0.80);
+    backdrop-filter: blur(6px);
+    pointer-events: auto;
+    cursor: pointer;
+}
+.nm-shortcuts-overlay.nm-shortcuts-overlay-visible { display: flex; flex-direction: column; }
+
+.nm-shortcuts-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #fff;
+    margin: 0 0 16px 0;
+    text-align: center;
+}
+
+.nm-shortcuts-grid {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 6px 24px;
+    margin: 0;
+    max-width: 380px;
+    width: 100%;
+    padding: 0 16px;
+}
+.nm-shortcuts-grid dt {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.80rem;
+    background: rgba(255,255,255,0.12);
+    color: #fff;
+    padding: 2px 8px;
+    border-radius: 4px;
+    text-align: center;
+    white-space: nowrap;
+    align-self: center;
+}
+.nm-shortcuts-grid dd {
+    margin: 0;
+    font-size: 0.82rem;
+    color: rgba(255,255,255,0.80);
+    align-self: center;
+}
 `;
+
 
 export function ensureDesktopUiStyles(): void {
     if (document.getElementById(STYLE_ELEMENT_ID)) return;

@@ -38,6 +38,19 @@ export interface AudioTrackLite { id?: string | number; name?: string; language?
 export interface QualityLevelLite { id?: string | number; index?: number; height?: number; width?: number; name?: string; label?: string; bitrate?: number }
 export interface ChapterLite { index: number; start: number; end: number; title: string }
 
+/** Coerce an unknown array-returning getter into `T[]`. Each element is an
+ *  object with at least one property — the Lite interfaces are all optional-
+ *  field shapes, so any non-null object satisfies them structurally. */
+function coerceArray<T>(value: unknown): T[] {
+    return Array.isArray(value) ? (value as T[]) : [];
+}
+
+/** Coerce a possibly-unknown subtitle style object. Falls back to empty. */
+function coerceSubtitleStyle(value: unknown): Record<string, unknown> {
+    if (value !== null && typeof value === 'object') return value as Record<string, unknown>;
+    return {};
+}
+
 export interface MenuActions {
     closeMenu: () => void;
     openSubMenu: (id: SubMenuId) => void;
@@ -300,7 +313,7 @@ export function renderSpeedPane(
     const scroll = pane.querySelector<HTMLDivElement>('.speed-scroll-container');
     if (!scroll) return;
     scroll.replaceChildren();
-    const rates = (player.playbackRates?.() ?? [0.5, 0.75, 1, 1.25, 1.5, 2]) as number[];
+    const rates = coerceArray<number>(player.playbackRates?.() ?? [0.5, 0.75, 1, 1.25, 1.5, 2]);
     const cur = player.playbackRate?.() ?? 1;
     for (const r of rates) {
         const btn = player.createButton(`speed-button-${r}`, `${r}×`, () => {});
@@ -325,7 +338,7 @@ export function renderQualityPane(
     const scroll = pane.querySelector<HTMLDivElement>('.quality-scroll-container');
     if (!scroll) return;
     scroll.replaceChildren();
-    const levels = ((player.qualityLevels?.() ?? []) as QualityLevelLite[]);
+    const levels = coerceArray<QualityLevelLite>(player.qualityLevels?.() ?? []);
     const auto = state.qualityIdx === 'auto';
     appendChoice(scroll, 'quality-auto', 'Auto', auto, () => { player.currentQuality?.('auto'); onPick(); }, listen, player);
     levels.forEach((q, i) => {
@@ -355,7 +368,7 @@ export function renderSubsPane(
     scroll.replaceChildren();
     // The kit's `subtitles()` returns the union of HLS-managed and
     // sidecar VTT tracks, so the renderer just consumes one flat list.
-    const subs = ((player.subtitles?.() ?? []) as SubtitleTrackLite[]);
+    const subs = coerceArray<SubtitleTrackLite>(player.subtitles?.() ?? []);
     const off = state.subtitleIdx === null || state.subtitleIdx === -1;
     appendChoice(scroll, 'off-button-', 'Off', off, () => { player.currentSubtitle?.(null); onPick(); }, listen, player);
     subs.forEach((s, i) => {
@@ -406,13 +419,28 @@ const SETTING_ROWS: Array<{ label: string; property: keyof SubtitleStyle | '' }>
  * worry about an uninitialized state.
  */
 function readSubtitleStyle(player: NMVideoPlayer): SubtitleStyle {
-    const live = player.subtitleStyle?.();
-    if (live && typeof live === 'object') return live as SubtitleStyle;
-    return { ...defaultSubtitleStyles };
+    const raw = coerceSubtitleStyle(player.subtitleStyle?.());
+    const base: SubtitleStyle = { ...defaultSubtitleStyles };
+    for (const key of Object.keys(base) as Array<keyof SubtitleStyle>) {
+        if (key in raw) {
+            (base as unknown as Record<string, unknown>)[key] = raw[key];
+        }
+    }
+    return base;
 }
 
 function writeSubtitleStyle(player: NMVideoPlayer, patch: Partial<SubtitleStyle>): void {
     player.subtitleStyle?.(patch);
+}
+
+function writeSubtitleStyleKey<K extends keyof SubtitleStyle>(
+    player: NMVideoPlayer,
+    key: K,
+    value: SubtitleStyle[K],
+): void {
+    const patch: Partial<SubtitleStyle> = {};
+    patch[key] = value;
+    writeSubtitleStyle(player, patch);
 }
 
 /**
@@ -545,14 +573,14 @@ function renderSubtitlePropertyPane(
             // repaint the picker so the checkmark moves.
             try { action.action?.(); }
             catch { /* tolerate */ }
-            writeSubtitleStyle(player, { [property]: action.value } as Partial<SubtitleStyle>);
+            if (property) writeSubtitleStyleKey(player, property, action.value as SubtitleStyle[typeof property]);
             renderSubtitlePropertyPane(pane, player, listen, onPick, label, property);
         });
     }
 }
 
 interface WatchProgressLite {
-    lastWatchedAt: string;
+    timestamp: number;
     percentage: number;
 }
 
@@ -603,15 +631,17 @@ export function renderPlaylistPane(
     if (!scroll || !episodePane) return;
 
     if (!hasSeason) {
+        pane.classList.add('playlist-flat');
         if (seasonPane) seasonPane.style.display = 'none';
         episodePane.style.flex = '1';
         scroll.replaceChildren();
-        queue.forEach((item, i) => {
-            scroll.appendChild(buildPlaylistCard(player, item, i, i === curIdx, listen, onPick, opts));
+        queue.forEach((item, idx) => {
+            scroll.appendChild(buildPlaylistCard(player, item, idx, idx === curIdx, listen, onPick, opts));
         });
         return;
     }
 
+    pane.classList.remove('playlist-flat');
     if (seasonPane) seasonPane.style.display = '';
     episodePane.style.flex = '';
 
@@ -727,10 +757,10 @@ function buildPlaylistCard(
     title.className = 'playlist-menu-button-title';
     title.innerText = item.title ?? `Item ${index + 1}`;
     right.appendChild(title);
-    if (item.progress?.lastWatchedAt) {
+    if (item.progress?.timestamp) {
         const watchedLabel = document.createElement('span');
         watchedLabel.className = 'playlist-menu-button-watched';
-        watchedLabel.innerText = formatRelativeDate(item.progress.lastWatchedAt);
+        watchedLabel.dataset['timestamp'] = String(item.progress.timestamp);
         right.appendChild(watchedLabel);
     }
     if (item.description) {
@@ -750,19 +780,6 @@ function buildPlaylistCard(
     return btn;
 }
 
-function formatRelativeDate(iso: string): string {
-    const ms = Date.now() - new Date(iso).getTime();
-    const days = Math.floor(ms / 86_400_000);
-    if (days === 0) return 'Today';
-    if (days === 1) return 'Yesterday';
-    if (days < 7) return `${days} days ago`;
-    const weeks = Math.floor(days / 7);
-    if (weeks < 5) return `${weeks} week${weeks > 1 ? 's' : ''} ago`;
-    const months = Math.floor(days / 30);
-    if (months < 12) return `${months} month${months > 1 ? 's' : ''} ago`;
-    const years = Math.floor(days / 365);
-    return `${years} year${years > 1 ? 's' : ''} ago`;
-}
 
 function formatDuration(d: number | string | undefined): string {
     if (d == null) return '';

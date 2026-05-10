@@ -35,8 +35,8 @@ export interface SkipperData {
  * under the thumbnail without requiring the player to maintain watch history.
  */
 export interface WatchProgress {
-	/** ISO-8601 timestamp of the last watch session. */
-	lastWatchedAt: string;
+	/** Unix epoch milliseconds of the last watch session. Consumer formats for display. */
+	timestamp: number;
 	/** 0–100 percent watched (0 = unwatched, 100 = fully watched). */
 	percentage: number;
 }
@@ -59,8 +59,8 @@ export interface VideoPlaylistItem extends BasePlaylistItem {
 	chapters?: ChapterRef[];
 	previewSpriteUrl?: string;
 	skippers?: SkipperData;
-	/** Generic sidecar track list — `{ kind: 'thumbnails' | 'fonts' | string; file: string }`. */
-	tracks?: Array<{ kind?: string; file?: string }>;
+	/** Generic sidecar track list — subtitles, chapters, thumbnails, sprites, fonts, etc. */
+	tracks?: Array<{ id?: number | string; kind?: string; file?: string; label?: string; language?: string }>;
 	/** Series / show title displayed in the top-bar when season/episode are present. */
 	show?: string;
 	/** Season number (1-based). Combined with `episode` to render "S01E03" label. */

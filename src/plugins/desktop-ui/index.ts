@@ -163,6 +163,13 @@ export interface DesktopUiOptions {
      * theater → pip → speed → quality → subtitles → audio → aspectRatio → playlist.
      */
     buttonPriority?: ButtonPriorityList;
+    /**
+     * Volume slider orientation.
+     * - `'horizontal'` — inline slider that expands on hover (default).
+     * - `'vertical'`   — popup slider above the mute button, toggle on click.
+     * - `'auto'`       — vertical when the player width is ≤ 520 px, else horizontal.
+     */
+    volumeSlider?: 'horizontal' | 'vertical' | 'auto';
 }
 
 interface SidecarTrackEntry {
@@ -281,6 +288,9 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
     private chapFwdBtn!: HTMLButtonElement;
     private volBtn!: HTMLButtonElement;
     private volSlider!: HTMLInputElement;
+    /** Vertical volume slider popup. Null until `buildBottomRow` creates it. */
+    private volSliderVertical: HTMLDivElement | null = null;
+    private _volSliderVerticalOpen = false;
     private currentTimeEl!: HTMLDivElement;
     private remainingTimeEl!: HTMLDivElement;
     private aspectRatioBtn!: HTMLButtonElement;
@@ -298,6 +308,10 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
     private menus!: MenuFrameRefs;
     private menuOpen = false;
     private currentSubMenu: SubMenuId | null = null;
+
+    // ── keyboard shortcuts overlay ───────────────────────────────────
+    private shortcutsOverlay: HTMLDivElement | null = null;
+    private _shortcutsVisible = false;
 
     private inactivityToken: number | null = null;
     private cachedDuration = 0;
@@ -337,6 +351,8 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
             openSubMenu: (id) => this.openSubMenu(id),
             backToMain: () => this.openMainMenu(),
         });
+
+        this.shortcutsOverlay = this.buildShortcutsOverlay(root);
     }
 
     private buildCenter(parent: HTMLElement): HTMLDivElement {
@@ -354,6 +370,56 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
         this.centerBtn.innerHTML = svgFromIcon(fluentIcons.bigPlay, 32);
         wrap.appendChild(this.centerBtn);
         return wrap;
+    }
+
+    // ── Keyboard shortcuts overlay ───────────────────────────────────────
+    private buildShortcutsOverlay(parent: HTMLElement): HTMLDivElement {
+        const overlay = this.player.createElement('div', 'nm-shortcuts-overlay')
+            .addClasses(['nm-shortcuts-overlay'])
+            .appendTo(parent).get();
+
+        const shortcuts: Array<[string, string]> = [
+            ['Space / K', 'Play / Pause'],
+            ['← / →', 'Seek −10 s / +10 s'],
+            ['↑ / ↓', 'Volume +10% / −10%'],
+            ['M', 'Mute / Unmute'],
+            ['F', 'Fullscreen'],
+            ['T', 'Theater mode'],
+            ['P', 'Picture-in-picture'],
+            ['N', 'Next item'],
+            ['B', 'Previous item'],
+            [', / .', 'Previous / Next chapter'],
+            ['0–9', 'Seek to 0%–90%'],
+            ['?', 'Show / hide shortcuts'],
+        ];
+
+        const title = document.createElement('h2');
+        title.className = 'nm-shortcuts-title';
+        title.textContent = 'Keyboard shortcuts';
+        overlay.appendChild(title);
+
+        const grid = document.createElement('dl');
+        grid.className = 'nm-shortcuts-grid';
+        for (const [key, desc] of shortcuts) {
+            const term = document.createElement('dt');
+            term.textContent = key;
+            const def = document.createElement('dd');
+            def.textContent = desc;
+            grid.appendChild(term);
+            grid.appendChild(def);
+        }
+        overlay.appendChild(grid);
+
+        this.listen(overlay, 'click', () => this.toggleShortcuts());
+
+        return overlay;
+    }
+
+    private toggleShortcuts(): void {
+        this._shortcutsVisible = !this._shortcutsVisible;
+        if (this.shortcutsOverlay) {
+            this.shortcutsOverlay.classList.toggle('nm-shortcuts-overlay-visible', this._shortcutsVisible);
+        }
     }
 
     private buildBottomBar(parent: HTMLElement): HTMLDivElement {
@@ -431,6 +497,23 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
         this.volSlider.value = '100';
         this.volSlider.setAttribute('aria-label', 'Volume');
         this.volSlider.hidden = !show('volume');
+
+        // Vertical slider popup (hidden initially; activated by wireVolumeSlider).
+        const vertPop = this.player.createElement('div', 'volume-slider-vertical')
+            .addClasses(['volume-slider-vertical'])
+            .appendTo(volContainer).get();
+        const vertInput = this.player.createElement('input', 'volume-slider-vertical-input')
+            .addClasses(['volume-slider-vertical-input'])
+            .appendTo(vertPop).get() as HTMLInputElement;
+        vertInput.type = 'range';
+        vertInput.min = '0';
+        vertInput.max = '100';
+        vertInput.value = '100';
+        vertInput.setAttribute('aria-label', 'Volume');
+        vertInput.setAttribute('orient', 'vertical');
+        this.volSliderVertical = vertPop;
+
+        this.wireVolumeSlider(volContainer, vertPop, vertInput);
 
         this.currentTimeEl = this.player.createElement('div', 'current-time')
             .addClasses(['current-time', 'time'])
@@ -650,6 +733,87 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
         });
     }
 
+    // ── Volume slider orientation ─────────────────────────────────────────
+    /**
+     * Decides at construction time (before ResizeObserver fires) whether to
+     * render the horizontal expand-on-hover slider or the vertical click-popup.
+     * `auto` defers to a ResizeObserver callback that toggles the mode live.
+     */
+    private wireVolumeSlider(
+        volContainer: HTMLElement,
+        vertPop: HTMLDivElement,
+        vertInput: HTMLInputElement,
+    ): void {
+        const mode = this.opts?.volumeSlider ?? 'horizontal';
+
+        const applyVertical = (on: boolean): void => {
+            volContainer.classList.toggle('volume-container-vertical', on);
+        };
+
+        const syncVertInput = (): void => {
+            const pct = Math.round((this.player.volume?.() ?? 1) * 100);
+            vertInput.value = String(pct);
+            vertInput.style.setProperty('--vol-pct', `${pct}%`);
+        };
+
+        const openVertPop = (): void => {
+            if (this._volSliderVerticalOpen) {
+                vertPop.classList.remove('volume-slider-vertical-open');
+                this._volSliderVerticalOpen = false;
+                return;
+            }
+            syncVertInput();
+            vertPop.classList.add('volume-slider-vertical-open');
+            this._volSliderVerticalOpen = true;
+        };
+
+        const closeVertPop = (): void => {
+            vertPop.classList.remove('volume-slider-vertical-open');
+            this._volSliderVerticalOpen = false;
+        };
+
+        this.listen(vertInput, 'input', () => {
+            const level = Number(vertInput.value) / 100;
+            vertInput.style.setProperty('--vol-pct', `${vertInput.value}%`);
+            void this.player.volume?.(level);
+        });
+
+        if (mode === 'vertical') {
+            applyVertical(true);
+            this.listen(this.volBtn, 'click', () => openVertPop());
+            this.listen(document, 'click', (e: Event) => {
+                if (!volContainer.contains(e.target as Node)) closeVertPop();
+            });
+            return;
+        }
+
+        if (mode === 'auto') {
+            if (typeof ResizeObserver === 'undefined') return;
+
+            const AUTO_VERTICAL_THRESHOLD = 520;
+            const resizer = new ResizeObserver(entries => {
+                const entry = entries[0];
+                if (!entry) return;
+                const useVertical = entry.contentRect.width <= AUTO_VERTICAL_THRESHOLD;
+                applyVertical(useVertical);
+                if (!useVertical && this._volSliderVerticalOpen) closeVertPop();
+            });
+            resizer.observe(this.player.container);
+            this.lifecycle.addCleanup(() => resizer.disconnect());
+
+            this.listen(this.volBtn, 'click', () => {
+                if (volContainer.classList.contains('volume-container-vertical')) {
+                    openVertPop();
+                }
+            });
+            this.listen(document, 'click', (e: Event) => {
+                if (!volContainer.contains(e.target as Node)) closeVertPop();
+            });
+        }
+
+        // `horizontal` mode: no extra wiring — CSS handles expand-on-hover.
+    }
+
     // ── Event wiring ─────────────────────────────────────────────────────
     private wireEvents(): void {
         const container = this.player.container;
@@ -665,7 +829,14 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
             });
             this.listen(container, 'mousedown', () => this.bumpActivity());
             this.listen(container, 'pointerdown', () => this.bumpActivity());
-            this.listen(container, 'keydown', () => this.bumpActivity());
+            this.listen(container, 'keydown', (e: Event) => {
+                this.bumpActivity();
+                const ke = e as KeyboardEvent;
+                if (ke.key === '?' && !ke.ctrlKey && !ke.metaKey && !ke.altKey) {
+                    ke.preventDefault();
+                    this.toggleShortcuts();
+                }
+            });
             this.listen(container, 'mouseleave', () => this.maybeHide());
             this.listen(container, 'click', (e: Event) => {
                 this.bumpActivity();
@@ -1086,6 +1257,16 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
 
     private applyVolume(v: number): void {
         applyVolume(this.volSlider, () => this.applyMutedIcon(), v);
+
+        // Keep the vertical popup input in sync when volume changes externally.
+        if (this.volSliderVertical) {
+            const vertInput = this.volSliderVertical.querySelector<HTMLInputElement>('.volume-slider-vertical-input');
+            if (vertInput) {
+                const pct = Math.round(v * 100);
+                vertInput.value = String(pct);
+                vertInput.style.setProperty('--vol-pct', `${pct}%`);
+            }
+        }
     }
 
     private applyMuted(muted: boolean): void {

@@ -132,6 +132,7 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 
 	declare registerCueParser: (parser: CueParser, prepend?: boolean) => void;
 	declare unregisterCueParser: (id: string) => void;
+	declare resolveCueParser: (url: string) => CueParser | undefined;
 
 	declare play: (opts?: ActionOptions) => Promise<void>;
 	declare pause: (opts?: ActionOptions) => Promise<void>;

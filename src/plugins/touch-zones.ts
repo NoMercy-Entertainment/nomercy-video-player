@@ -22,6 +22,26 @@
  * Integration: emits `player.emit('activity', { active })` to notify the
  * desktop-ui plugin that controls should be shown or hidden. All other calls
  * go through the typed player surface (rewind, forward, togglePlayback, etc.).
+ *
+ * Seek-feedback indicators
+ * ────────────────────────
+ * Each seek zone hosts a floating indicator element (z-index 15 — above the
+ * zones, below desktop-ui controls at z-index 20). The indicator is lazy-mounted
+ * on the first double-tap of that side and remains in the DOM for the plugin's
+ * lifetime.
+ *
+ * Layout: a half-pill pinned to the player edge (left/right), containing an SVG
+ * chevron set and a text label showing the accumulated seek seconds for the
+ * current burst (e.g. "−30s" after three rapid left-taps).
+ *
+ * Cumulative-count behaviour:
+ *   Each double-tap adds `seekSeconds` to a per-side accumulator and updates the
+ *   indicator text. A ~1 s collapse timer resets the accumulator when no further
+ *   taps arrive. Rapid successive taps update the same element — no stacking.
+ *
+ * Animation: CSS transitions on `opacity` and `transform`. The indicator gains an
+ * `nm-seek-indicator--visible` class on show, loses it on hide. The transition
+ * in/out is handled entirely by CSS (no JS animation frames).
  */
 
 import { Plugin } from '@nomercy-entertainment/nomercy-player-core';
@@ -43,6 +63,7 @@ const STYLE_ID = 'nmplayer-touch-zones-styles';
 
 function ensureStyles(): void {
     if (document.getElementById(STYLE_ID)) return;
+
     const el = document.createElement('style');
     el.id = STYLE_ID;
     el.textContent = `
@@ -56,19 +77,53 @@ function ensureStyles(): void {
 .nm-touch-box {
     pointer-events: auto;
     -webkit-tap-highlight-color: transparent;
+    position: relative;
 }
-.nm-touch-ripple {
-    position: absolute; top: 0; bottom: 0;
-    width: 66%; display: none;
-    align-items: center; justify-content: center;
-    flex-direction: column; gap: 4px;
-    background: rgba(255,255,255,0.08);
-    color: #fff; font-size: 0.82rem; font-family: system-ui, sans-serif;
-    pointer-events: none; border-radius: 0 50% 50% 0;
+.nm-seek-indicator {
+    position: absolute;
+    top: 50%; transform: translateY(-50%) scale(0.85);
+    z-index: 15;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 72px; height: 72px;
+    background: rgba(0,0,0,0.45);
+    color: #fff;
+    font-size: 0.78rem;
+    font-family: system-ui, sans-serif;
+    font-weight: 600;
+    pointer-events: none;
+    border-radius: 50%;
+    opacity: 0;
+    transition: opacity 120ms ease-out, transform 120ms ease-out;
+    user-select: none;
 }
-.nm-touch-ripple.right { border-radius: 50% 0 0 50%; right: 0; }
+.nm-seek-indicator.nm-seek-indicator--left  { left: 16px; }
+.nm-seek-indicator.nm-seek-indicator--right { right: 16px; }
+.nm-seek-indicator--visible {
+    opacity: 1;
+    transform: translateY(-50%) scale(1);
+}
+.nm-seek-indicator svg {
+    width: 20px; height: 20px;
+    fill: none;
+    stroke: #fff;
+    stroke-width: 2.2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
 `;
     document.head.appendChild(el);
+}
+
+interface SeekIndicatorState {
+    el: HTMLDivElement;
+    textEl: HTMLSpanElement;
+    accumulated: number;
+    collapseTimer: ReturnType<typeof setTimeout> | null;
+    hideTimer: ReturnType<typeof setTimeout> | null;
 }
 
 export class TouchZonesPlugin extends Plugin<NMVideoPlayer<any>, TouchZonesOptions> {
@@ -78,6 +133,9 @@ export class TouchZonesPlugin extends Plugin<NMVideoPlayer<any>, TouchZonesOptio
 
     private root!: HTMLDivElement;
     private controlsVisible = false;
+
+    private leftIndicator: SeekIndicatorState | null = null;
+    private rightIndicator: SeekIndicatorState | null = null;
 
     override use(): void {
         ensureStyles();
@@ -153,12 +211,86 @@ export class TouchZonesPlugin extends Plugin<NMVideoPlayer<any>, TouchZonesOptio
         };
     }
 
+    private createSeekIndicator(parent: HTMLElement, side: 'left' | 'right'): SeekIndicatorState {
+        const el = document.createElement('div');
+        el.className = `nm-seek-indicator nm-seek-indicator--${side}`;
+
+        const svgNs = 'http://www.w3.org/2000/svg';
+        const svg = document.createElementNS(svgNs, 'svg');
+        svg.setAttribute('viewBox', '0 0 24 24');
+
+        if (side === 'left') {
+            const path = document.createElementNS(svgNs, 'path');
+            path.setAttribute('d', 'M11 17l-5-5 5-5M18 17l-5-5 5-5');
+            svg.appendChild(path);
+        }
+        else {
+            const path = document.createElementNS(svgNs, 'path');
+            path.setAttribute('d', 'M13 7l5 5-5 5M6 7l5 5-5 5');
+            svg.appendChild(path);
+        }
+
+        const textEl = document.createElement('span');
+        textEl.textContent = side === 'left' ? '-10s' : '+10s';
+
+        el.appendChild(svg);
+        el.appendChild(textEl);
+        parent.appendChild(el);
+
+        return {
+            el,
+            textEl,
+            accumulated: 0,
+            collapseTimer: null,
+            hideTimer: null,
+        };
+    }
+
+    private showSeekIndicator(state: SeekIndicatorState, seconds: number, direction: 'back' | 'forward'): void {
+        if (state.collapseTimer !== null) {
+            clearTimeout(state.collapseTimer);
+            state.collapseTimer = null;
+        }
+
+        if (state.hideTimer !== null) {
+            clearTimeout(state.hideTimer);
+            state.hideTimer = null;
+        }
+
+        state.accumulated += seconds;
+
+        const label = direction === 'back'
+            ? `-${state.accumulated}s`
+            : `+${state.accumulated}s`;
+        state.textEl.textContent = label;
+
+        state.el.classList.add('nm-seek-indicator--visible');
+
+        state.collapseTimer = setTimeout(() => {
+            state.accumulated = 0;
+            state.collapseTimer = null;
+
+            state.hideTimer = setTimeout(() => {
+                state.el.classList.remove('nm-seek-indicator--visible');
+                state.hideTimer = null;
+            }, 200);
+        }, 1000);
+    }
+
     private buildSeekBack(parent: HTMLElement, pos: ZonePos): void {
         const el = this.makeBox(parent, pos);
         const seconds = this.opts?.seekSeconds ?? 10;
 
         const handler = this.doubleTap(
-            () => { void this.player.rewind?.(seconds); },
+            () => {
+                void this.player.rewind?.(seconds);
+
+                if (this.leftIndicator === null) {
+                    this.leftIndicator = this.createSeekIndicator(el, 'left');
+                }
+
+                this.showSeekIndicator(this.leftIndicator, seconds, 'back');
+            },
             () => {
                 if (this.controlsVisible) this.player.emit('activity', { active: false });
             },
@@ -171,7 +303,15 @@ export class TouchZonesPlugin extends Plugin<NMVideoPlayer<any>, TouchZonesOptio
         const seconds = this.opts?.seekSeconds ?? 10;
 
         const handler = this.doubleTap(
-            () => { void this.player.forward?.(seconds); },
+            () => {
+                void this.player.forward?.(seconds);
+
+                if (this.rightIndicator === null) {
+                    this.rightIndicator = this.createSeekIndicator(el, 'right');
+                }
+
+                this.showSeekIndicator(this.rightIndicator, seconds, 'forward');
+            },
             () => {
                 if (this.controlsVisible) this.player.emit('activity', { active: false });
             },
@@ -197,6 +337,7 @@ export class TouchZonesPlugin extends Plugin<NMVideoPlayer<any>, TouchZonesOptio
 
     private buildVolUp(parent: HTMLElement, pos: ZonePos): void {
         const el = this.makeBox(parent, pos);
+
         const handler = this.doubleTap(
             () => { this.player.volumeUp?.(); },
             () => {
@@ -208,6 +349,7 @@ export class TouchZonesPlugin extends Plugin<NMVideoPlayer<any>, TouchZonesOptio
 
     private buildVolDown(parent: HTMLElement, pos: ZonePos): void {
         const el = this.makeBox(parent, pos);
+
         const handler = this.doubleTap(
             () => { this.player.volumeDown?.(); },
             () => {
