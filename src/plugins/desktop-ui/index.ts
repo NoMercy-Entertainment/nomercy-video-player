@@ -827,7 +827,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
         const levels = ((this.player as any).qualityLevels?.() ?? []) as QualityLevelLite[];
 
         this.subsBtn.hidden = subsCount === 0;
-        this.audioBtn.hidden = audios.length === 0;
+        this.audioBtn.hidden = audios.length <= 1;
         this.qualityBtn.hidden = levels.length < 2;
         const chapters = this.getChapters();
         this.chapBackBtn.hidden = chapters.length === 0;
@@ -837,7 +837,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
         this.playlistBtn.hidden = queueLen < 2;
 
         this.menus.mainButtons.subtitles.style.display = subsCount === 0 ? 'none' : 'flex';
-        this.menus.mainButtons.language.style.display = audios.length === 0 ? 'none' : 'flex';
+        this.menus.mainButtons.language.style.display = audios.length <= 1 ? 'none' : 'flex';
         this.menus.mainButtons.quality.style.display = levels.length < 2 ? 'none' : 'flex';
         this.menus.mainButtons.playlist.style.display = queueLen < 2 ? 'none' : 'flex';
 
