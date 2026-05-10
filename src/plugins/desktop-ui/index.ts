@@ -1275,23 +1275,24 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
     }
 
     private repaintPane(id: SubMenuId): void {
-        const onPick = () => this.closeAllMenus();
+        const closeOnPick = () => this.closeAllMenus();
+        const keepOpenOnPick = (paneId: SubMenuId) => () => this.repaintPane(paneId);
         const listen = this.listen.bind(this);
         const st = this.menuState();
-        if (id === 'speed') renderSpeedPane(this.menus.panes.speed, this.player, listen, onPick);
-        if (id === 'quality') renderQualityPane(this.menus.panes.quality, this.player, listen, onPick, st);
-        if (id === 'subtitles') renderSubsPane(this.menus.panes.subtitles, this.player, listen, onPick, st);
-        if (id === 'language') renderAudioPane(this.menus.panes.language, this.player, listen, onPick, st);
+        if (id === 'speed') renderSpeedPane(this.menus.panes.speed, this.player, listen, keepOpenOnPick('speed'));
+        if (id === 'quality') renderQualityPane(this.menus.panes.quality, this.player, listen, closeOnPick, st);
+        if (id === 'subtitles') renderSubsPane(this.menus.panes.subtitles, this.player, listen, closeOnPick, st);
+        if (id === 'language') renderAudioPane(this.menus.panes.language, this.player, listen, closeOnPick, st);
         if (id === 'playlist') {
-            renderPlaylistPane(this.menus.panes.playlist, this.player, listen, onPick, {
+            renderPlaylistPane(this.menus.panes.playlist, this.player, listen, closeOnPick, {
                 imageBaseUrl: this.opts?.imageBaseUrl,
             });
         }
         if (id === 'subtitleSettings') {
-            renderSubtitleSettingsPane(this.menus.panes.subtitleSettings, this.player, listen, onPick);
+            renderSubtitleSettingsPane(this.menus.panes.subtitleSettings, this.player, listen, closeOnPick);
         }
         if (id === 'aspectRatio') {
-            renderAspectRatioPane(this.menus.panes.aspectRatio, this.player, listen, onPick);
+            renderAspectRatioPane(this.menus.panes.aspectRatio, this.player, listen, keepOpenOnPick('aspectRatio'));
         }
     }
 
