@@ -411,11 +411,20 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
             this.repaintAudioIfOpen();
         });
 
-        // HLS backend bridge fires 'level-switched' with the selected level index.
-        this.on('level-switched', (d) => {
-            const isAuto = this.player.qualityState() === 'auto';
-            this.activeQualityIdx = isAuto ? 'auto' : (typeof d.level === 'number' ? d.level : 'auto');
+        this.onVideo('quality:requested', (d) => {
+            this.activeQualityIdx = d.level;
+            this._userPickedQuality = d.level !== 'auto';
             this.applyQualityIcon();
+            this.repaintQualityIfOpen();
+        });
+
+        this.on('level-switched', (d) => {
+            if (!this._userPickedQuality) {
+                this.activeQualityIdx = 'auto';
+            }
+            else {
+                this.activeQualityIdx = typeof d.level === 'number' ? d.level : this.activeQualityIdx;
+            }
             this.repaintQualityIfOpen();
         });
 
@@ -790,12 +799,11 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
     }
 
     private applyQualityIcon(): void {
-        const active = this.activeQualityIdx !== 'auto';
-        const icon = active
+        const icon = this._userPickedQuality
             ? { ...fluentIcons.quality, normal: fluentIcons.quality.hover }
             : fluentIcons.quality;
         this.qualityBtn.innerHTML = svgFromIcon(icon);
-        this.qualityBtn.setAttribute('aria-label', active ? 'Quality (manual)' : 'Quality (auto)');
+        this.qualityBtn.setAttribute('aria-label', this._userPickedQuality ? 'Quality (manual)' : 'Quality (auto)');
     }
 
     private applyFullscreen(): void {
@@ -973,13 +981,14 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
             }
         }
 
-        // Quality
         const qState = (this.player as any).qualityState?.();
         if (qState === 'auto' || qState === 0) {
             this.activeQualityIdx = 'auto';
+            this._userPickedQuality = false;
         }
         else if (typeof hls?.currentLevel === 'number') {
             this.activeQualityIdx = hls.currentLevel >= 0 ? hls.currentLevel : 'auto';
+            this._userPickedQuality = hls.currentLevel >= 0;
         }
     }
 
