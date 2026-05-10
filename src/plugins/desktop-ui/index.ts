@@ -17,6 +17,13 @@
  *   sprite.ts       — Sprite VTT parser + thumbnail lookup for slider-pop.
  *   styles.ts       — CSS injection (ensureDesktopUiStyles).
  *
+ * UX rule — menu vs. cycle:
+ *   Pointer-input buttons (control bar) open menus for multi-state features.
+ *   The cycle action (cycleAspectRatio, etc.) is for remote-control and key-bind
+ *   contexts where the user cannot pick from a list. Quality, subtitles, audio,
+ *   speed, and aspect-ratio are all menu-driven on click. Theater / PiP /
+ *   Fullscreen are binary toggles — direct action on click is correct for those.
+ *
  * DOM tree (mirrors v1 div-by-div):
  *
  *   overlay
@@ -495,7 +502,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
         this.listen(this.playlistBtn, 'click', (e: Event) => { e.stopPropagation(); this.openSubMenu('playlist'); });
         this.listen(this.settingsBtn, 'click', (e: Event) => { e.stopPropagation(); this.openMainMenu(); });
 
-        this.listen(this.aspectRatioBtn, 'click', () => { this.player.cycleAspectRatio(); });
+        this.listen(this.aspectRatioBtn, 'click', (e: Event) => { e.stopPropagation(); this.openSubMenu('aspectRatio'); });
         this.listen(this.theaterBtn, 'click', () => { this.player.toggleTheater(); });
         this.listen(this.pipBtn, 'click', () => { this.player.togglePip(); });
         this.listen(this.fsBtn, 'click', () => { this.player.toggleFullscreen(); });
@@ -1010,6 +1017,9 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
         }
         if (id === 'subtitleSettings') {
             renderSubtitleSettingsPane(this.menus.panes.subtitleSettings, this.player, listen, onPick);
+        }
+        if (id === 'aspectRatio') {
+            renderAspectRatioPane(this.menus.panes.aspectRatio, this.player, listen, onPick);
         }
     }
 
