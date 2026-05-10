@@ -673,9 +673,9 @@ export const desktopUiCss = `
     background: rgba(20, 22, 30, 0.92);
     color: #fff;
     font-size: 0.75rem;
-    line-height: 1.2;
-    padding: 4px 8px;
-    border-radius: 4px;
+    line-height: 2;
+    padding: 8px 16px;
+    border-radius: 8px;
     white-space: nowrap;
     pointer-events: none;
     z-index: 100;
