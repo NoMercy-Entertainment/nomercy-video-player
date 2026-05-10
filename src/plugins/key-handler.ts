@@ -1,36 +1,5 @@
 import { KeyHandlerPlugin as BaseKeyHandler } from '@nomercy-entertainment/nomercy-player-core/plugins/key-handler';
-import type { NMVideoPlayer } from '../index';
-
-interface VideoSurface {
-	play?: () => unknown;
-	pause?: () => unknown;
-	stop?: () => unknown;
-	togglePlayback?: () => unknown;
-	next?: () => unknown;
-	previous?: () => unknown;
-	rewind?: (seconds?: number) => unknown;
-	forward?: (seconds?: number) => unknown;
-	volumeUp?: (step?: number) => unknown;
-	volumeDown?: (step?: number) => unknown;
-	toggleMute?: () => unknown;
-	toggleFullscreen?: () => unknown;
-	cycleSubtitles?: () => unknown;
-	cycleAudioTracks?: () => unknown;
-	cycleAspectRatio?: () => unknown;
-	nextChapter?: (opts?: unknown) => unknown;
-	previousChapter?: (opts?: unknown) => unknown;
-	playbackRate?: { (): number; (rate: number): void };
-	playbackRates?: () => number[];
-	currentTime?: { (): number; (t: number, opts?: unknown): Promise<void> };
-	duration?: () => number;
-	playState?: () => string;
-	fullscreenState?: { (): unknown; (s: boolean): void };
-	isTv?: () => boolean;
-	isMobile?: () => boolean;
-	displayMessage?: (text: string, ms?: number) => void;
-	emit?: (event: string, payload?: unknown) => void;
-	options?: { disableMediaControls?: boolean; disableControls?: boolean };
-}
+import type { NMVideoPlayer, VideoPlayerConfig } from '../index';
 
 const fmtTime = (s: number): string => {
 	const h = Math.floor(s / 3600);
@@ -40,6 +9,10 @@ const fmtTime = (s: number): string => {
 		? `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
 		: `${m}:${String(sec).padStart(2, '0')}`;
 };
+
+function hasDisplayMessage(p: NMVideoPlayer<any>): p is NMVideoPlayer<any> & { displayMessage: (text: string, ms?: number) => void } {
+	return typeof (p as unknown as { displayMessage?: unknown }).displayMessage === 'function';
+}
 
 /**
  * Video key handler — full v1 binding parity, modifier-aware. Subclasses
@@ -55,25 +28,26 @@ export class KeyHandlerPlugin extends BaseKeyHandler<NMVideoPlayer<any>> {
 	static override readonly version: string = '2.0.0';
 	static override readonly description: string = 'Video keyboard shortcuts — playback, media keys, modifier-aware seeks, TV color buttons, chapters, subs/audio, fullscreen, speed, frame-advance, time, subtitle-size, aspect-ratio';
 
-	protected get surface(): VideoSurface {
-		return this.player as unknown as VideoSurface;
+	private get cfg(): VideoPlayerConfig {
+		return this.player.options as VideoPlayerConfig;
 	}
 
 	protected mediaControlsAllowed(): boolean {
-		return !this.surface.options?.disableMediaControls;
+		return !this.cfg.disableMediaControls;
 	}
 
 	/** Best-effort OSD message — calls `player.displayMessage(...)` if present, also emits `display-message`. */
 	protected message(text: string): void {
-		try { this.surface.displayMessage?.(text); }
-		catch { /* swallow */ }
-		try { this.surface.emit?.('display-message', { text }); }
+		if (hasDisplayMessage(this.player)) {
+			try { this.player.displayMessage(text); }
+			catch { /* swallow */ }
+		}
+		try { this.player.emit('display-message', { text }); }
 		catch { /* swallow */ }
 	}
 
 	protected override addDefaults(): void {
-		// `disableControls` skips the entire registration (matches v1).
-		if (this.surface.options?.disableControls) return;
+		if (this.cfg.disableControls) return;
 		this.addPlaybackKeys();
 		this.addNavigationKeys();
 		this.addVolumeKeys();
@@ -96,53 +70,44 @@ export class KeyHandlerPlugin extends BaseKeyHandler<NMVideoPlayer<any>> {
 	}
 
 	protected override addPlaybackKeys(): void {
-		const s = (): VideoSurface => this.surface;
-		this.bind(' ', () => { void s().togglePlayback?.(); });
-		// Hardware media keys — gated by disableMediaControls per v1.
-		this.bind('MediaPlay', () => { if (this.mediaControlsAllowed()) void s().play?.(); });
-		this.bind('MediaPause', () => { if (this.mediaControlsAllowed()) void s().pause?.(); });
-		this.bind('MediaPlayPause', () => { if (this.mediaControlsAllowed()) void s().togglePlayback?.(); });
-		this.bind('MediaStop', () => { if (this.mediaControlsAllowed()) void s().stop?.(); });
-		this.bind('MediaRewind', () => { if (this.mediaControlsAllowed()) void s().rewind?.(); });
-		this.bind('MediaFastForward', () => { if (this.mediaControlsAllowed()) void s().forward?.(); });
+		this.bind(' ', () => { void this.player.togglePlayback?.(); });
+		this.bind('MediaPlay', () => { if (this.mediaControlsAllowed()) void this.player.play?.(); });
+		this.bind('MediaPause', () => { if (this.mediaControlsAllowed()) void this.player.pause?.(); });
+		this.bind('MediaPlayPause', () => { if (this.mediaControlsAllowed()) void this.player.togglePlayback?.(); });
+		this.bind('MediaStop', () => { if (this.mediaControlsAllowed()) void this.player.stop?.(); });
+		this.bind('MediaRewind', () => { if (this.mediaControlsAllowed()) void this.player.rewind?.(); });
+		this.bind('MediaFastForward', () => { if (this.mediaControlsAllowed()) void this.player.forward?.(); });
 	}
 
 	protected override addNavigationKeys(): void {
-		const s = (): VideoSurface => this.surface;
-		// Plain arrow seek — only off-TV (TV reserves arrows for focus nav).
-		this.bind('ArrowLeft', () => { if (!s().isTv?.()) void s().rewind?.(); });
-		this.bind('ArrowRight', () => { if (!s().isTv?.()) void s().forward?.(); });
+		this.bind('ArrowLeft', () => { if (!this.player.isTv?.()) void this.player.rewind?.(); });
+		this.bind('ArrowRight', () => { if (!this.player.isTv?.()) void this.player.forward?.(); });
 	}
 
 	protected override addVolumeKeys(): void {
-		const s = (): VideoSurface => this.surface;
-		// Volume — only on desktop (TV + mobile have hardware controls).
 		this.bind('ArrowUp', () => {
-			if (!s().isTv?.() && !s().isMobile?.()) void s().volumeUp?.();
+			if (!this.player.isTv?.() && !this.player.isMobile?.()) void this.player.volumeUp?.();
 		});
 		this.bind('ArrowDown', () => {
-			if (!s().isTv?.() && !s().isMobile?.()) void s().volumeDown?.();
+			if (!this.player.isTv?.() && !this.player.isMobile?.()) void this.player.volumeDown?.();
 		});
-		this.bind('m', () => { void s().toggleMute?.(); });
+		this.bind('m', () => { void this.player.toggleMute?.(); });
 	}
 
 	protected override addMediaKeys(): void {
-		const s = (): VideoSurface => this.surface;
-		// Subtitle / Audio media keys + numeric and letter aliases.
-		this.bind('Subtitle', () => { void s().cycleSubtitles?.(); });
-		this.bind('5', () => { void s().cycleSubtitles?.(); });
-		this.bind('v', () => { void s().cycleSubtitles?.(); });
-		this.bind('Audio', () => { void s().cycleAudioTracks?.(); });
-		this.bind('2', () => { void s().cycleAudioTracks?.(); });
-		this.bind('b', () => { void s().cycleAudioTracks?.(); });
+		this.bind('Subtitle', () => { void this.player.cycleSubtitles?.(); });
+		this.bind('5', () => { void this.player.cycleSubtitles?.(); });
+		this.bind('v', () => { void this.player.cycleSubtitles?.(); });
+		this.bind('Audio', () => { void this.player.cycleAudioTracks?.(); });
+		this.bind('2', () => { void this.player.cycleAudioTracks?.(); });
+		this.bind('b', () => { void this.player.cycleAudioTracks?.(); });
 	}
 
 	/** VLC-style modifier seeks: shift = ±3s, alt = ±10s, ctrl = ±60s. */
 	protected addModifierSeekKeys(): void {
-		const s = (): VideoSurface => this.surface;
 		const seek = (delta: number): void => {
-			if (delta > 0) void s().forward?.(delta);
-			else void s().rewind?.(Math.abs(delta));
+			if (delta > 0) void this.player.forward?.(delta);
+			else void this.player.rewind?.(Math.abs(delta));
 		};
 		this.bind('shift+ArrowLeft', () => seek(-3));
 		this.bind('shift+ArrowRight', () => seek(3));
@@ -154,67 +119,54 @@ export class KeyHandlerPlugin extends BaseKeyHandler<NMVideoPlayer<any>> {
 
 	/** Numeric quick-skip + TV remote color buttons (v1 parity). */
 	protected addQuickSkipKeys(): void {
-		const s = (): VideoSurface => this.surface;
-		this.bind('1', () => { void s().forward?.(120); });
-		this.bind('3', () => { void s().forward?.(30); });
-		this.bind('6', () => { void s().forward?.(60); });
-		this.bind('9', () => { void s().forward?.(90); });
-		this.bind('ColorF0Red', () => { void s().forward?.(30); });
-		this.bind('ColorF1Green', () => { void s().forward?.(60); });
-		this.bind('ColorF2Yellow', () => { void s().forward?.(90); });
-		this.bind('ColorF3Blue', () => { void s().forward?.(120); });
+		this.bind('1', () => { void this.player.forward?.(120); });
+		this.bind('3', () => { void this.player.forward?.(30); });
+		this.bind('6', () => { void this.player.forward?.(60); });
+		this.bind('9', () => { void this.player.forward?.(90); });
+		this.bind('ColorF0Red', () => { void this.player.forward?.(30); });
+		this.bind('ColorF1Green', () => { void this.player.forward?.(60); });
+		this.bind('ColorF2Yellow', () => { void this.player.forward?.(90); });
+		this.bind('ColorF3Blue', () => { void this.player.forward?.(120); });
 	}
 
 	protected addNextPrevKeys(): void {
-		const s = (): VideoSurface => this.surface;
-		this.bind('MediaTrackNext', () => { if (this.mediaControlsAllowed()) void s().next?.(); });
-		this.bind('MediaTrackPrevious', () => { if (this.mediaControlsAllowed()) void s().previous?.(); });
-		this.bind('n', () => { void s().next?.(); });
-		this.bind('p', () => { void s().previous?.(); });
+		this.bind('MediaTrackNext', () => { if (this.mediaControlsAllowed()) void this.player.next?.(); });
+		this.bind('MediaTrackPrevious', () => { if (this.mediaControlsAllowed()) void this.player.previous?.(); });
+		this.bind('n', () => { void this.player.next?.(); });
+		this.bind('p', () => { void this.player.previous?.(); });
 	}
 
 	/** Chapter cycling — Shift+N forward, Shift+P backward (matches v1). */
 	protected addChapterKeys(): void {
-		const s = (): VideoSurface => this.surface;
-		this.bind('shift+n', () => { void s().nextChapter?.(); });
-		this.bind('shift+p', () => { void s().previousChapter?.(); });
+		this.bind('shift+n', () => { void this.player.nextChapter?.(); });
+		this.bind('shift+p', () => { void this.player.previousChapter?.(); });
 	}
 
 	protected addFullscreenKeys(): void {
-		const s = (): VideoSurface => this.surface;
-		this.bind('f', () => { void s().toggleFullscreen?.(); });
-		this.bind('F11', () => { void s().toggleFullscreen?.(); });
+		this.bind('f', () => { void this.player.toggleFullscreen?.(); });
+		this.bind('F11', () => { void this.player.toggleFullscreen?.(); });
 		this.bind('Escape', () => {
-			const surface = s();
-			// Only exit fullscreen if currently in it — don't swallow Escape unconditionally.
-			const state = surface.fullscreenState?.();
-			const inFs = state === 'on' || state === true;
-			if (inFs) surface.fullscreenState?.(false);
+			const inFs = this.player.fullscreenState?.() === 'on';
+			if (inFs) this.player.fullscreenState?.(false);
 		});
 	}
 
 	/** VLC-style speed: `]` faster, `[` slower, `=` reset to 1x. */
 	protected addSpeedKeys(): void {
-		const s = (): VideoSurface => this.surface;
 		const setRate = (rate: number): void => {
-			const surface = s();
-			if (typeof surface.playbackRate === 'function') (surface.playbackRate as (r: number) => void)(rate);
+			this.player.playbackRate?.(rate);
 			this.message(`${rate}x`);
 		};
-		const currentRate = (): number => {
-			const surface = s();
-			return typeof surface.playbackRate === 'function' ? (surface.playbackRate as () => number)() ?? 1 : 1;
-		};
+		const currentRate = (): number => this.player.playbackRate?.() ?? 1;
+
 		this.bind(']', () => {
-			const surface = s();
-			const rates = surface.playbackRates?.() ?? [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+			const rates = this.player.playbackRates?.() ?? [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 			const cur = currentRate();
 			const idx = rates.indexOf(cur);
 			if (idx >= 0 && idx < rates.length - 1) setRate(rates[idx + 1]!);
 		});
 		this.bind('[', () => {
-			const surface = s();
-			const rates = surface.playbackRates?.() ?? [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+			const rates = this.player.playbackRates?.() ?? [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 			const cur = currentRate();
 			const idx = rates.indexOf(cur);
 			if (idx > 0) setRate(rates[idx - 1]!);
@@ -224,26 +176,19 @@ export class KeyHandlerPlugin extends BaseKeyHandler<NMVideoPlayer<any>> {
 
 	/** Frame-advance ('e') — only when paused, advance ~1 frame at 30fps (v1 parity). */
 	protected addFrameAdvanceKey(): void {
-		const s = (): VideoSurface => this.surface;
 		this.bind('e', () => {
-			const surface = s();
-			if (typeof surface.currentTime !== 'function') return;
-			// v1 only advanced when paused — don't seek forward during active playback.
-			const ps = surface.playState?.();
+			const ps = this.player.playState?.();
 			if (ps === 'playing' || ps === 'loading') return;
-			const t = (surface.currentTime as () => number)();
-			void (surface.currentTime as (t: number) => Promise<void>)(t + (1 / 30));
+			const t = this.player.currentTime?.() ?? 0;
+			void this.player.currentTime?.(t + (1 / 30));
 		});
 	}
 
 	/** Show current time / remaining time as an OSD message. */
 	protected addShowTimeKey(): void {
-		const s = (): VideoSurface => this.surface;
 		this.bind('t', () => {
-			const surface = s();
-			if (typeof surface.currentTime !== 'function' || typeof surface.duration !== 'function') return;
-			const cur = (surface.currentTime as () => number)();
-			const dur = surface.duration();
+			const cur = this.player.currentTime?.() ?? 0;
+			const dur = this.player.duration?.() ?? 0;
 			const remaining = Math.max(0, dur - cur);
 			this.message(`${fmtTime(cur)} / -${fmtTime(remaining)}`);
 		});
@@ -251,9 +196,8 @@ export class KeyHandlerPlugin extends BaseKeyHandler<NMVideoPlayer<any>> {
 
 	/** Subtitle font-size events — UI plugins listen on `subtitle-size-up/down`. */
 	protected addSubtitleSizeKeys(): void {
-		const s = (): VideoSurface => this.surface;
 		const emit = (name: 'subtitle-size-up' | 'subtitle-size-down'): void => {
-			try { s().emit?.(name); }
+			try { this.player.emit(name, undefined); }
 			catch { /* swallow */ }
 		};
 		this.bind('+', () => emit('subtitle-size-up'));
@@ -262,14 +206,12 @@ export class KeyHandlerPlugin extends BaseKeyHandler<NMVideoPlayer<any>> {
 	}
 
 	protected addAspectRatioKeys(): void {
-		const s = (): VideoSurface => this.surface;
-		this.bind('a', () => { void s().cycleAspectRatio?.(); });
-		this.bind('BrowserFavorites', () => { void s().cycleAspectRatio?.(); });
+		this.bind('a', () => { void this.player.cycleAspectRatio?.(); });
+		this.bind('BrowserFavorites', () => { void this.player.cycleAspectRatio?.(); });
 	}
 
 	protected addStopKey(): void {
-		const s = (): VideoSurface => this.surface;
-		this.bind('s', () => { void s().stop?.(); });
+		this.bind('s', () => { void this.player.stop?.(); });
 	}
 }
 
