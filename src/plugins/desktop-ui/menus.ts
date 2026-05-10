@@ -18,7 +18,7 @@
  * builder takes a `listen` helper and a small action-callback bag.
  */
 
-import type { NMVideoPlayer } from '@nomercy-entertainment/nomercy-video-player';
+import type { NMVideoPlayer, VideoPlaylistItem } from '@nomercy-entertainment/nomercy-video-player';
 import { fluentIcons, svgFromIcon } from './icons';
 import {
     colors,
@@ -31,7 +31,7 @@ import {
 
 export type MenuListen = (target: EventTarget, event: string, fn: (e: Event) => void) => void;
 
-export type SubMenuId = 'language' | 'subtitles' | 'quality' | 'speed' | 'playlist' | 'subtitleSettings';
+export type SubMenuId = 'language' | 'subtitles' | 'quality' | 'speed' | 'playlist' | 'subtitleSettings' | 'aspectRatio';
 
 export interface SubtitleTrackLite { id?: string | number; label?: string; language?: string; kind?: string }
 export interface AudioTrackLite { id?: string | number; name?: string; language?: string; label?: string; default?: boolean }
@@ -96,6 +96,7 @@ export function buildMenuFrame(
         speed: buildSubMenuPane(player, sub, 'speed', 'Speed', listen, actions),
         playlist: buildPlaylistPaneShell(player, sub, listen, actions),
         subtitleSettings: buildSubMenuPane(player, sub, 'subtitleSettings', 'Subtitle Settings', listen, actions),
+        aspectRatio: buildSubMenuPane(player, sub, 'aspectRatio', 'Aspect Ratio', listen, actions),
     };
 
     return {
@@ -112,6 +113,7 @@ export function buildMenuFrame(
             speed: main.querySelector<HTMLButtonElement>('#menu-button-speed')!,
             playlist: main.querySelector<HTMLButtonElement>('#menu-button-playlist')!,
             subtitleSettings: main.querySelector<HTMLButtonElement>('#menu-button-subtitleSettings')!,
+            aspectRatio: main.querySelector<HTMLButtonElement>('#menu-button-aspectRatio')!,
         },
     };
 }
@@ -137,13 +139,14 @@ function buildMainMenu(
     listen(closeBtn, 'click', (e: Event) => { e.stopPropagation(); actions.closeMenu(); });
 
     // Category buttons. v1 order: language, subtitles, subtitle settings,
-    // quality, speed, playlist.
+    // quality, speed, aspect ratio, playlist.
     const cats: { id: SubMenuId; label: string; iconKey: keyof typeof fluentIcons }[] = [
         { id: 'language', label: 'Audio', iconKey: 'language' },
         { id: 'subtitles', label: 'Subtitles', iconKey: 'subtitles' },
         { id: 'subtitleSettings', label: 'Subtitle Settings', iconKey: 'subtitleSettings' },
         { id: 'quality', label: 'Quality', iconKey: 'quality' },
         { id: 'speed', label: 'Speed', iconKey: 'speed' },
+        { id: 'aspectRatio', label: 'Aspect Ratio', iconKey: 'aspectFit' },
         { id: 'playlist', label: 'Playlist', iconKey: 'playlist' },
     ];
     for (const c of cats) {
@@ -285,7 +288,7 @@ export function renderSpeedPane(
     const scroll = pane.querySelector<HTMLDivElement>('.speed-scroll-container');
     if (!scroll) return;
     scroll.replaceChildren();
-    const rates = ((player as any).playbackRates?.() ?? [0.5, 0.75, 1, 1.25, 1.5, 2]) as number[];
+    const rates = (player.playbackRates?.() ?? [0.5, 0.75, 1, 1.25, 1.5, 2]) as number[];
     const cur = player.playbackRate?.() ?? 1;
     for (const r of rates) {
         const btn = player.createButton(`speed-button-${r}`, `${r}×`, () => {});
@@ -310,21 +313,18 @@ export function renderQualityPane(
     const scroll = pane.querySelector<HTMLDivElement>('.quality-scroll-container');
     if (!scroll) return;
     scroll.replaceChildren();
-    const levels = (((player as any).qualityLevels?.() ?? []) as QualityLevelLite[]);
+    const levels = ((player.qualityLevels?.() ?? []) as QualityLevelLite[]);
     const auto = state.qualityIdx === 'auto';
-    appendChoice(scroll, 'quality-auto', 'Auto', auto, () => { (player as any).currentQuality?.('auto'); onPick(); }, listen, player);
+    appendChoice(scroll, 'quality-auto', 'Auto', auto, () => { player.currentQuality?.('auto'); onPick(); }, listen, player);
     levels.forEach((q, i) => {
         const label = q.label ?? q.name ?? (q.height ? `${q.height}p` : `Level ${i + 1}`);
-        // Use a per-index id so SDR/HDR siblings at the same height don't
-        // collide. Suffix with a stable height/bitrate hash for parity
-        // with v1's `quality-button-${height}-${bitrate}` convention.
         const id = `quality-${q.height ?? '?'}-${q.bitrate ?? i}`;
         appendChoice(
             scroll,
             id,
             label,
             !auto && state.qualityIdx === i,
-            () => { (player as any).currentQuality?.(i); onPick(); },
+            () => { player.currentQuality?.(i); onPick(); },
             listen,
             player,
         );
@@ -345,7 +345,7 @@ export function renderSubsPane(
     // sidecar VTT tracks, so the renderer just consumes one flat list.
     const subs = ((player.subtitles?.() ?? []) as SubtitleTrackLite[]);
     const off = state.subtitleIdx === null || state.subtitleIdx === -1;
-    appendChoice(scroll, 'off-button-', 'Off', off, () => { (player as any).currentSubtitle?.(null); onPick(); }, listen, player);
+    appendChoice(scroll, 'off-button-', 'Off', off, () => { player.currentSubtitle?.(null); onPick(); }, listen, player);
     subs.forEach((s, i) => {
         const langSlug = (s.language ?? String(s.id ?? i)).replace(/\W+/g, '-').toLowerCase();
         const kind = (s.kind ?? 'full').replace(/\W+/g, '-').toLowerCase();
@@ -354,7 +354,7 @@ export function renderSubsPane(
             `${kind}-button-${langSlug}`,
             s.label ?? s.language ?? `Track ${i + 1}`,
             !off && state.subtitleIdx === i,
-            () => { (player as any).currentSubtitle?.(i); onPick(); },
+            () => { player.currentSubtitle?.(i); onPick(); },
             listen,
             player,
         );
@@ -394,18 +394,13 @@ const SETTING_ROWS: Array<{ label: string; property: keyof SubtitleStyle | '' }>
  * worry about an uninitialized state.
  */
 function readSubtitleStyle(player: NMVideoPlayer): SubtitleStyle {
-    const live = (player as any).subtitleStyle?.();
+    const live = player.subtitleStyle?.();
     if (live && typeof live === 'object') return live as SubtitleStyle;
     return { ...defaultSubtitleStyles };
 }
 
-/**
- * Write a partial style patch through the kit; the kit merges it onto
- * the active state and emits `subtitleStyle` so the overlay plugin
- * picks it up.
- */
 function writeSubtitleStyle(player: NMVideoPlayer, patch: Partial<SubtitleStyle>): void {
-    (player as any).subtitleStyle?.(patch);
+    player.subtitleStyle?.(patch);
 }
 
 /**
@@ -517,7 +512,7 @@ function renderSubtitlePropertyPane(
     if (!scroll) return;
     scroll.replaceChildren();
 
-    const actions = subtitleSettingActions(player as any).filter(a => a.property === property);
+    const actions = subtitleSettingActions(player).filter(a => a.property === property);
     const currentValue = readSubtitleStyle(player)[property];
 
     for (const action of actions) {
@@ -536,7 +531,7 @@ function renderSubtitlePropertyPane(
             // Mirror v1's subtitleSettingActions: each action calls the
             // player API. We also update our local fallback state and
             // repaint the picker so the checkmark moves.
-            try { (action.action as any)?.(); }
+            try { action.action?.(); }
             catch { /* tolerate */ }
             writeSubtitleStyle(player, { [property]: action.value } as Partial<SubtitleStyle>);
             renderSubtitlePropertyPane(pane, player, listen, onPick, label, property);
@@ -577,8 +572,8 @@ export function renderPlaylistPane(
     onPick: () => void,
     opts: PlaylistRenderOptions = {},
 ): void {
-    const queue = (((player as any).queue?.() ?? []) as PlaylistItemLite[]);
-    const curIdx = (player as any).currentIndex?.() ?? 0;
+    const queue = ((player.queue?.() ?? []) as PlaylistItemLite[]);
+    const curIdx = player.currentIndex?.() ?? 0;
 
     const hasSeason = queue.some(item => typeof item.season === 'number');
 
@@ -720,8 +715,8 @@ function buildPlaylistCard(
     btn.appendChild(right);
 
     listen(btn, 'click', () => {
-        const target = item.id ?? index;
-        (player as any).current?.(target);
+        void player.load?.(item as VideoPlaylistItem)
+            ?.then(() => player.play?.({ source: 'user' }));
         onPick();
     });
 
@@ -758,7 +753,7 @@ export function renderAudioPane(
             `audio-button-${langSlug}-${i}`,
             t.name ?? t.label ?? t.language ?? `Track ${i + 1}`,
             state.audioIdx === i,
-            () => { (player as any).currentAudioTrack?.(i); onPick(); },
+            () => { player.currentAudioTrack?.(i); onPick(); },
             listen,
             player,
         );
@@ -784,6 +779,44 @@ function appendChoice(
     scroll.appendChild(btn);
     listen(btn, 'click', () => onClick());
 }
+
+export type AspectRatioValue = 'uniform' | 'fill' | 'exactfit' | 'none';
+
+const ASPECT_RATIO_OPTIONS: Array<{ value: AspectRatioValue; label: string }> = [
+    { value: 'uniform', label: 'Original' },
+    { value: 'fill', label: 'Stretch' },
+    { value: 'exactfit', label: 'Crop' },
+    { value: 'none', label: 'Native' },
+];
+
+export function renderAspectRatioPane(
+    pane: HTMLDivElement,
+    player: NMVideoPlayer,
+    listen: MenuListen,
+    onPick: () => void,
+): void {
+    const scroll = pane.querySelector<HTMLDivElement>('.aspectRatio-scroll-container');
+    if (!scroll) return;
+    scroll.replaceChildren();
+
+    const current = player.aspectRatio?.() ?? 'uniform';
+
+    for (const opt of ASPECT_RATIO_OPTIONS) {
+        const btn = player.createButton(`aspect-ratio-${opt.value}`, opt.label, () => {});
+        btn.classList.add('language-button');
+        if (opt.value === current) btn.classList.add('is-active');
+        btn.innerHTML = `
+            <span class="menu-button-text">${escapeHtml(opt.label)}</span>
+            <span class="menu-button-check">${svgFromIcon(fluentIcons.checkmark, 18)}</span>
+        `;
+        scroll.appendChild(btn);
+        listen(btn, 'click', () => {
+            player.aspectRatio(opt.value);
+            onPick();
+        });
+    }
+}
+
 
 function escapeHtml(s: string): string {
     return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));

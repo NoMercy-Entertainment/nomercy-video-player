@@ -155,8 +155,7 @@ export class OctopusPlugin extends Plugin<NMVideoPlayer<any>, OctopusOptions> {
 		// Use the player's merged subtitles() list — backend HLS-managed +
 		// sidecar .ass / .vtt tracks. `current().subtitles` doesn't exist;
 		// the kit derives the list from the item's `tracks[]` array.
-		const subtitlesFn = (this.player as unknown as { subtitles?: () => Array<{ id?: string; url?: string }> }).subtitles;
-		const list = typeof subtitlesFn === 'function' ? (subtitlesFn.call(this.player) ?? []) : [];
+		const list = this.player.subtitles?.() ?? [];
 
 		if (typeof track === 'number') {
 			return list[track]?.url ?? null;
@@ -177,10 +176,9 @@ export class OctopusPlugin extends Plugin<NMVideoPlayer<any>, OctopusOptions> {
 	private async resolveFontsForCurrent(): Promise<string[]> {
 		if (this._fontsForCurrent) return this._fontsForCurrent;
 
-		const cur = (this.player as unknown as { current?: () => { tracks?: Array<{ kind?: string; file?: string }> } | undefined }).current;
-		const item = typeof cur === 'function' ? cur.call(this.player) : undefined;
+		const item = this.player.current?.();
 		const tracks = Array.isArray(item?.tracks) ? item!.tracks! : [];
-		const fontsTrack = tracks.find(t => t?.kind === 'fonts');
+		const fontsTrack = tracks.find((t: { kind?: string; file?: string }) => t?.kind === 'fonts');
 		const manifestUrl = fontsTrack?.file;
 
 		// No fonts track on this item — fall back to the plugin-level static fonts.
@@ -294,9 +292,7 @@ export class OctopusPlugin extends Plugin<NMVideoPlayer<any>, OctopusOptions> {
 	 * `options.auth` would freeze on the setup-time value.
 	 */
 	private async resolveAccessToken(): Promise<string | undefined> {
-		const auth = (this.player as unknown as { auth?: () => { bearerToken?: unknown } | undefined }).auth;
-		const live = typeof auth === 'function' ? auth.call(this.player) : undefined;
-		const v = live?.bearerToken;
+		const v = this.player.auth?.()?.bearerToken;
 		if (!v) return undefined;
 		if (typeof v === 'string') return v;
 		if (typeof v === 'function') {

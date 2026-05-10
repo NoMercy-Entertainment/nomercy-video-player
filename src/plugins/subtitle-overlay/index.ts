@@ -226,7 +226,7 @@ export class SubtitleOverlayPlugin extends Plugin<NMVideoPlayer, SubtitleOverlay
      */
     private bindOverlayToVideo(): void {
         const fit = (): void => {
-            const video = (this.player as any).videoElement as HTMLVideoElement | undefined;
+            const video = this.player.videoElement as HTMLVideoElement | undefined;
             const container = this.player.container as HTMLElement | undefined;
             if (!video || !container) return;
 
@@ -258,14 +258,14 @@ export class SubtitleOverlayPlugin extends Plugin<NMVideoPlayer, SubtitleOverlay
         };
 
         fit();
-        this.on('mediaReady' as any, fit);
-        this.on('duration' as any, fit);
-        this.on('fullscreen' as any, fit);
+        this.on('mediaReady', fit);
+        this.on('duration', fit);
+        this.on('fullscreen', fit);
 
         const ro = new ResizeObserver(fit);
         const container = this.player.container as HTMLElement | undefined;
         if (container) ro.observe(container);
-        const video = (this.player as any).videoElement as HTMLVideoElement | undefined;
+        const video = this.player.videoElement as HTMLVideoElement | undefined;
         if (video) ro.observe(video);
         this.lifecycle?.addCleanup?.(() => ro.disconnect());
     }

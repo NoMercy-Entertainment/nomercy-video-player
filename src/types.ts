@@ -47,6 +47,8 @@ export interface VideoPlaylistItem extends BasePlaylistItem {
 	chapters?: ChapterRef[];
 	previewSpriteUrl?: string;
 	skippers?: SkipperData;
+	/** Generic sidecar track list — `{ kind: 'thumbnails' | 'fonts' | string; file: string }`. */
+	tracks?: Array<{ kind?: string; file?: string }>;
 	/** Series / show title displayed in the top-bar when season/episode are present. */
 	show?: string;
 	/** Season number (1-based). Combined with `episode` to render "S01E03" label. */

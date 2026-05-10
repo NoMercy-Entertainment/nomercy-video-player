@@ -121,7 +121,7 @@ export class DrmPlugin extends Plugin<NMVideoPlayer<any>, DrmOptions, DrmEvents>
 	/** Returns the backend's `mediaKeys` if EME is supported and bound. */
 	mediaKeys(): MediaKeys | null {
 		if (!this.supported) return null;
-		const ve = (this.player as unknown as { videoElement?: HTMLVideoElement }).videoElement;
+		const ve = this.player.videoElement;
 		return ve?.mediaKeys ?? null;
 	}
 

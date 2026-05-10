@@ -341,7 +341,7 @@ export interface SubtitleSettingAction {
 	label: string;
 	property: keyof SubtitleStyle | '';
 	value: string | number;
-	action: (value: Event) => void;
+	action: () => void;
 }
 
 export const colors: { label: string, value: string }[] = [

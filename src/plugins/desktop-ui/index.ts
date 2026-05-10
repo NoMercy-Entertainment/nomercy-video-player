@@ -957,48 +957,17 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
     }
     
     private syncActiveIndexes(): void {
-        // backend() is private on NMVideoPlayer; reach it only to inspect the
-        // underlying HLS.js state that is not yet surfaced on the player API.
-        const be = (this.player as unknown as { backend(): { hls?: Record<string, unknown> } }).backend?.();
-        const hls = be?.hls as Record<string, unknown> | undefined;
-
-        // Audio
         const audios = (this.player.audioTracks?.() ?? []) as AudioTrackLite[];
         if (audios.length > 0) {
-            const hlsAudio = hls?.['audioTrack'];
-            if (typeof hlsAudio === 'number' && hlsAudio >= 0) {
-                this.activeAudioIdx = hlsAudio;
-            }
-            else {
-                const defIdx = audios.findIndex(t => t.default === true);
-                this.activeAudioIdx = defIdx >= 0 ? defIdx : 0;
-            }
+            const defIdx = audios.findIndex(t => t.default === true);
+            this.activeAudioIdx = defIdx >= 0 ? defIdx : 0;
         }
 
-        const hlsSubTracks = hls?.['subtitleTracks'];
-        const hlsHasSubs = Array.isArray(hlsSubTracks) && hlsSubTracks.length > 0;
-        if (hlsHasSubs) {
-            const subState = this.player.subtitleState();
-            const hlsSub = hls?.['subtitleTrack'];
-            if (subState === 'off') {
-                this.activeSubtitleIdx = -1;
-            }
-            else if (typeof hlsSub === 'number') {
-                this.activeSubtitleIdx = hlsSub >= 0 ? hlsSub : -1;
-            }
-        }
+        const subState = this.player.subtitleState();
+        this.activeSubtitleIdx = subState === 'off' ? -1 : 0;
 
         if (!this._userPickedQuality) {
-            const qState = this.player.qualityState();
-            if (qState === 'auto') {
-                this.activeQualityIdx = 'auto';
-            }
-            else {
-                const hlsLevel = hls?.['currentLevel'];
-                if (typeof hlsLevel === 'number') {
-                    this.activeQualityIdx = hlsLevel >= 0 ? hlsLevel : 'auto';
-                }
-            }
+            this.activeQualityIdx = this.player.qualityState() === 'auto' ? 'auto' : 0;
         }
     }
 
