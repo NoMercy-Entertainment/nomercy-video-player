@@ -366,12 +366,15 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 			if (!data) return;
 			this.emit('subtitleCue', data);
 		});
-		// `play()` Promise rejection (autoplay block, source swap mid-play)
-		// fires `pause` immediately after the rejected play. The element's
-		// `pause` listener above already handles that, so no extra hook
-		// needed — but we DO need to make sure the kit's `play()` waits
-		// for the backend's actual play promise to resolve. That's the
-		// testbed bridge's job, not the kit's.
+
+		instance.on('timeupdate', () => {
+			this.emit('time', { time: instance.currentTime() });
+		});
+		instance.on('loadedmetadata', (data?: { duration: number }) => {
+			if (!data) return;
+			this.emit('duration', { duration: data.duration });
+		});
+
 		return instance;
 	}
 
