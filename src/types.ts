@@ -29,6 +29,18 @@ export interface SkipperData {
 	credits?: SkipperRange;
 }
 
+/**
+ * Continue-watching progress state for a playlist item. Consumers ship this
+ * alongside each item so the playlist menu can render a watched-percentage bar
+ * under the thumbnail without requiring the player to maintain watch history.
+ */
+export interface WatchProgress {
+	/** ISO-8601 timestamp of the last watch session. */
+	lastWatchedAt: string;
+	/** 0–100 percent watched (0 = unwatched, 100 = fully watched). */
+	percentage: number;
+}
+
 export interface VideoPlaylistItem extends BasePlaylistItem {
 	title?: string;
 	url?: string;
@@ -55,6 +67,12 @@ export interface VideoPlaylistItem extends BasePlaylistItem {
 	season?: number;
 	/** Episode number (1-based). */
 	episode?: number;
+	/**
+	 * Continue-watching state for this item. Consumer-supplied — the player
+	 * reads this to render the playlist menu progress bar. The player does not
+	 * write to this field; persistence is the consumer's responsibility.
+	 */
+	progress?: WatchProgress;
 }
 
 /** Top-level playback state. Returned by `player.playState()`. */

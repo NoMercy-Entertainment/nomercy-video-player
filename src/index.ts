@@ -55,7 +55,7 @@ import {
 	VolumeState,
 } from './types';
 
-export type { Stretching, VideoEventMap, VideoPlayerConfig, VideoPlaylistItem } from './types';
+export type { Stretching, VideoEventMap, VideoPlayerConfig, VideoPlaylistItem, WatchProgress } from './types';
 export {
 	AudioTrackState,
 	FullscreenState,
