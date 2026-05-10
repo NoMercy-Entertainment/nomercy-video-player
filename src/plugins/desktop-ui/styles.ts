@@ -616,6 +616,27 @@ export const desktopUiCss = `
 .active .nm-top-bar, .active .bottom-bar { opacity: 1; transform: translateY(0); }
 .inactive .nm-top-bar { opacity: 0; transform: translateY(-100%); pointer-events: none; }
 .inactive .bottom-bar { opacity: 0; transform: translateY(100%); pointer-events: none; }
+
+/* ── Button tooltips ──────────────────────────────────────────────── */
+.nm-tooltip {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(20, 22, 30, 0.92);
+    color: #fff;
+    font-size: 0.75rem;
+    line-height: 1.2;
+    padding: 4px 8px;
+    border-radius: 4px;
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 100;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    backdrop-filter: blur(4px);
+}
+.nm-tooltip.nm-tooltip-visible { opacity: 1; }
 `;
 
 export function ensureDesktopUiStyles(): void {

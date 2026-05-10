@@ -189,6 +189,33 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
     static override readonly version: string = '2.0.0';
     static override readonly description: string = 'Official desktop UI overlay (v2 rewrite)';
 
+    static override readonly translations = {
+        en: {
+            'desktop-ui.tooltip.play': 'Play / Pause',
+            'desktop-ui.tooltip.previous': 'Previous',
+            'desktop-ui.tooltip.next': 'Next',
+            'desktop-ui.tooltip.seekBack': 'Seek back 10 s',
+            'desktop-ui.tooltip.seekForward': 'Seek forward 10 s',
+            'desktop-ui.tooltip.chapterPrev': 'Previous chapter',
+            'desktop-ui.tooltip.chapterNext': 'Next chapter',
+            'desktop-ui.tooltip.mute': 'Mute / Unmute',
+            'desktop-ui.tooltip.aspectRatio': 'Aspect ratio',
+            'desktop-ui.tooltip.theater': 'Theater mode',
+            'desktop-ui.tooltip.pip': 'Picture-in-picture',
+            'desktop-ui.tooltip.speed': 'Playback speed',
+            'desktop-ui.tooltip.subtitles': 'Subtitles',
+            'desktop-ui.tooltip.audio': 'Audio track',
+            'desktop-ui.tooltip.quality': 'Quality',
+            'desktop-ui.tooltip.playlist': 'Episodes',
+            'desktop-ui.tooltip.settings': 'Settings',
+            'desktop-ui.tooltip.fullscreen': 'Fullscreen',
+            'desktop-ui.tooltip.nextWithTitle': 'Next: {title}',
+            'desktop-ui.tooltip.previousWithTitle': 'Previous: {title}',
+            'desktop-ui.tooltip.nextChapterWithTitle': 'Next chapter: {title}',
+            'desktop-ui.tooltip.previousChapterWithTitle': 'Previous chapter: {title}',
+        },
+    };
+
     // ── top bar ─────────────────────────────────────────────────────
     private topBarRefs!: TopBarRefs;
 
@@ -258,10 +285,12 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
     private cachedDuration = 0;
     private _lastMouseX = -1;
     private _lastMouseY = -1;
+    private _tooltipHoverToken: number | null = null;
 
     override use(): void {
         ensureDesktopUiStyles();
         this.buildDom();
+        this.wireTooltips();
         this.wireEvents();
         void Promise.resolve(this.storage.getJSON('showRemaining')).then(v => {
             this._showRemaining = (v as boolean | null) ?? true;
@@ -443,8 +472,98 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
         const icon = fluentIcons[iconName];
         const btn = this.player.createButton(id, icon.title || iconName, () => {});
         this.player.addClasses(btn, ['nm-btn']);
+        btn.style.position = 'relative';
         btn.innerHTML = svgFromIcon(icon);
         return btn;
+    }
+
+    /**
+     * Attach a hover tooltip to a button. `getText` is evaluated lazily on
+     * each hover so dynamic labels (next chapter, next item title) stay current.
+     * Tooltip appears after 500 ms; dismissed on click or mouseleave.
+     */
+    private addTooltip(btn: HTMLButtonElement, getText: () => string): void {
+        const tip = document.createElement('span');
+        tip.className = 'nm-tooltip';
+
+        const show = (): void => {
+            tip.textContent = getText();
+            tip.classList.add('nm-tooltip-visible');
+        };
+        const hide = (): void => {
+            if (this._tooltipHoverToken !== null) {
+                clearTimeout(this._tooltipHoverToken);
+                this._tooltipHoverToken = null;
+            }
+            tip.classList.remove('nm-tooltip-visible');
+        };
+
+        btn.removeAttribute('title');
+        btn.appendChild(tip);
+
+        this.listen(btn, 'mouseenter', () => {
+            if (this._tooltipHoverToken !== null) clearTimeout(this._tooltipHoverToken);
+            this._tooltipHoverToken = this.timeout(() => show(), 500);
+        });
+        this.listen(btn, 'mouseleave', () => hide());
+        this.listen(btn, 'click', () => hide());
+    }
+
+    private wireTooltips(): void {
+        this.addTooltip(this.playBtn, () => this.t('desktop-ui.tooltip.play', {}));
+        this.addTooltip(this.rewindBtn, () => this.t('desktop-ui.tooltip.seekBack', {}));
+        this.addTooltip(this.forwardBtn, () => this.t('desktop-ui.tooltip.seekForward', {}));
+        this.addTooltip(this.volBtn, () => this.t('desktop-ui.tooltip.mute', {}));
+        this.addTooltip(this.aspectRatioBtn, () => this.t('desktop-ui.tooltip.aspectRatio', {}));
+        this.addTooltip(this.theaterBtn, () => this.t('desktop-ui.tooltip.theater', {}));
+        this.addTooltip(this.pipBtn, () => this.t('desktop-ui.tooltip.pip', {}));
+        this.addTooltip(this.speedBtn, () => this.t('desktop-ui.tooltip.speed', {}));
+        this.addTooltip(this.subsBtn, () => this.t('desktop-ui.tooltip.subtitles', {}));
+        this.addTooltip(this.audioBtn, () => this.t('desktop-ui.tooltip.audio', {}));
+        this.addTooltip(this.qualityBtn, () => this.t('desktop-ui.tooltip.quality', {}));
+        this.addTooltip(this.playlistBtn, () => this.t('desktop-ui.tooltip.playlist', {}));
+        this.addTooltip(this.settingsBtn, () => this.t('desktop-ui.tooltip.settings', {}));
+        this.addTooltip(this.fsBtn, () => this.t('desktop-ui.tooltip.fullscreen', {}));
+
+        this.addTooltip(this.prevBtn, () => {
+            const idx = this.safeCurrentIndex();
+            const queue = this.player.queue() as VideoPlaylistItem[];
+            const prevItem = idx > 0 ? queue[idx - 1] : undefined;
+            if (prevItem?.title) {
+                return this.t('desktop-ui.tooltip.previousWithTitle', { title: prevItem.title });
+            }
+            return this.t('desktop-ui.tooltip.previous', {});
+        });
+
+        this.addTooltip(this.nextBtn, () => {
+            const idx = this.safeCurrentIndex();
+            const queue = this.player.queue() as VideoPlaylistItem[];
+            const nextItem = queue[idx + 1];
+            if (nextItem?.title) {
+                return this.t('desktop-ui.tooltip.nextWithTitle', { title: nextItem.title });
+            }
+            return this.t('desktop-ui.tooltip.next', {});
+        });
+
+        this.addTooltip(this.chapBackBtn, () => {
+            const chapters = this.player.chapters();
+            const time = this.player.currentTime?.() ?? 0;
+            const prev = [...chapters].reverse().find(ch => ch.start < time - 1);
+            if (prev?.title) {
+                return this.t('desktop-ui.tooltip.previousChapterWithTitle', { title: prev.title });
+            }
+            return this.t('desktop-ui.tooltip.chapterPrev', {});
+        });
+
+        this.addTooltip(this.chapFwdBtn, () => {
+            const chapters = this.player.chapters();
+            const time = this.player.currentTime?.() ?? 0;
+            const next = chapters.find(ch => ch.start > time + 1);
+            if (next?.title) {
+                return this.t('desktop-ui.tooltip.nextChapterWithTitle', { title: next.title });
+            }
+            return this.t('desktop-ui.tooltip.chapterNext', {});
+        });
     }
 
     // ── Event wiring ─────────────────────────────────────────────────────
