@@ -138,6 +138,16 @@ export interface DesktopUiButtonOptions {
     aspectRatio?: boolean;
 }
 
+/**
+ * Priority order for responsive button removal. When the container narrows,
+ * buttons at the END of the array are hidden first. The default order puts
+ * the most essential buttons first so they survive longest.
+ *
+ * Only include buttons that are enabled via `buttons`. Buttons not in the list
+ * keep whatever visibility the content rules gave them.
+ */
+export type ButtonPriorityList = ReadonlyArray<keyof DesktopUiButtonOptions>;
+
 export interface DesktopUiOptions {
     hideTitle?: boolean;
     disableClickToPause?: boolean;
@@ -145,6 +155,14 @@ export interface DesktopUiOptions {
     imageBaseUrl?: string;
     /** Per-button opt-in / opt-out. Unset keys use the button's own default. */
     buttons?: DesktopUiButtonOptions;
+    /**
+     * Priority order for responsive removal when the container is narrow.
+     * Buttons at the end are removed first. Override to change the default order.
+     * Default order: play → mute → volume → fullscreen → settings → next →
+     * previous → seekBack → seekForward → chapterPrev → chapterNext →
+     * theater → pip → speed → quality → subtitles → audio → aspectRatio → playlist.
+     */
+    buttonPriority?: ButtonPriorityList;
 }
 
 interface SidecarTrackEntry {
@@ -286,12 +304,14 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
     private _lastMouseX = -1;
     private _lastMouseY = -1;
     private _tooltipHoverToken: number | null = null;
+    private _resizeObserver: ResizeObserver | null = null;
 
     override use(): void {
         ensureDesktopUiStyles();
         this.buildDom();
         this.wireTooltips();
         this.wireEvents();
+        this.wireResponsive();
         void Promise.resolve(this.storage.getJSON('showRemaining')).then(v => {
             this._showRemaining = (v as boolean | null) ?? true;
         });
@@ -563,6 +583,70 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
                 return this.t('desktop-ui.tooltip.nextChapterWithTitle', { title: next.title });
             }
             return this.t('desktop-ui.tooltip.chapterNext', {});
+        });
+    }
+
+    // ── Responsive button removal ────────────────────────────────────────
+    private wireResponsive(): void {
+        if (typeof ResizeObserver === 'undefined') return;
+
+        const defaultPriority: ButtonPriorityList = [
+            'play', 'mute', 'volume', 'fullscreen', 'settings',
+            'next', 'previous', 'seekBack', 'seekForward',
+            'chapterPrev', 'chapterNext',
+            'theater', 'pip', 'speed', 'quality', 'subtitles', 'audio', 'aspectRatio', 'playlist',
+        ];
+        const priority = this.opts?.buttonPriority ?? defaultPriority;
+
+        const buttonMap: Record<keyof DesktopUiButtonOptions, HTMLButtonElement | null> = {
+            play: this.playBtn,
+            mute: this.volBtn,
+            volume: null,
+            fullscreen: this.fsBtn,
+            settings: this.settingsBtn,
+            next: this.nextBtn,
+            previous: this.prevBtn,
+            seekBack: this.rewindBtn,
+            seekForward: this.forwardBtn,
+            chapterPrev: this.chapBackBtn,
+            chapterNext: this.chapFwdBtn,
+            theater: this.theaterBtn,
+            pip: this.pipBtn,
+            speed: this.speedBtn,
+            quality: this.qualityBtn,
+            subtitles: this.subsBtn,
+            audio: this.audioBtn,
+            aspectRatio: this.aspectRatioBtn,
+            playlist: this.playlistBtn,
+        };
+
+        const COLLAPSE_THRESHOLD = 480;
+
+        const applyResponsive = (width: number): void => {
+            const narrow = width < COLLAPSE_THRESHOLD;
+            for (let idx = priority.length - 1; idx >= 0; idx--) {
+                const key = priority[idx];
+                if (!key) continue;
+                const btn = buttonMap[key];
+                if (!btn) continue;
+                const optHidden = !buttonVisible(key, this.opts?.buttons);
+                if (optHidden) continue;
+                const rank = priority.length - 1 - idx;
+                const shouldHide = narrow && rank > 3;
+                btn.hidden = shouldHide;
+            }
+        };
+
+        this._resizeObserver = new ResizeObserver(entries => {
+            const entry = entries[0];
+            if (!entry) return;
+            applyResponsive(entry.contentRect.width);
+        });
+
+        this._resizeObserver.observe(this.player.container);
+        this.lifecycle.addCleanup(() => {
+            this._resizeObserver?.disconnect();
+            this._resizeObserver = null;
         });
     }
 
