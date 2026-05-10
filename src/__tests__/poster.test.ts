@@ -1,10 +1,3 @@
-/**
- * Verifies the playlist item's `image` field reaches the `<video>` element's
- * `poster` attribute on `current` events — covering both orderings:
- *   - cursor moves AFTER backend allocation (real element already exists)
- *   - cursor moves BEFORE backend allocation (real element materialises later)
- */
-
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { NMVideoPlayer } from '../index';
 
@@ -87,5 +80,39 @@ describe('NMVideoPlayer poster sync', () => {
 
 		p.current('b');
 		expect(videoEl.getAttribute('poster')).toBe('https://cdn/b.jpg');
+	});
+
+	it('resolves relative image paths against imageBasePath', () => {
+		const relItems: ItemShape[] = [
+			{ id: 'r1', url: '/r1.m3u8', image: '/w780/abc.jpg' },
+		];
+
+		const p = new NMVideoPlayer<ItemShape>('poster-test').setup({
+			imageBasePath: 'https://image.tmdb.org/t/p',
+			playlist: relItems,
+		});
+		p.backend();
+		p.queue(relItems);
+		p.current('r1');
+
+		const videoEl = document.querySelector('#poster-test video') as HTMLVideoElement;
+		expect(videoEl.getAttribute('poster')).toBe('https://image.tmdb.org/t/p/w780/abc.jpg');
+	});
+
+	it('passes absolute image URLs through unchanged when imageBasePath is set', () => {
+		const absItems: ItemShape[] = [
+			{ id: 'abs', url: '/abs.m3u8', image: 'https://other.cdn/img.jpg' },
+		];
+
+		const p = new NMVideoPlayer<ItemShape>('poster-test').setup({
+			imageBasePath: 'https://image.tmdb.org/t/p',
+			playlist: absItems,
+		});
+		p.backend();
+		p.queue(absItems);
+		p.current('abs');
+
+		const videoEl = document.querySelector('#poster-test video') as HTMLVideoElement;
+		expect(videoEl.getAttribute('poster')).toBe('https://other.cdn/img.jpg');
 	});
 });

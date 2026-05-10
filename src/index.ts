@@ -238,30 +238,29 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 		this.container = resolved.div;
 		_instances.set(resolved.id, this);
 
-		// Sync the playlist item's `image` to the <video> element's poster
-		// attribute so the player shows cover art instead of a black frame
-		// before / between sources. The element doesn't necessarily exist
-		// yet when `current` fires (backend allocation is lazy), so we
-		// remember the wanted poster and re-apply once it's materialised.
-		this.on('current', (data) => {
-			const item = (data as Record<string, unknown> | undefined);
-			const image: string | undefined = (item?.['item'] as Record<string, string> | undefined)?.image
-				?? (item?.['image'] as string | undefined)
-				?? (item?.['poster'] as string | undefined)
-				?? (item?.['thumbnail'] as string | undefined);
-			this._wantedPoster = image ?? null;
+		this.on('current', data => {
+			const fields = (data as Record<string, unknown> | undefined);
+			const raw: string | undefined
+				= (fields?.['item'] as Record<string, string> | undefined)?.image
+				?? (fields?.['item'] as Record<string, string> | undefined)?.poster
+				?? (fields?.['item'] as Record<string, string> | undefined)?.thumbnail
+				?? (fields?.['image'] as string | undefined)
+				?? (fields?.['poster'] as string | undefined)
+				?? (fields?.['thumbnail'] as string | undefined);
+
+			this._wantedPoster = raw ? this._resolveImageUrl(raw) : null;
 			this._applyPoster();
 		});
 	}
 
 	private _wantedPoster: string | null = null;
 
-	/**
-	 * Apply the most recently requested poster to whichever real `<video>`
-	 * element exists in the container. The constructor stores `videoElement`
-	 * as a stub `{}` until the backend lazily allocates the real element, so
-	 * we query the container as the source of truth.
-	 */
+	private _resolveImageUrl(url: string): string {
+		if (/^[a-z][a-z\d+\-.]*:/iu.test(url)) return url;
+		const base = (this.options as VideoPlayerConfig<BasePlaylistItem>)?.imageBasePath ?? '';
+		return base ? base + url : url;
+	}
+
 	private _applyPoster(): void {
 		const el = this.container?.querySelector?.('video') as HTMLVideoElement | null;
 		if (!el) return;
