@@ -446,6 +446,10 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
         this.on('ended', () => this.setPlayingState(false));
         this.on('current', (d) => this.handleCurrentChange(d.item));
 
+        this.on('listeners-changed', (d) => {
+            if (d.name === 'back') this.refreshBackButton();
+        });
+
         // mediaReady: refresh chapters + duration, then sync all track lists
         // (subtitles / audio / quality) that may have changed with the new source.
         this.on('mediaReady', () => {
