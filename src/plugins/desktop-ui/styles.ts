@@ -40,7 +40,7 @@ export const desktopUiCss = `
     transition: background 0.18s ease;
     margin-right: 8px;
 }
-.nm-back-btn:hover { background: rgba(255,255,255,0.15); }
+.nm-back-btn:hover { background: color-mix(in srgb, #fff 10%, rgba(0,0,0,0.35)); }
 .nm-back-btn[hidden] { display: none !important; }
 
 /* ── Center play button ──────────────────────────────────────────── */
@@ -51,7 +51,7 @@ export const desktopUiCss = `
     display: flex; align-items: center; justify-content: center; backdrop-filter: blur(2px);
     transition: background 0.18s ease, transform 0.18s ease, opacity 0.18s ease;
 }
-.nm-center-btn:hover { background: rgba(255,255,255,0.15); transform: scale(1.08); }
+.nm-center-btn:hover { background: color-mix(in srgb, #fff 10%, rgba(0,0,0,0.45)); transform: scale(1.08); }
 .nm-center.nm-playing .nm-center-btn { opacity: 0; }
 .active:hover .nm-center-btn { opacity: 1; }
 .nm-spinner { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; pointer-events: none; }
