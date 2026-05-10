@@ -55,6 +55,37 @@ export interface DesktopUiOptions {
     imageBaseUrl?: string;
 }
 
+function tsToSeconds(ts: string): number {
+    const parts = ts.trim().split(':').map(Number);
+    if (parts.length === 3) return parts[0]! * 3600 + parts[1]! * 60 + parts[2]!;
+    if (parts.length === 2) return parts[0]! * 60 + parts[1]!;
+    return Number(ts) || 0;
+}
+
+function parseChaptersVtt(text: string): ChapterLite[] {
+    const lines = text.replace(/\r\n/g, '\n').split('\n');
+    const out: ChapterLite[] = [];
+    let i = 0;
+    if (lines[0]?.trim().startsWith('WEBVTT')) i = 1;
+    let index = 0;
+    while (i < lines.length) {
+        const line = lines[i]!.trim();
+        if (!line || line.startsWith('NOTE')) { i++; continue; }
+        let cueLine = line;
+        if (!cueLine.includes('-->') && i + 1 < lines.length) { i++; cueLine = lines[i]!.trim(); }
+        const m = cueLine.match(/^([\d:.]+)\s*-->\s*([\d:.]+)/);
+        if (!m) { i++; continue; }
+        const start = tsToSeconds(m[1]!);
+        const end = tsToSeconds(m[2]!);
+        i++;
+        const titleParts: string[] = [];
+        while (i < lines.length && lines[i]!.trim() !== '') { titleParts.push(lines[i]!.trim()); i++; }
+        out.push({ index: index++, start, end, title: titleParts.join(' ') });
+    }
+    return out;
+}
+
+
 function fmt(s: number): string {
     if (!Number.isFinite(s) || s < 0) return '0:00';
     const h = Math.floor(s / 3600);
@@ -104,6 +135,10 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
     /** Sprite preview thumbnails for the current playlist item. */
     private spriteSet: SpriteSet | null = null;
     private spriteLoadId = 0;
+
+    /** Chapters loaded from the current item's VTT track. Empty until fetched. */
+    private _loadedChapters: ChapterLite[] = [];
+    private chapterLoadId = 0;
 
     /** v2's subtitleState/audioTrackState/qualityState methods return
      *  ON/OFF/AUTO/MANUAL enums — not the active track index. The menu
@@ -611,10 +646,32 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
 
     private handleCurrentChange(item: VideoPlaylistItem | undefined | null): void {
         if (this.titleText) this.titleText.textContent = item?.title ?? '';
+        this._loadedChapters = [];
         this.refreshChaptersAndDuration();
         this.refreshCapabilityVisibility();
         this.repaintPlaylistIfOpen();
         void this.loadSpritesForItem(item);
+        void this.loadChaptersForItem(item);
+    }
+
+    private async loadChaptersForItem(item: VideoPlaylistItem | undefined | null): Promise<void> {
+        const myToken = ++this.chapterLoadId;
+        const tracks = (item as any)?.tracks as Array<{ kind?: string; file?: string }> | undefined;
+        if (!tracks) return;
+        const chapTrack = tracks.find(t => t?.kind === 'chapters' && typeof t.file === 'string');
+        if (!chapTrack?.file) return;
+
+        try {
+            const r = await fetch(chapTrack.file);
+            if (!r.ok) return;
+            const text = await r.text();
+            if (myToken !== this.chapterLoadId) return;
+            this._loadedChapters = parseChaptersVtt(text);
+        }
+        catch { return; }
+
+        this.refreshChaptersAndDuration();
+        this.refreshCapabilityVisibility();
     }
 
     private async loadSpritesForItem(item: VideoPlaylistItem | undefined | null): Promise<void> {
@@ -720,7 +777,9 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
     }
 
     private getChapters(): ChapterLite[] {
-        return ((this.player as any).chapters?.() ?? []) as ChapterLite[];
+        const fromPlayer = ((this.player as any).chapters?.() ?? []) as ChapterLite[];
+        if (fromPlayer.length > 0) return fromPlayer;
+        return this._loadedChapters;
     }
 
     private findChapterTitle(time: number): string | undefined {
