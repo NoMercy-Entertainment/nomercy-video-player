@@ -356,6 +356,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
         this.pipBtn = this.iconBtn('pip', 'pipEnter');
         parent.appendChild(this.pipBtn);
         this.speedBtn = this.iconBtn('speed', 'speed');
+        this.speedBtn.setAttribute('aria-label', 'Speed (1x)');
         parent.appendChild(this.speedBtn);
         this.subsBtn = this.iconBtn('subtitles', 'subtitles');
         parent.appendChild(this.subsBtn);
