@@ -628,9 +628,31 @@ composeMixins(NMVideoPlayer.prototype, ...playerCoreMethods);
 /**
  * Factory entry point. Returns the existing instance for a given div id, or
  * mounts a fresh one. Mirrors the v1 video-player wiki contract.
+ *
+ * When `setup({ expose: true })` is called on the returned instance,
+ * `window.nmplayer` is set to this factory for console access alongside
+ * `window.player` (wired by the kit). Cleaned up on `dispose()`.
  */
 export const nmplayer = <T extends BasePlaylistItem = VideoPlaylistItem>(id?: string | number): NMVideoPlayer<T> => {
-	return new NMVideoPlayer<T>(id);
+	const instance = new NMVideoPlayer<T>(id);
+
+	const originalSetup = instance.setup.bind(instance);
+	instance.setup = function (config: VideoPlayerConfig<T>): NMVideoPlayer<T> {
+		const result = originalSetup(config);
+		if (config.expose === true && typeof window !== 'undefined') {
+			Object.assign(window, { nmplayer });
+			const originalDispose = instance.dispose.bind(instance);
+			instance.dispose = function (): void {
+				if (Object.is(Reflect.get(window, 'nmplayer'), nmplayer)) {
+					Reflect.deleteProperty(window, 'nmplayer');
+				}
+				originalDispose();
+			};
+		}
+		return result;
+	};
+
+	return instance;
 };
 
 export default nmplayer;
