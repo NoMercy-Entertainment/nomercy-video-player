@@ -24,7 +24,7 @@ export class MediaSessionPlugin extends BaseMediaSession<NMVideoPlayer<any>, Vid
 		const posterSrc = item.poster
 			? (base ? `${base}${item.poster}` : item.poster)
 			: undefined;
-		const seasonText = x.season !== undefined && x.season !== null && x.season !== ''
+		const seasonText = x.season !== undefined && x.season !== null && String(x.season) !== ''
 			? `Season ${x.season}`
 			: '';
 		return {

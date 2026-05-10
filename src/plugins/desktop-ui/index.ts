@@ -103,6 +103,8 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
 
     private titleBar!: HTMLDivElement;
     private titleText!: HTMLSpanElement;
+    private showInfoText!: HTMLSpanElement;
+    private backBtn!: HTMLButtonElement;
     private centerWrap!: HTMLDivElement;
     private centerBtn!: HTMLButtonElement;
     private spinner!: HTMLDivElement;
@@ -205,10 +207,62 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
         const bar = this.player.createElement('div', 'nmplayer-top-bar')
             .addClasses(['nm-top-bar'])
             .appendTo(parent).get();
+
+        const left = this.player.createElement('div', 'nmplayer-top-bar-left')
+            .addClasses(['nm-top-bar-left'])
+            .appendTo(bar).get();
+
+        this.backBtn = this.player.createButton('nmplayer-back-btn', 'Back', () => {
+            this.player.emit('back', undefined);
+        });
+        this.player.addClasses(this.backBtn, ['nm-back-btn']);
+        this.backBtn.innerHTML = svgFromIcon(fluentIcons.back);
+        this.backBtn.hidden = true;
+        left.appendChild(this.backBtn);
+
+        const right = this.player.createElement('div', 'nmplayer-top-bar-right')
+            .addClasses(['nm-top-bar-right'])
+            .appendTo(bar).get();
+
+        this.showInfoText = this.player.createElement('span', 'nmplayer-show-info')
+            .addClasses(['nm-show-info'])
+            .appendTo(right).get();
+
         this.titleText = this.player.createElement('span', 'nmplayer-title')
             .addClasses(['nm-title'])
-            .appendTo(bar).get();
+            .appendTo(right).get();
+
         return bar;
+    }
+
+    private updateTitleBar(item: VideoPlaylistItem | undefined | null): void {
+        if (!this.titleText) return;
+
+        this.titleText.textContent = item?.title ?? '';
+
+        const hasSeries = Boolean(item?.show);
+        const hasEpisode = item?.season !== undefined && item?.episode !== undefined;
+
+        if (hasSeries && hasEpisode) {
+            const s = String(item!.season).padStart(2, '0');
+            const e = String(item!.episode).padStart(2, '0');
+            this.showInfoText.textContent = `${item!.show}  ·  S${s}E${e}`;
+        } else if (hasSeries) {
+            this.showInfoText.textContent = item!.show!;
+        } else if (hasEpisode) {
+            const s = String(item!.season ?? 0).padStart(2, '0');
+            const e = String(item!.episode).padStart(2, '0');
+            this.showInfoText.textContent = `S${s}E${e}`;
+        } else {
+            this.showInfoText.textContent = '';
+        }
+
+        this.showInfoText.hidden = !this.showInfoText.textContent;
+    }
+
+    private refreshBackButton(): void {
+        if (!this.backBtn) return;
+        this.backBtn.hidden = !this.player.hasListeners('back');
     }
 
     private buildCenter(parent: HTMLElement): HTMLDivElement {
@@ -609,6 +663,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
         const dur = this.player.duration?.();
         if (dur) this.applyDuration(dur);
         this.refreshCapabilityVisibility();
+        this.refreshBackButton();
     }
 
     private setPlayingState(playing: boolean): void {
@@ -638,8 +693,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
     }
 
     private handleCurrentChange(item: VideoPlaylistItem | undefined | null): void {
-        if (this.titleText) this.titleText.textContent = item?.title ?? '';
-
+        this.updateTitleBar(item);
         this.refreshChaptersAndDuration();
         this.refreshCapabilityVisibility();
         this.repaintPlaylistIfOpen();

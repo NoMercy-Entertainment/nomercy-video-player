@@ -24,11 +24,24 @@ export const desktopUiCss = `
 .nm-top-bar {
     position: absolute; top: 0; left: 0; right: 0;
     padding: 16px 24px;
+    display: flex; align-items: flex-start; justify-content: space-between;
     background: linear-gradient(to bottom, rgba(0,0,0,0.85), rgba(0,0,0,0.40), rgba(0,0,0,0));
     pointer-events: none;
     transition: opacity 0.25s ease, transform 0.25s ease;
 }
+.nm-top-bar-left { display: flex; align-items: center; pointer-events: auto; }
+.nm-top-bar-right { display: flex; flex-direction: column; align-items: flex-end; text-align: right; max-width: 60%; }
+.nm-show-info { font-size: 0.78rem; font-weight: 600; color: rgba(255,255,255,0.75); margin-bottom: 2px; }
 .nm-title { font-size: 1.05rem; font-weight: 700; text-shadow: 0 1px 4px rgba(0,0,0,0.8); }
+.nm-back-btn {
+    pointer-events: auto; background: rgba(0,0,0,0.35); border: none; color: #fff;
+    width: 40px; height: 40px; border-radius: 50%; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.18s ease;
+    margin-right: 8px;
+}
+.nm-back-btn:hover { background: rgba(255,255,255,0.15); }
+.nm-back-btn[hidden] { display: none !important; }
 
 /* ── Center play button ──────────────────────────────────────────── */
 .nm-center { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
@@ -90,7 +103,6 @@ export const desktopUiCss = `
     position: relative;
     display: flex;
     height: 8px;
-    margin: 0 16px;
     width: 100%;
     background: rgba(255,255,255,0.20);
     border-radius: 9999px;

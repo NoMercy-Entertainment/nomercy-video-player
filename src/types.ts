@@ -47,6 +47,12 @@ export interface VideoPlaylistItem extends BasePlaylistItem {
 	chapters?: ChapterRef[];
 	previewSpriteUrl?: string;
 	skippers?: SkipperData;
+	/** Series / show title displayed in the top-bar when season/episode are present. */
+	show?: string;
+	/** Season number (1-based). Combined with `episode` to render "S01E03" label. */
+	season?: number;
+	/** Episode number (1-based). */
+	episode?: number;
 }
 
 /** Top-level playback state. Returned by `player.playState()`. */
@@ -141,6 +147,13 @@ export interface VideoEventMap extends BaseEventMap {
 	// inherited from `BaseEventMap` — the kit owns those signals so any
 	// consumer (overlay plugins, debug widgets, a11y tooling) can subscribe
 	// without depending on a specific player package.
+
+	// Navigation intent emitted by the DesktopUiPlugin back button.
+	// The player itself has no navigation stack — consumers wire a listener
+	// and handle routing (e.g. router.back(), close the player modal).
+	// The back button in the UI is only visible when at least one listener
+	// is registered (checked via `player.hasListeners('back')` at ready time).
+	'back': void;
 }
 
 /**
