@@ -23,7 +23,7 @@ export const desktopUiCss = `
 /* ── Top bar ──────────────────────────────────────────────────────── */
 .nm-top-bar {
     position: absolute; top: 0; left: 0; right: 0;
-    padding: 16px 24px;
+    padding: 16px 16px 48px 16px;
     display: flex; align-items: flex-start; justify-content: space-between;
     background: linear-gradient(to bottom, rgba(0,0,0,0.85), rgba(0,0,0,0.40), rgba(0,0,0,0));
     pointer-events: none;

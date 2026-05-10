@@ -5,6 +5,8 @@ export { subtitleOverlayPlugin, SubtitleOverlayPlugin } from './subtitle-overlay
 export type { SubtitleOverlayOptions } from './subtitle-overlay/index';
 export { octopusPlugin, OctopusPlugin } from './octopus';
 export type { OctopusOptions } from './octopus';
+export { touchZonesPlugin, TouchZonesPlugin } from './touch-zones';
+export type { TouchZonesOptions } from './touch-zones';
 
 // Audio-graph plugins re-exported from core for ergonomic imports.
 // Layered composition: addPlugin(audioGraphPlugin) → addPlugin(equalizerPlugin / mixerPlugin / spectrumPlugin / canvasPlugin / visualizers).

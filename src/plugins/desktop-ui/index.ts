@@ -699,6 +699,9 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
 
     private handleCurrentChange(item: VideoPlaylistItem | undefined | null): void {
         this.updateTitleBar(item);
+        // Reset the cached duration so chapter markers are not computed
+        // against the previous item's duration while the new media loads.
+        this.cachedDuration = 0;
         this.refreshChaptersAndDuration();
         this.refreshCapabilityVisibility();
         this.repaintPlaylistIfOpen();

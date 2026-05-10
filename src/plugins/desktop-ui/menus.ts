@@ -561,14 +561,14 @@ export interface PlaylistRenderOptions {
 }
 
 /**
- * Playlist sub-menu — mirrors v1's `createEpisodeMenu` rich-card layout:
- * each row is a button with a left-side thumbnail (with bottom gradient,
- * episode/duration overlay, progress bar) and a right-side title +
- * multi-line description. The active item gets `.is-active` background.
+ * Playlist sub-menu — mirrors v1's `createEpisodeMenu` rich-card layout.
  *
- * No seasons rail in the testbed: the v1 split-pane (seasons / episodes)
- * only kicks in when the queue spans multiple seasons. For a flat queue
- * the right pane fills the whole sub-menu.
+ * Adaptive layout:
+ *   - Flat playlist (no `season` field on any item): the seasons rail is
+ *     hidden, the episodes rail fills the full width.
+ *   - Seasonal playlist (at least one item carries `season`): the left
+ *     rail shows season buttons; clicking a season filters the right rail
+ *     to that season's episodes.
  */
 export function renderPlaylistPane(
     pane: HTMLDivElement,
@@ -577,14 +577,69 @@ export function renderPlaylistPane(
     onPick: () => void,
     opts: PlaylistRenderOptions = {},
 ): void {
-    const scroll = pane.querySelector<HTMLDivElement>('.playlist-scroll-container');
-    if (!scroll) return;
-    scroll.replaceChildren();
-
     const queue = (((player as any).queue?.() ?? []) as PlaylistItemLite[]);
     const curIdx = (player as any).currentIndex?.() ?? 0;
 
+    const hasSeason = queue.some(item => typeof item.season === 'number');
+
+    const seasonPane = pane.querySelector<HTMLDivElement>('.seasons-pane');
+    const episodePane = pane.querySelector<HTMLDivElement>('.episode-menu');
+    const seasonScroll = pane.querySelector<HTMLDivElement>('.playlist-seasons-scroll-container');
+    const scroll = pane.querySelector<HTMLDivElement>('.playlist-scroll-container');
+
+    if (!scroll || !episodePane) return;
+
+    if (!hasSeason) {
+        if (seasonPane) seasonPane.style.display = 'none';
+        episodePane.style.flex = '1';
+        scroll.replaceChildren();
+        queue.forEach((item, i) => {
+            scroll.appendChild(buildPlaylistCard(player, item, i, i === curIdx, listen, onPick, opts));
+        });
+        return;
+    }
+
+    if (seasonPane) seasonPane.style.display = '';
+    episodePane.style.flex = '';
+
+    const seasons = Array.from(new Set(queue.map(it => it.season).filter((s): s is number => typeof s === 'number'))).sort((a, b) => a - b);
+    const currentItem = queue[curIdx];
+    const activeSeason = typeof currentItem?.season === 'number' ? currentItem.season : (seasons[0] ?? 1);
+
+    if (seasonScroll) {
+        seasonScroll.replaceChildren();
+        for (const sNum of seasons) {
+            const btn = player.createButton(`season-button-${sNum}`, `Season ${sNum}`, () => {});
+            btn.classList.add('language-button');
+            if (sNum === activeSeason) btn.classList.add('is-active');
+            btn.innerHTML = `<span class="menu-button-text">Season ${sNum}</span>`;
+            seasonScroll.appendChild(btn);
+            listen(btn, 'click', () => {
+                renderSeasonEpisodes(scroll, player, queue, sNum, curIdx, listen, onPick, opts);
+                for (const b of Array.from(seasonScroll.querySelectorAll('.language-button'))) {
+                    b.classList.remove('is-active');
+                }
+                btn.classList.add('is-active');
+            });
+        }
+    }
+
+    renderSeasonEpisodes(scroll, player, queue, activeSeason, curIdx, listen, onPick, opts);
+}
+
+function renderSeasonEpisodes(
+    scroll: HTMLDivElement,
+    player: NMVideoPlayer,
+    queue: PlaylistItemLite[],
+    season: number,
+    curIdx: number,
+    listen: MenuListen,
+    onPick: () => void,
+    opts: PlaylistRenderOptions,
+): void {
+    scroll.replaceChildren();
     queue.forEach((item, i) => {
+        if (item.season !== season) return;
         scroll.appendChild(buildPlaylistCard(player, item, i, i === curIdx, listen, onPick, opts));
     });
 }
