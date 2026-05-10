@@ -1,62 +1,59 @@
 /**
  * Desktop UI overlay plugin — v2-native rewrite of the v1 examples plugin.
  *
- * The DOM tree mirrors the v1 implementation div-by-div:
+ * File map (desktop-ui/ folder):
+ *
+ *   index.ts        — DesktopUiPlugin class: lifecycle (use/dispose), DOM
+ *                     composition, event wiring, menu state, activity/hide.
+ *   topBar.ts       — Top-bar DOM + title/show-info update + back-button logic.
+ *   progressBar.ts  — Slider-bar DOM, chapter-marker rendering, time formatting,
+ *                     chapter state updaters (progress/buffer/hover).
+ *   buttonState.ts  — apply* helpers: volume, mute, rate, quality, fullscreen,
+ *                     theater, subtitles, PiP, aspect-ratio icon/aria updates.
+ *   menus.ts        — Menu-frame DOM + all sub-pane renderers (speed, quality,
+ *                     subtitles, audio, playlist, subtitleSettings, aspectRatio).
+ *   buttons.ts      — Fluent UI icon SVG path data table.
+ *   icons.ts        — svgFromIcon() renderer on top of buttons.ts.
+ *   sprite.ts       — Sprite VTT parser + thumbnail lookup for slider-pop.
+ *   styles.ts       — CSS injection (ensureDesktopUiStyles).
+ *
+ * DOM tree (mirrors v1 div-by-div):
  *
  *   overlay
- *     ├─ nm-top-bar > nm-title
+ *     ├─ nm-top-bar > nm-title              (topBar.ts)
  *     ├─ nm-center > nm-spinner + nm-center-btn
  *     ├─ bottom-bar
- *     │   ├─ bottom-bar-shadow            (gradient backdrop)
- *     │   ├─ top-row                      (slider only)
+ *     │   ├─ bottom-bar-shadow
+ *     │   ├─ top-row                        (progressBar.ts)
  *     │   │   └─ slider-bar
- *     │   │       ├─ slider-buffer        (hidden when has-chapters; replaced by per-segment buffer)
+ *     │   │       ├─ slider-buffer
  *     │   │       ├─ slider-hover
  *     │   │       ├─ slider-progress
- *     │   │       ├─ chapter-progress     (segmented chapter-markers)
- *     │   │       │   └─ chapter-marker × N
- *     │   │       │       ├─ chapter-marker-bg
- *     │   │       │       ├─ chapter-marker-buffer   (buffer fill, scaleX per segment)
- *     │   │       │       ├─ chapter-marker-hover
- *     │   │       │       └─ chapter-marker-progress
+ *     │   │       ├─ chapter-progress × N
  *     │   │       ├─ slider-nipple
- *     │   │       └─ slider-pop > slider-pop-image + slider-pop-text + chapter-text
- *     │   └─ bottom-row                   (transport buttons + times + settings)
- *     │       ├─ playback / previous / seek-back / seek-forward
- *     │       ├─ chapter-back / chapter-forward / next
- *     │       ├─ volume-container > volume-button + volume-slider
- *     │       ├─ current-time + divider + remaining-time
- *     │       └─ theater / pip / speed / subs / audio / quality / fullscreen
- *     └─ menu-frame-dialog (popover modal with main-menu + sub-menu panes)
+ *     │   │       └─ slider-pop
+ *     │   └─ bottom-row
+ *     │       ├─ transport buttons          (buttonState.ts for icon state)
+ *     │       ├─ volume-container
+ *     │       ├─ current-time + remaining-time
+ *     │       └─ feature buttons
+ *     └─ menu-frame-dialog                  (menus.ts)
  *
- * Segmented-buffer rendering pattern
- * ───────────────────────────────────
- * When the playlist item has chapters, `sliderBuffer` (the single continuous
- * strip) is hidden via `.slider-bar.has-chapters .slider-buffer { display:none }`.
- * Instead, each `chapter-marker` contains a `chapter-marker-buffer` sibling
- * rendered between `chapter-marker-bg` and `chapter-marker-hover`.
- *
- * `updateChapterBuffer(bufferedEnd, duration)` walks `chapterRefs` and sets each
- * segment's `buffer` div with the same `transform: scaleX(fill)` pattern used by
- * `chapter-marker-progress`.  The fill fraction per segment is:
- *
- *   - bufferedEnd ≤ segment.start  → 0   (not yet buffered)
- *   - bufferedEnd ≥ segment.end    → 1   (fully buffered)
- *   - otherwise                   → (bufferedEnd − segment.start) / segmentWidth
- *
- * The 2 px gap that `calc(width% - 2px)` applies to each chapter-marker
- * automatically aligns the buffer segments with the chapter dividers, so no
- * extra gap logic is required here.
+ * Segmented-buffer rendering: when the item has chapters, sliderBuffer is
+ * hidden and each chapter-marker carries its own buffer div. See progressBar.ts
+ * for the scaleX fill math. The 2 px gap from `calc(width% - 2px)` aligns
+ * segments with chapter dividers automatically.
  */
 
 import { Plugin } from '@nomercy-entertainment/nomercy-player-core';
 import { TheaterState, VolumeState, type NMVideoPlayer, type VideoEventMap, type VideoPlaylistItem } from '@nomercy-entertainment/nomercy-video-player';
 
-import { fluentIcons, svgFromIcon } from './icons';
+import { svgFromIcon, fluentIcons } from './icons';
 import { ensureDesktopUiStyles } from './styles';
 import { loadSpriteSet, lookupCue, type SpriteSet } from './sprite';
 import {
     buildMenuFrame,
+    renderAspectRatioPane,
     renderAudioPane,
     renderPlaylistPane,
     renderQualityPane,
@@ -70,6 +67,35 @@ import {
     type SubMenuId,
     type SubtitleTrackLite,
 } from './menus';
+import {
+    fmt,
+    buildSliderBar,
+    buildChapterMarkers,
+    updateChapterProgress,
+    updateChapterBuffer,
+    updateChapterHover,
+    type SliderBarRefs,
+    type ChapterMarkerRef,
+    type ChapterLite,
+} from './progressBar';
+import {
+    buildTitleBar,
+    updateTitleBar,
+    refreshBackButton,
+    type TopBarRefs,
+} from './topBar';
+import {
+    applyVolume,
+    applyMuted,
+    applyMutedIcon,
+    applyRate,
+    applyQualityIcon,
+    applyFullscreen,
+    applyTheaterIcon,
+    applySubsIcon,
+    applyPipIcon,
+    applyAspectRatioIcon,
+} from './buttonState';
 
 export interface DesktopUiOptions {
     hideTitle?: boolean;
@@ -102,34 +128,15 @@ function readSidecarTracks(item: unknown): SidecarTrackEntry[] | undefined {
 }
 
 
-function fmt(s: number): string {
-    if (!Number.isFinite(s) || s < 0) return '0:00';
-    const h = Math.floor(s / 3600);
-    const m = Math.floor((s % 3600) / 60);
-    const sec = Math.floor(s % 60);
-    return h > 0
-        ? `${h}:${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`
-        : `${m}:${sec.toString().padStart(2, '0')}`;
-}
-
-interface ChapterMarkerRef {
-    /** Chapter range, as percentages of total duration. */
-    left: number;
-    right: number;
-    buffer: HTMLDivElement;
-    hover: HTMLDivElement;
-    progress: HTMLDivElement;
-}
 
 export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions> {
     static override readonly id: string = 'desktop-ui';
     static override readonly version: string = '2.0.0';
     static override readonly description: string = 'Official desktop UI overlay (v2 rewrite)';
 
-    private titleBar!: HTMLDivElement;
-    private titleText!: HTMLSpanElement;
-    private showInfoText!: HTMLSpanElement;
-    private backBtn!: HTMLButtonElement;
+    // ── top bar ─────────────────────────────────────────────────────
+    private topBarRefs!: TopBarRefs;
+
     private centerWrap!: HTMLDivElement;
     private centerBtn!: HTMLButtonElement;
     private spinner!: HTMLDivElement;
@@ -138,17 +145,8 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
     private topRow!: HTMLDivElement;
     private bottomRow!: HTMLDivElement;
 
-    // ── slider-bar tree (v1) ────────────────────────────────────────
-    private sliderBar!: HTMLDivElement;
-    private sliderBuffer!: HTMLDivElement;
-    private sliderHover!: HTMLDivElement;
-    private sliderProgress!: HTMLDivElement;
-    private chapterBar!: HTMLDivElement;
-    private sliderNipple!: HTMLDivElement;
-    private sliderPop!: HTMLDivElement;
-    private sliderPopImage!: HTMLDivElement;
-    private sliderPopText!: HTMLDivElement;
-    private chapterText!: HTMLDivElement;
+    // ── slider-bar tree ─────────────────────────────────────────────
+    private sliderRefs!: SliderBarRefs;
     private chapterRefs: ChapterMarkerRef[] = [];
 
     /** Sprite preview thumbnails for the current playlist item. */
@@ -185,6 +183,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
     private volSlider!: HTMLInputElement;
     private currentTimeEl!: HTMLDivElement;
     private remainingTimeEl!: HTMLDivElement;
+    private aspectRatioBtn!: HTMLButtonElement;
     private speedBtn!: HTMLButtonElement;
     private qualityBtn!: HTMLButtonElement;
     private subsBtn!: HTMLButtonElement;
@@ -221,7 +220,9 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
 
         this.player.container.classList.add('nomercyplayer');
 
-        if (!this.opts?.hideTitle) this.titleBar = this.buildTitleBar(root);
+        if (!this.opts?.hideTitle) {
+            this.topBarRefs = buildTitleBar(this.player, root);
+        }
         this.centerWrap = this.buildCenter(root);
         this.bottomBar = this.buildBottomBar(root);
 
@@ -230,68 +231,6 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
             openSubMenu: (id) => this.openSubMenu(id),
             backToMain: () => this.openMainMenu(),
         });
-    }
-
-    private buildTitleBar(parent: HTMLElement): HTMLDivElement {
-        const bar = this.player.createElement('div', 'nmplayer-top-bar')
-            .addClasses(['nm-top-bar'])
-            .appendTo(parent).get();
-
-        const left = this.player.createElement('div', 'nmplayer-top-bar-left')
-            .addClasses(['nm-top-bar-left'])
-            .appendTo(bar).get();
-
-        this.backBtn = this.player.createButton('nmplayer-back-btn', 'Back', () => {
-            this.player.emit('back', undefined);
-        });
-        this.player.addClasses(this.backBtn, ['nm-back-btn']);
-        this.backBtn.innerHTML = svgFromIcon(fluentIcons.back);
-        this.backBtn.hidden = true;
-        left.appendChild(this.backBtn);
-
-        const right = this.player.createElement('div', 'nmplayer-top-bar-right')
-            .addClasses(['nm-top-bar-right'])
-            .appendTo(bar).get();
-
-        this.showInfoText = this.player.createElement('span', 'nmplayer-show-info')
-            .addClasses(['nm-show-info'])
-            .appendTo(right).get();
-
-        this.titleText = this.player.createElement('span', 'nmplayer-title')
-            .addClasses(['nm-title'])
-            .appendTo(right).get();
-
-        return bar;
-    }
-
-    private updateTitleBar(item: VideoPlaylistItem | undefined | null): void {
-        if (!this.titleText) return;
-
-        this.titleText.textContent = item?.title ?? '';
-
-        const hasSeries = Boolean(item?.show);
-        const hasEpisode = item?.season !== undefined && item?.episode !== undefined;
-
-        if (hasSeries && hasEpisode) {
-            const s = String(item!.season).padStart(2, '0');
-            const e = String(item!.episode).padStart(2, '0');
-            this.showInfoText.textContent = `${item!.show}  ·  S${s}E${e}`;
-        } else if (hasSeries) {
-            this.showInfoText.textContent = item!.show!;
-        } else if (hasEpisode) {
-            const s = String(item!.season ?? 0).padStart(2, '0');
-            const e = String(item!.episode).padStart(2, '0');
-            this.showInfoText.textContent = `S${s}E${e}`;
-        } else {
-            this.showInfoText.textContent = '';
-        }
-
-        this.showInfoText.hidden = !this.showInfoText.textContent;
-    }
-
-    private refreshBackButton(): void {
-        if (!this.backBtn) return;
-        this.backBtn.hidden = !this.player.hasListeners('back');
     }
 
     private buildCenter(parent: HTMLElement): HTMLDivElement {
@@ -324,7 +263,9 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
         this.topRow = this.player.createElement('div', 'top-row')
             .addClasses(['top-row'])
             .appendTo(bar).get();
-        this.buildSliderBar(this.topRow);
+
+        this.sliderRefs = buildSliderBar(this.player);
+        this.topRow.appendChild(this.sliderRefs.sliderBar);
 
         this.bottomRow = this.player.createElement('div', 'bottom-row')
             .addClasses(['bottom-row'])
@@ -380,6 +321,8 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
             .appendTo(parent).get();
         this.remainingTimeEl.textContent = '0:00';
 
+        this.aspectRatioBtn = this.iconBtn('aspect-ratio', 'aspectFit');
+        parent.appendChild(this.aspectRatioBtn);
         this.theaterBtn = this.iconBtn('theater', 'theater');
         parent.appendChild(this.theaterBtn);
         this.pipBtn = this.iconBtn('pip', 'pipEnter');
@@ -399,49 +342,6 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
         parent.appendChild(this.settingsBtn);
         this.fsBtn = this.iconBtn('fullscreen', 'fullscreen');
         parent.appendChild(this.fsBtn);
-    }
-
-    /** v1 progress strip — a verbatim port of `createProgressBar()`. */
-    private buildSliderBar(parent: HTMLElement): void {
-        this.sliderBar = this.player.createElement('div', 'slider-bar')
-            .addClasses(['slider-bar'])
-            .appendTo(parent).get();
-        this.sliderBar.setAttribute('role', 'slider');
-        this.sliderBar.setAttribute('aria-label', 'Seek');
-        this.sliderBar.setAttribute('aria-valuemin', '0');
-        this.sliderBar.setAttribute('aria-valuemax', '100');
-        this.sliderBar.setAttribute('aria-valuenow', '0');
-
-        this.sliderBuffer = this.player.createElement('div', 'slider-buffer')
-            .addClasses(['slider-buffer'])
-            .appendTo(this.sliderBar).get();
-        this.sliderHover = this.player.createElement('div', 'slider-hover')
-            .addClasses(['slider-hover'])
-            .appendTo(this.sliderBar).get();
-        this.sliderProgress = this.player.createElement('div', 'slider-progress')
-            .addClasses(['slider-progress'])
-            .appendTo(this.sliderBar).get();
-        this.chapterBar = this.player.createElement('div', 'chapter-progress')
-            .addClasses(['chapter-bar'])
-            .appendTo(this.sliderBar).get();
-
-        this.sliderNipple = this.player.createElement('div', 'slider-nipple')
-            .addClasses(['slider-nipple'])
-            .appendTo(this.sliderBar).get();
-
-        this.sliderPop = this.player.createElement('div', 'slider-pop')
-            .addClasses(['slider-pop'])
-            .appendTo(this.sliderBar).get();
-        this.sliderPop.style.setProperty('--visibility', '0');
-        this.sliderPopImage = this.player.createElement('div', 'slider-pop-image')
-            .addClasses(['slider-pop-image'])
-            .appendTo(this.sliderPop).get();
-        this.sliderPopText = this.player.createElement('div', 'slider-text')
-            .addClasses(['slider-pop-text'])
-            .appendTo(this.sliderPop).get();
-        this.chapterText = this.player.createElement('div', 'chapter-text')
-            .addClasses(['chapter-text'])
-            .appendTo(this.sliderPop).get();
     }
 
     private iconBtn(id: string, iconName: string): HTMLButtonElement {
@@ -476,7 +376,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
         this.on('current', (d) => this.handleCurrentChange(d.item));
 
         this.on('listeners-changed', (d) => {
-            if (d.name === 'back') this.refreshBackButton();
+            if (d.name === 'back' && this.topBarRefs) refreshBackButton(this.topBarRefs, this.player);
         });
 
         // mediaReady: refresh chapters + duration, then sync all track lists
@@ -560,6 +460,11 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
             this.player.container.classList.toggle('theater', d.active);
         });
 
+        this.onVideo('aspectRatio', d => {
+            this.applyAspectRatioIcon(d.value);
+            this.repaintAspectRatioIfOpen();
+        });
+
         this.listen(this.centerBtn, 'click', () => { void this.player.togglePlayback(); this.bumpActivity(); });
         this.listen(this.playBtn, 'click', () => { void this.player.togglePlayback(); this.bumpActivity(); });
 
@@ -591,6 +496,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
         this.listen(this.playlistBtn, 'click', (e: Event) => { e.stopPropagation(); this.openSubMenu('playlist'); });
         this.listen(this.settingsBtn, 'click', (e: Event) => { e.stopPropagation(); this.openMainMenu(); });
 
+        this.listen(this.aspectRatioBtn, 'click', () => { this.player.cycleAspectRatio(); });
         this.listen(this.theaterBtn, 'click', () => { this.player.toggleTheater(); });
         this.listen(this.pipBtn, 'click', () => { this.player.togglePip(); });
         this.listen(this.fsBtn, 'click', () => { this.player.toggleFullscreen(); });
@@ -617,10 +523,10 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
             if (this.isMouseDown) return;
             this.isMouseDown = true;
             this.isScrubbing = true;
-            this.sliderBar.classList.add('slider-scrubbing');
+            this.sliderRefs.sliderBar.classList.add('slider-scrubbing');
         };
-        this.listen(this.sliderBar, 'mousedown', startScrub);
-        this.listen(this.sliderBar, 'touchstart', startScrub);
+        this.listen(this.sliderRefs.sliderBar, 'mousedown', startScrub);
+        this.listen(this.sliderRefs.sliderBar, 'touchstart', startScrub);
 
         // Click on bottom bar finalizes the scrub (matches v1 behavior so
         // dragging off the slider before releasing still seeks).
@@ -628,53 +534,53 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
             if (!this.isMouseDown) return;
             this.isMouseDown = false;
             this.isScrubbing = false;
-            this.sliderBar.classList.remove('slider-scrubbing');
-            this.sliderPop.style.setProperty('--visibility', '0');
+            this.sliderRefs.sliderBar.classList.remove('slider-scrubbing');
+            this.sliderRefs.sliderPop.style.setProperty('--visibility', '0');
             const scrub = this.getScrubTime(e);
-            this.sliderNipple.style.left = `${scrub.scrubTime}%`;
+            this.sliderRefs.sliderNipple.style.left = `${scrub.scrubTime}%`;
             void this.player.currentTime?.(scrub.scrubTimePlayer);
             this.bumpActivity();
         });
 
         const onMove = (e: Event) => {
             const scrub = this.getScrubTime(e);
-            this.sliderPopText.textContent = fmt(scrub.scrubTimePlayer);
+            this.sliderRefs.sliderPopText.textContent = fmt(scrub.scrubTimePlayer);
             this.paintSpriteAt(scrub.scrubTimePlayer);
 
             const popOffsetPct = this.clampPopOffset(scrub.scrubTime);
-            this.sliderPop.style.left = `${popOffsetPct}%`;
+            this.sliderRefs.sliderPop.style.left = `${popOffsetPct}%`;
 
             const chapters = this.player.chapters();
             if (chapters.length === 0) {
-                this.sliderHover.style.width = `${scrub.scrubTime}%`;
+                this.sliderRefs.sliderHover.style.width = `${scrub.scrubTime}%`;
             } else {
                 this.updateChapterHover(scrub.scrubTime);
             }
-            this.chapterText.textContent = this.findChapterTitle(scrub.scrubTimePlayer) ?? '';
+            this.sliderRefs.chapterText.textContent = this.findChapterTitle(scrub.scrubTimePlayer) ?? '';
 
             if (!this.isMouseDown) return;
-            this.sliderNipple.style.left = `${scrub.scrubTime}%`;
+            this.sliderRefs.sliderNipple.style.left = `${scrub.scrubTime}%`;
         };
-        this.listen(this.sliderBar, 'mousemove', onMove);
-        this.listen(this.sliderBar, 'touchmove', onMove);
+        this.listen(this.sliderRefs.sliderBar, 'mousemove', onMove);
+        this.listen(this.sliderRefs.sliderBar, 'touchmove', onMove);
 
-        this.listen(this.sliderBar, 'mouseover', (e: Event) => {
+        this.listen(this.sliderRefs.sliderBar, 'mouseover', (e: Event) => {
             const scrub = this.getScrubTime(e);
-            this.sliderPopText.textContent = fmt(scrub.scrubTimePlayer);
+            this.sliderRefs.sliderPopText.textContent = fmt(scrub.scrubTimePlayer);
             this.paintSpriteAt(scrub.scrubTimePlayer);
-            this.chapterText.textContent = this.findChapterTitle(scrub.scrubTimePlayer) ?? '';
-            this.sliderPop.style.setProperty('--visibility', '1');
-            this.sliderPop.style.left = `${this.clampPopOffset(scrub.scrubTime)}%`;
+            this.sliderRefs.chapterText.textContent = this.findChapterTitle(scrub.scrubTimePlayer) ?? '';
+            this.sliderRefs.sliderPop.style.setProperty('--visibility', '1');
+            this.sliderRefs.sliderPop.style.left = `${this.clampPopOffset(scrub.scrubTime)}%`;
         });
-        this.listen(this.sliderBar, 'mouseleave', () => {
-            this.sliderPop.style.setProperty('--visibility', '0');
-            this.sliderHover.style.width = '0';
+        this.listen(this.sliderRefs.sliderBar, 'mouseleave', () => {
+            this.sliderRefs.sliderPop.style.setProperty('--visibility', '0');
+            this.sliderRefs.sliderHover.style.width = '0';
             for (const ch of this.chapterRefs) ch.hover.style.transform = 'scaleX(0)';
         });
     }
 
     private getScrubTime(e: Event): { scrubTime: number; scrubTimePlayer: number } {
-        const rect = this.sliderBar.getBoundingClientRect();
+        const rect = this.sliderRefs.sliderBar.getBoundingClientRect();
         const me = e as MouseEvent;
         const te = e as TouchEvent;
         const x = me.clientX ?? te.touches?.[0]?.clientX ?? te.changedTouches?.[0]?.clientX ?? 0;
@@ -689,7 +595,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
     }
 
     private clampPopOffset(pct: number): number {
-        const popWidthPct = (this.sliderPop.offsetWidth / Math.max(1, this.sliderBar.offsetWidth)) * 100;
+        const popWidthPct = (this.sliderRefs.sliderPop.offsetWidth / Math.max(1, this.sliderRefs.sliderBar.offsetWidth)) * 100;
         const half = popWidthPct / 2;
         return Math.max(half, Math.min(100 - half, pct));
     }
@@ -701,6 +607,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
         this.applyRate(this.player.playbackRate?.() ?? 1);
         this.applySubsIcon();
         this.applyQualityIcon();
+        this.applyAspectRatioIcon(this.player.aspectRatio?.() ?? 'uniform');
         this.applyPipIcon(Boolean(document.pictureInPictureElement));
         const theaterActive = this.player.theaterState() === TheaterState.ON;
         this.applyTheaterIcon(theaterActive);
@@ -710,7 +617,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
         const dur = this.player.duration?.();
         if (dur) this.applyDuration(dur);
         this.refreshCapabilityVisibility();
-        this.refreshBackButton();
+        if (this.topBarRefs) refreshBackButton(this.topBarRefs, this.player);
     }
 
     private setPlayingState(playing: boolean): void {
@@ -740,9 +647,10 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
     }
 
     private handleCurrentChange(item: VideoPlaylistItem | undefined | null): void {
-        this.updateTitleBar(item);
-        // Reset the cached duration so chapter markers are not computed
-        // against the previous item's duration while the new media loads.
+        if (this.topBarRefs) updateTitleBar(this.topBarRefs, item);
+
+        // Reset cached duration so chapter markers are not computed against
+        // the previous item's duration while the new media loads.
         this.cachedDuration = 0;
         this.refreshChaptersAndDuration();
         this.refreshCapabilityVisibility();
@@ -754,10 +662,10 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
         const myToken = ++this.spriteLoadId;
         this.spriteSet = null;
 
-        this.sliderPopImage.style.backgroundImage = '';
-        this.sliderPopImage.style.backgroundPosition = '';
-        this.sliderPopImage.style.width = '';
-        this.sliderPopImage.style.height = '';
+        this.sliderRefs.sliderPopImage.style.backgroundImage = '';
+        this.sliderRefs.sliderPopImage.style.backgroundPosition = '';
+        this.sliderRefs.sliderPopImage.style.width = '';
+        this.sliderRefs.sliderPopImage.style.height = '';
 
         const tracks = readSidecarTracks(item);
         if (!tracks) return;
@@ -769,16 +677,16 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
         if (!set) return;
 
         this.spriteSet = set;
-        this.sliderPopImage.style.backgroundImage = `url('${set.spriteUrl}')`;
+        this.sliderRefs.sliderPopImage.style.backgroundImage = `url('${set.spriteUrl}')`;
     }
     
     private paintSpriteAt(time: number): void {
         if (!this.spriteSet) return;
         const cue = lookupCue(this.spriteSet, time);
         if (!cue) return;
-        this.sliderPopImage.style.backgroundPosition = `-${cue.x}px -${cue.y}px`;
-        this.sliderPopImage.style.width = `${cue.w}px`;
-        this.sliderPopImage.style.height = `${cue.h}px`;
+        this.sliderRefs.sliderPopImage.style.backgroundPosition = `-${cue.x}px -${cue.y}px`;
+        this.sliderRefs.sliderPopImage.style.width = `${cue.w}px`;
+        this.sliderRefs.sliderPopImage.style.height = `${cue.h}px`;
     }
 
     private refreshChaptersAndDuration(): void {
@@ -787,82 +695,37 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
         this.renderChapterMarkers();
     }
 
-    /** Build segmented chapter-marker DOM, mirroring v1's createChapterMarker. */
+    /** Rebuild the segmented chapter-marker DOM for the current item. */
     private renderChapterMarkers(): void {
-        const chapters = this.player.chapters();
+        const chapters = this.player.chapters() as ChapterLite[];
         const dur = this.resolveDuration();
-        this.chapterBar.replaceChildren();
-        this.chapterRefs = [];
 
         if (!dur || chapters.length === 0) {
-            this.sliderBar.classList.remove('has-chapters');
-            return;
+            this.sliderRefs.sliderBar.classList.remove('has-chapters');
         }
-        this.sliderBar.classList.add('has-chapters');
-
-        for (const ch of chapters) {
-            const left = (ch.start / dur) * 100;
-            const right = (ch.end / dur) * 100;
-            const width = Math.max(0, right - left);
-
-            const marker = document.createElement('div');
-            marker.className = 'chapter-marker';
-            marker.id = `chapter-marker-${ch.index}`;
-            marker.style.left = `${left}%`;
-            marker.style.width = `calc(${width}% - 2px)`;
-
-            const bg = document.createElement('div');
-            bg.className = 'chapter-marker-bg';
-            const buffer = document.createElement('div');
-            buffer.className = 'chapter-marker-buffer';
-            const hover = document.createElement('div');
-            hover.className = 'chapter-marker-hover';
-            const progress = document.createElement('div');
-            progress.className = 'chapter-marker-progress';
-
-            marker.append(bg, buffer, hover, progress);
-            this.chapterBar.appendChild(marker);
-
-            this.listen(marker, 'click', (e: Event) => {
-                e.stopPropagation();
-                void this.player.seekToChapter?.(ch.index);
-            });
-
-            this.chapterRefs.push({ left, right, buffer, hover, progress });
+        else {
+            this.sliderRefs.sliderBar.classList.add('has-chapters');
         }
+
+        this.chapterRefs = buildChapterMarkers(
+            this.sliderRefs.chapterBar,
+            chapters,
+            dur,
+            (index) => { void this.player.seekToChapter?.(index); },
+            this.listen.bind(this),
+        );
     }
 
     private updateChapterProgress(percentage: number): void {
-        for (const m of this.chapterRefs) {
-            if (percentage < m.left) m.progress.style.transform = 'scaleX(0)';
-            else if (percentage > m.right) m.progress.style.transform = 'scaleX(1)';
-            else {
-                const span = Math.max(0.0001, m.right - m.left);
-                m.progress.style.transform = `scaleX(${(percentage - m.left) / span})`;
-            }
-        }
+        updateChapterProgress(this.chapterRefs, percentage);
     }
 
     private updateChapterBuffer(bufferedPct: number): void {
-        for (const m of this.chapterRefs) {
-            if (bufferedPct <= m.left) m.buffer.style.transform = 'scaleX(0)';
-            else if (bufferedPct >= m.right) m.buffer.style.transform = 'scaleX(1)';
-            else {
-                const span = Math.max(0.0001, m.right - m.left);
-                m.buffer.style.transform = `scaleX(${(bufferedPct - m.left) / span})`;
-            }
-        }
+        updateChapterBuffer(this.chapterRefs, bufferedPct);
     }
 
     private updateChapterHover(scrubPct: number): void {
-        for (const m of this.chapterRefs) {
-            if (scrubPct < m.left) m.hover.style.transform = 'scaleX(0)';
-            else if (scrubPct > m.right) m.hover.style.transform = 'scaleX(1)';
-            else {
-                const span = Math.max(0.0001, m.right - m.left);
-                m.hover.style.transform = `scaleX(${(scrubPct - m.left) / span})`;
-            }
-        }
+        updateChapterHover(this.chapterRefs, scrubPct);
     }
 
     private findChapterTitle(time: number): string | undefined {
@@ -881,9 +744,9 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
         const dur = this.resolveDuration();
         const pct = dur > 0 ? (t / dur) * 100 : 0;
         if (!this.isScrubbing) {
-            this.sliderProgress.style.width = `${pct}%`;
-            this.sliderNipple.style.left = `${pct}%`;
-            this.sliderBar.setAttribute('aria-valuenow', String(Math.round(pct)));
+            this.sliderRefs.sliderProgress.style.width = `${pct}%`;
+            this.sliderRefs.sliderNipple.style.left = `${pct}%`;
+            this.sliderRefs.sliderBar.setAttribute('aria-valuenow', String(Math.round(pct)));
             this.updateChapterProgress(pct);
         }
         try {
@@ -893,7 +756,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
                 this.updateChapterBuffer(bufPct);
             }
             else {
-                this.sliderBuffer.style.width = `${bufPct}%`;
+                this.sliderRefs.sliderBuffer.style.width = `${bufPct}%`;
             }
         }
         catch { /* SourceBuffer detach */ }
@@ -917,71 +780,43 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
     }
 
     private applyVolume(v: number): void {
-        const pct = Math.round((v ?? 1) * 100);
-        this.volSlider.value = String(pct);
-        this.volSlider.style.setProperty('--vol-pct', `${pct}%`);
-        this.applyMutedIcon();
+        applyVolume(this.volSlider, () => this.applyMutedIcon(), v);
     }
 
     private applyMuted(muted: boolean): void {
-        this.volBtn.classList.toggle('nm-muted', muted);
-        this.applyMutedIcon();
+        applyMuted(this.volBtn, () => this.applyMutedIcon(), muted);
     }
 
     private applyMutedIcon(): void {
-        const muted = this.player.volumeState() === VolumeState.MUTED;
-        const v = this.player.volume?.() ?? 1;
-        const icon = muted || v === 0
-            ? fluentIcons.volumeMuted
-            : v < 0.34
-                ? fluentIcons.volumeLow
-                : v < 0.67
-                    ? fluentIcons.volumeMedium
-                    : fluentIcons.volumeHigh;
-        this.volBtn.innerHTML = svgFromIcon(icon);
-        this.volBtn.setAttribute('aria-label', muted ? 'Unmute' : 'Mute');
+        applyMutedIcon(this.volBtn, this.player);
     }
 
     private applyRate(rate: number): void {
-        const icon = rate === 1
-            ? fluentIcons.speed
-            : { ...fluentIcons.speed, normal: fluentIcons.speed.hover };
-        this.speedBtn.innerHTML = svgFromIcon(icon);
-        this.speedBtn.setAttribute('aria-label', rate === 1 ? 'Speed (1x)' : `Speed (${rate}x)`);
+        applyRate(this.speedBtn, rate);
     }
 
     private applyQualityIcon(): void {
-        const icon = this._userPickedQuality
-            ? { ...fluentIcons.quality, normal: fluentIcons.quality.hover }
-            : fluentIcons.quality;
-        this.qualityBtn.innerHTML = svgFromIcon(icon);
-        this.qualityBtn.setAttribute('aria-label', this._userPickedQuality ? 'Quality (manual)' : 'Quality (auto)');
+        applyQualityIcon(this.qualityBtn, this._userPickedQuality);
     }
 
     private applyFullscreen(): void {
-        const fs = Boolean(document.fullscreenElement);
-        this.fsBtn.innerHTML = svgFromIcon(fs ? fluentIcons.exitFullscreen : fluentIcons.fullscreen);
+        applyFullscreen(this.fsBtn);
     }
 
     private applyTheaterIcon(active: boolean): void {
-        this.theaterBtn.innerHTML = svgFromIcon(active ? fluentIcons.theaterExit : fluentIcons.theater);
-        this.theaterBtn.setAttribute('aria-label', active ? 'Exit theater mode' : 'Theater mode');
+        applyTheaterIcon(this.theaterBtn, active);
     }
 
-    /** Toggle subtitles button icon between subtitlesOff (no caption
-     *  selected, the default) and subtitles (a track is active). v1
-     *  pattern from `createCaptionsButton`. */
     private applySubsIcon(): void {
-        const on = this.activeSubtitleIdx !== null && this.activeSubtitleIdx !== -1;
-        this.subsBtn.innerHTML = svgFromIcon(on ? fluentIcons.subtitles : fluentIcons.subtitlesOff);
-        this.subsBtn.setAttribute('aria-label', on ? 'Subtitles on' : 'Subtitles off');
+        applySubsIcon(this.subsBtn, this.activeSubtitleIdx);
     }
 
     private applyPipIcon(active: boolean): void {
-        const label = active ? 'Exit picture-in-picture' : 'Picture-in-picture';
-        this.pipBtn.innerHTML = svgFromIcon(active ? fluentIcons.pipExit : fluentIcons.pipEnter);
-        this.pipBtn.setAttribute('aria-label', label);
-        this.pipBtn.title = label;
+        applyPipIcon(this.pipBtn, active);
+    }
+
+    private applyAspectRatioIcon(value: 'uniform' | 'fill' | 'exactfit' | 'none'): void {
+        applyAspectRatioIcon(this.aspectRatioBtn, value);
     }
 
     private refreshCapabilityVisibility(): void {
@@ -1184,6 +1019,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
     private repaintQualityIfOpen(): void { if (this.currentSubMenu === 'quality') this.repaintPane('quality'); }
     private repaintSpeedIfOpen(): void { if (this.currentSubMenu === 'speed') this.repaintPane('speed'); }
     private repaintPlaylistIfOpen(): void { if (this.currentSubMenu === 'playlist') this.repaintPane('playlist'); }
+    private repaintAspectRatioIfOpen(): void { if (this.currentSubMenu === 'aspectRatio') this.repaintPane('aspectRatio'); }
 
     // ── Activity / auto-hide ────────────────────────────────────────
     private bumpActivity(): void {
