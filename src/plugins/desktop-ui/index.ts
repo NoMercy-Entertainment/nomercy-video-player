@@ -10,10 +10,15 @@
  *     │   ├─ bottom-bar-shadow            (gradient backdrop)
  *     │   ├─ top-row                      (slider only)
  *     │   │   └─ slider-bar
- *     │   │       ├─ slider-buffer
+ *     │   │       ├─ slider-buffer        (hidden when has-chapters; replaced by per-segment buffer)
  *     │   │       ├─ slider-hover
  *     │   │       ├─ slider-progress
  *     │   │       ├─ chapter-progress     (segmented chapter-markers)
+ *     │   │       │   └─ chapter-marker × N
+ *     │   │       │       ├─ chapter-marker-bg
+ *     │   │       │       ├─ chapter-marker-buffer   (buffer fill, scaleX per segment)
+ *     │   │       │       ├─ chapter-marker-hover
+ *     │   │       │       └─ chapter-marker-progress
  *     │   │       ├─ slider-nipple
  *     │   │       └─ slider-pop > slider-pop-image + slider-pop-text + chapter-text
  *     │   └─ bottom-row                   (transport buttons + times + settings)
@@ -23,6 +28,25 @@
  *     │       ├─ current-time + divider + remaining-time
  *     │       └─ theater / pip / speed / subs / audio / quality / fullscreen
  *     └─ menu-frame-dialog (popover modal with main-menu + sub-menu panes)
+ *
+ * Segmented-buffer rendering pattern
+ * ───────────────────────────────────
+ * When the playlist item has chapters, `sliderBuffer` (the single continuous
+ * strip) is hidden via `.slider-bar.has-chapters .slider-buffer { display:none }`.
+ * Instead, each `chapter-marker` contains a `chapter-marker-buffer` sibling
+ * rendered between `chapter-marker-bg` and `chapter-marker-hover`.
+ *
+ * `updateChapterBuffer(bufferedEnd, duration)` walks `chapterRefs` and sets each
+ * segment's `buffer` div with the same `transform: scaleX(fill)` pattern used by
+ * `chapter-marker-progress`.  The fill fraction per segment is:
+ *
+ *   - bufferedEnd ≤ segment.start  → 0   (not yet buffered)
+ *   - bufferedEnd ≥ segment.end    → 1   (fully buffered)
+ *   - otherwise                   → (bufferedEnd − segment.start) / segmentWidth
+ *
+ * The 2 px gap that `calc(width% - 2px)` applies to each chapter-marker
+ * automatically aligns the buffer segments with the chapter dividers, so no
+ * extra gap logic is required here.
  */
 
 import { Plugin } from '@nomercy-entertainment/nomercy-player-core';
@@ -92,6 +116,7 @@ interface ChapterMarkerRef {
     /** Chapter range, as percentages of total duration. */
     left: number;
     right: number;
+    buffer: HTMLDivElement;
     hover: HTMLDivElement;
     progress: HTMLDivElement;
 }
@@ -788,12 +813,14 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
 
             const bg = document.createElement('div');
             bg.className = 'chapter-marker-bg';
+            const buffer = document.createElement('div');
+            buffer.className = 'chapter-marker-buffer';
             const hover = document.createElement('div');
             hover.className = 'chapter-marker-hover';
             const progress = document.createElement('div');
             progress.className = 'chapter-marker-progress';
 
-            marker.append(bg, hover, progress);
+            marker.append(bg, buffer, hover, progress);
             this.chapterBar.appendChild(marker);
 
             this.listen(marker, 'click', (e: Event) => {
@@ -801,7 +828,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
                 void this.player.seekToChapter?.(ch.index);
             });
 
-            this.chapterRefs.push({ left, right, hover, progress });
+            this.chapterRefs.push({ left, right, buffer, hover, progress });
         }
     }
 
@@ -812,6 +839,17 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
             else {
                 const span = Math.max(0.0001, m.right - m.left);
                 m.progress.style.transform = `scaleX(${(percentage - m.left) / span})`;
+            }
+        }
+    }
+
+    private updateChapterBuffer(bufferedPct: number): void {
+        for (const m of this.chapterRefs) {
+            if (bufferedPct <= m.left) m.buffer.style.transform = 'scaleX(0)';
+            else if (bufferedPct >= m.right) m.buffer.style.transform = 'scaleX(1)';
+            else {
+                const span = Math.max(0.0001, m.right - m.left);
+                m.buffer.style.transform = `scaleX(${(bufferedPct - m.left) / span})`;
             }
         }
     }
@@ -850,7 +888,13 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
         }
         try {
             const buf = this.player.buffered();
-            this.sliderBuffer.style.width = `${dur > 0 ? (buf / dur) * 100 : 0}%`;
+            const bufPct = dur > 0 ? (buf / dur) * 100 : 0;
+            if (this.chapterRefs.length > 0) {
+                this.updateChapterBuffer(bufPct);
+            }
+            else {
+                this.sliderBuffer.style.width = `${bufPct}%`;
+            }
         }
         catch { /* SourceBuffer detach */ }
         this.currentTimeEl.textContent = fmt(t);

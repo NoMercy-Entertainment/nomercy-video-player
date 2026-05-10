@@ -139,6 +139,7 @@ export const desktopUiCss = `
 }
 .slider-bar.has-chapters .slider-progress { display: none; }
 .slider-bar.has-chapters .slider-hover { display: none; }
+.slider-bar.has-chapters .slider-buffer { display: none; }
 .chapter-bar {
     position: absolute; inset: 0;
     height: 100%;
@@ -161,6 +162,16 @@ export const desktopUiCss = `
     background: rgba(255,255,255,0.20);
     border-radius: 2px;
     z-index: 0;
+}
+.chapter-marker-buffer {
+    position: absolute; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(255,255,255,0.40);
+    transform-origin: left;
+    transform: scaleX(0);
+    border-radius: 2px;
+    z-index: 5;
+    pointer-events: none;
 }
 .chapter-marker-hover {
     position: absolute; left: 0;
@@ -347,7 +358,7 @@ export const desktopUiCss = `
     margin-top: auto;
     overflow-y: auto;
     overflow-x: hidden;
-    padding: 12px 12px;
+    padding: 4px 8px 8px;
     border-radius: 8px;
     pointer-events: auto;
 }
@@ -449,7 +460,7 @@ export const desktopUiCss = `
     gap: 4px;
     overflow-x: hidden;
     overflow-y: auto;
-    padding: 12px;
+    padding: 8px 0 8px 8px;
     transition: all 0.3s ease;
     width: 100%;
     max-height: 50vh;
