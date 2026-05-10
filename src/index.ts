@@ -148,16 +148,8 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 		(t: number, opts?: ActionOptions): Promise<void>;
 	};
 	declare duration: () => number;
-	buffered(): number {
-		if (this._backend) return this._backend.buffered();
-		return 0;
-	}
-
-	bufferedRanges(): TimeRanges {
-		if (this._backend) return this._backend.bufferedRanges();
-		return { length: 0, start: () => 0, end: () => 0 } as unknown as TimeRanges;
-	}
-
+	declare buffered: () => number;
+	declare bufferedRanges: () => TimeRanges;
 	declare seekable: () => TimeRanges;
 	declare timeData: () => KitTimeState;
 	/** Seek to a position expressed as a percentage (0–100) of total duration. V1 parity. */
@@ -303,6 +295,15 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 		// Real element now exists — apply any poster the cursor moved through
 		// while we were lazy.
 		this._applyPoster();
+		// Apply the initial stretching config to the video element.
+		const initialStretching = (this.options as VideoPlayerConfig<BasePlaylistItem>)?.stretching;
+		if (initialStretching) {
+			this._aspectRatio = initialStretching;
+			this._applyObjectFit(initialStretching);
+		}
+		else {
+			this._applyObjectFit('uniform');
+		}
 		// Bridge backend element events to player-level phase transitions and
 		// the `firstFrame` / `ended` events the player surface promises.
 		let firstFrameEmitted = false;
@@ -340,9 +341,7 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 			}
 		});
 		instance.on('pause', () => {
-			// `pause` fires on natural pause AND right before `ended`; the
-			// `ended` listener already moved phase, so don't override it.
-			if (self._playState === 'playing') {
+			if (self._playState === 'playing' && !instance.mediaElement().ended) {
 				self._playState = 'paused';
 				this.emit('pause', undefined);
 			}
@@ -548,12 +547,37 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 		this.currentAudioTrack(next);
 	}
 	private _aspectRatio: 'uniform' | 'fill' | 'exactfit' | 'none' = 'uniform';
+
+	private static readonly _OBJECT_FIT_MAP: Record<'uniform' | 'fill' | 'exactfit' | 'none', string> = {
+		uniform: 'contain',
+		fill: 'fill',
+		exactfit: 'cover',
+		none: 'none',
+	};
+
+	aspectRatio(): 'uniform' | 'fill' | 'exactfit' | 'none';
+	aspectRatio(value: 'uniform' | 'fill' | 'exactfit' | 'none'): void;
+	aspectRatio(value?: 'uniform' | 'fill' | 'exactfit' | 'none'): 'uniform' | 'fill' | 'exactfit' | 'none' | void {
+		if (value === undefined) return this._aspectRatio;
+
+		this._aspectRatio = value;
+		this._applyObjectFit(value);
+		this.emit('aspectRatio', { value });
+	}
+
 	cycleAspectRatio(): void {
 		const order: Array<'uniform' | 'fill' | 'exactfit' | 'none'> = ['uniform', 'fill', 'exactfit', 'none'];
 		const idx = order.indexOf(this._aspectRatio);
-		const next = order[(idx + 1) % order.length];
+		const next = order[(idx + 1) % order.length]!;
 		this._aspectRatio = next;
+		this._applyObjectFit(next);
 		this.emit('aspectRatio', { value: next });
+	}
+
+	private _applyObjectFit(value: 'uniform' | 'fill' | 'exactfit' | 'none'): void {
+		const el = this.videoElement;
+		if (!el || !el.style) return;
+		el.style.objectFit = NMVideoPlayer._OBJECT_FIT_MAP[value];
 	}
 
 	// ── Tracks / chapters / quality ── composed in via `mediaTracksMethods` mixin.
