@@ -6,6 +6,54 @@ import type { BackendEventPayload, BackendLoaderState, BackendState, IVideoBacke
 
 const HLS_EXT_RE = /\.m3u8(\?|$)/i;
 
+interface HlsLevel {
+	attrs?: { CODECS?: string };
+	bitrate?: number;
+	height?: number;
+	width?: number;
+	frameRate?: number;
+	name?: string;
+}
+
+interface HlsAudioTrack {
+	lang?: string;
+	name?: string;
+	default?: boolean;
+}
+
+interface HlsSubtitleTrack {
+	name?: string;
+	lang?: string;
+	default?: boolean;
+	forced?: boolean;
+	url?: string;
+}
+
+interface HlsConstructor {
+	new(config?: Record<string, unknown>): HlsInstance;
+	isSupported?(): boolean;
+	Events: Record<string, string>;
+	ErrorTypes: Record<string, string>;
+}
+
+interface HlsInstance {
+	levels: HlsLevel[];
+	audioTracks: HlsAudioTrack[];
+	subtitleTracks: HlsSubtitleTrack[];
+	audioTrack: number;
+	subtitleTrack: number;
+	currentLevel: number;
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	on(event: string, fn: (event: string, data: any) => void): void;
+	attachMedia(el: HTMLVideoElement): void;
+	loadSource(url: string): void;
+	detachMedia(): void;
+	destroy(): void;
+	startLoad(): void;
+	stopLoad(): void;
+	recoverMediaError(): void;
+}
+
 const CODEC_LABELS: Array<[RegExp, string]> = [
     [/avc1|h264/i, 'H.264'],
     [/hvc1|hev1|h265/i, 'H.265 (HEVC)'],
@@ -60,7 +108,7 @@ export class Html5VideoBackend extends EventEmitter<BackendEventPayload> impleme
 	 * canonical home.
 	 */
 	private readonly elementListeners: Array<{ event: string; fn: EventListener }> = [];
-	private hls: any | undefined;
+	private hls: HlsInstance | undefined;
 	private currentUrl: string | undefined;
 	private _state: BackendState = 'idle';
 	private _hadError = false;
@@ -157,8 +205,8 @@ export class Html5VideoBackend extends EventEmitter<BackendEventPayload> impleme
 			// Indirect specifier sidesteps TS module resolution — hls.js is a
 			// transitive dep via @nomercy-entertainment/nomercy-player-core.
 			const hlsSpec = 'hls.js';
-			const mod: any = await import(/* @vite-ignore */ hlsSpec);
-			const Hls = mod.default ?? mod;
+			const mod: { default?: HlsConstructor } & Partial<HlsConstructor> = await import(/* @vite-ignore */ hlsSpec);
+			const Hls = (mod.default ?? mod) as HlsConstructor;
 			if (!Hls?.isSupported?.()) {
 				this._state = 'error';
 				throw new MediaFormatError({
@@ -191,13 +239,14 @@ export class Html5VideoBackend extends EventEmitter<BackendEventPayload> impleme
 			//   - WebVTT absent  → reload the Hls instance with CEA on
 			//                       so pure-CEA streams aren't left
 			//                       silent (rule 2 fallback).
-			this.hls = new Hls({
+			const initialHls: HlsInstance = new Hls({
 				autoStartLoad: true,
 				enableWorker: true,
 				lowLatencyMode: false,
 				enableCEA708Captions: false,
 			});
-			this.hls.on(Hls.Events.MANIFEST_PARSED, (_e: unknown, data: { subtitleTracks?: unknown[] }) => {
+			this.hls = initialHls;
+			initialHls.on(Hls.Events.MANIFEST_PARSED, (_e: unknown, data: { subtitleTracks?: unknown[] }) => {
 				const hasWebVttSubs = Array.isArray(data?.subtitleTracks) && data.subtitleTracks.length > 0;
 				if (hasWebVttSubs) {
 					this._emitHlsTrackLists();
@@ -210,21 +259,21 @@ export class Html5VideoBackend extends EventEmitter<BackendEventPayload> impleme
 				catch { /* defensive */ }
 				try { this.hls?.destroy(); }
 				catch { /* defensive */ }
-				const fallback = new Hls({
+				const fallback: HlsInstance = new Hls({
 					autoStartLoad: true,
 					enableWorker: true,
 					lowLatencyMode: false,
 					enableCEA708Captions: true,
 				});
 				this.hls = fallback;
-				this.hls.attachMedia(this.element);
-				this.hls.loadSource(url);
-				this.hls.on(Hls.Events.MANIFEST_PARSED, () => { this._emitHlsTrackLists(); });
+				fallback.attachMedia(this.element);
+				fallback.loadSource(url);
+				fallback.on(Hls.Events.MANIFEST_PARSED, () => { this._emitHlsTrackLists(); });
 				this._attachHlsErrorHandler(Hls, url);
 				this._attachHlsLevelSwitchedHandler(Hls);
 			});
-			this.hls.attachMedia(this.element);
-			this.hls.loadSource(url);
+			initialHls.attachMedia(this.element);
+			initialHls.loadSource(url);
 			this._attachHlsErrorHandler(Hls, url);
 			this._attachHlsLevelSwitchedHandler(Hls);
 		}
@@ -374,7 +423,7 @@ export class Html5VideoBackend extends EventEmitter<BackendEventPayload> impleme
 	audioTracks(): AudioTrack[] {
 		// HLS-managed sources: hls.audioTracks gives language + name.
 		if (this.hls?.audioTracks?.length) {
-			return this.hls.audioTracks.map((t: any, index: number) => ({
+			return this.hls.audioTracks.map((t, index) => ({
 				id: `audio-${index}`,
 				language: t.lang ?? undefined,
 				label: t.name ?? `Track ${index + 1}`,
@@ -582,7 +631,7 @@ export class Html5VideoBackend extends EventEmitter<BackendEventPayload> impleme
 
 		type QL = QualityLevel & { supported: boolean };
 
-		const all: QL[] = this.hls.levels.map((level: any, index: number) => {
+		const all: QL[] = this.hls.levels.map((level, index) => {
 			const codec: string = level.attrs?.CODECS ?? '';
 			const cached = this._capabilityCache.get(codec);
 			return {
@@ -605,7 +654,7 @@ export class Html5VideoBackend extends EventEmitter<BackendEventPayload> impleme
 		if (typeof navigator?.mediaCapabilities?.decodingInfo !== 'function') return;
 
 		const seen = new Set<string>();
-		for (const level of this.hls.levels as any[]) {
+		for (const level of this.hls.levels) {
 			const codec: string = level.attrs?.CODECS ?? '';
 			if (!codec || seen.has(codec) || this._capabilityCache.has(codec)) continue;
 			seen.add(codec);
@@ -701,14 +750,12 @@ export class Html5VideoBackend extends EventEmitter<BackendEventPayload> impleme
 	pauseLoader(): void {
 		// HLS path: hand off to hls.js. Native HLS / progressive MP4 has no
 		// public throttle hook — the runtime tracks state for symmetry.
-		const stop = this.hls?.stopLoad as (() => void) | undefined;
-		if (typeof stop === 'function') stop.call(this.hls);
+		this.hls?.stopLoad();
 		this._loaderState = 'paused';
 	}
 
 	resumeLoader(): void {
-		const start = this.hls?.startLoad as (() => void) | undefined;
-		if (typeof start === 'function') start.call(this.hls);
+		this.hls?.startLoad();
 		this._loaderState = 'running';
 	}
 
@@ -835,7 +882,7 @@ export class Html5VideoBackend extends EventEmitter<BackendEventPayload> impleme
 	 * @param Hls   - The hls.js constructor (carries static `Events` + `ErrorTypes`)
 	 * @param url   - The manifest URL, needed for MUX destroy-reload.
 	 */
-	private _attachHlsErrorHandler(Hls: any, url: string): void {
+	private _attachHlsErrorHandler(Hls: HlsConstructor, url: string): void {
 		if (!this.hls) return;
 		const MAX_NET_RETRIES = 3;
 
@@ -887,7 +934,7 @@ export class Html5VideoBackend extends EventEmitter<BackendEventPayload> impleme
 				}
 				this._mediaRecoveryStartMs = now;
 				this.emit('stream:recovering', { details: data.details, attempt: 1, maxAttempts: 1 });
-				try { this.hls?.recoverMediaError(); }
+				try { this.hls?.recoverMediaError?.(); }
 				catch { this._escalateHlsError(data.details, `HLS recoverMediaError threw: ${data.details}`); }
 			}
 			else {
@@ -933,7 +980,7 @@ export class Html5VideoBackend extends EventEmitter<BackendEventPayload> impleme
 	 * Must be called after every HLS instance creation alongside
 	 * `_attachHlsErrorHandler`.
 	 */
-	private _attachHlsLevelSwitchedHandler(Hls: any): void {
+	private _attachHlsLevelSwitchedHandler(Hls: HlsConstructor): void {
 		if (!this.hls) return;
 		this.hls.on(Hls.Events.LEVEL_SWITCHED, (_e: unknown, data: { level: number }) => {
 			this.emit('level-switched', { level: data.level });

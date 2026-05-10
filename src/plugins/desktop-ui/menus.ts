@@ -746,6 +746,7 @@ function buildPlaylistCard(
     progressBar.className = 'progress-bar';
     if (item.progress && item.progress.percentage > 0) {
         progressBar.style.width = `${Math.min(100, item.progress.percentage)}%`;
+        sliderContainer.classList.add('has-progress');
     }
     sliderContainer.appendChild(progressBar);
     progressContainer.appendChild(sliderContainer);
@@ -761,6 +762,7 @@ function buildPlaylistCard(
         const watchedLabel = document.createElement('span');
         watchedLabel.className = 'playlist-menu-button-watched';
         watchedLabel.dataset['timestamp'] = String(item.progress.timestamp);
+        watchedLabel.textContent = new Date(item.progress.timestamp).toISOString();
         right.appendChild(watchedLabel);
     }
     if (item.description) {

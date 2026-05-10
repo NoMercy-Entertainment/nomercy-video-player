@@ -63,6 +63,7 @@ export class KeyHandlerPlugin extends BaseKeyHandler<NMVideoPlayer<any>> {
 		this.addSubtitleSizeKeys();
 		this.addAspectRatioKeys();
 		this.addStopKey();
+		this.addHelpKey();
 	}
 
 	protected override defaultBindings(): void {
@@ -212,6 +213,15 @@ export class KeyHandlerPlugin extends BaseKeyHandler<NMVideoPlayer<any>> {
 
 	protected addStopKey(): void {
 		this.bind('s', () => { void this.player.stop?.(); });
+	}
+
+	/** `?` — fires `plugin:desktop-ui:shortcuts-toggle` so the desktop UI overlay can open/close. */
+	protected addHelpKey(): void {
+		this.bind('?', () => {
+			try {
+				this.player.emit('plugin:desktop-ui:shortcuts-toggle', undefined);
+			} catch { /* desktop-ui not mounted — no-op */ }
+		});
 	}
 }
 

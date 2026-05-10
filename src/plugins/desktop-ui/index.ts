@@ -238,6 +238,18 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
             'desktop-ui.tooltip.previousWithTitle': 'Previous: {title}',
             'desktop-ui.tooltip.nextChapterWithTitle': 'Next chapter: {title}',
             'desktop-ui.tooltip.previousChapterWithTitle': 'Previous chapter: {title}',
+            'desktop-ui.shortcuts.title': 'Keyboard shortcuts',
+            'desktop-ui.shortcuts.playPause': 'Play / Pause',
+            'desktop-ui.shortcuts.seekBackForward': 'Seek −10 s / +10 s',
+            'desktop-ui.shortcuts.volumeUpDown': 'Volume +10% / −10%',
+            'desktop-ui.shortcuts.mute': 'Mute / Unmute',
+            'desktop-ui.shortcuts.fullscreen': 'Fullscreen',
+            'desktop-ui.shortcuts.theater': 'Theater mode',
+            'desktop-ui.shortcuts.pip': 'Picture-in-picture',
+            'desktop-ui.shortcuts.next': 'Next item',
+            'desktop-ui.shortcuts.previous': 'Previous item',
+            'desktop-ui.shortcuts.chapters': 'Previous / Next chapter',
+            'desktop-ui.shortcuts.help': 'Show / hide shortcuts',
         },
     };
 
@@ -378,33 +390,32 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
             .addClasses(['nm-shortcuts-overlay'])
             .appendTo(parent).get();
 
-        const shortcuts: Array<[string, string]> = [
-            ['Space / K', 'Play / Pause'],
-            ['← / →', 'Seek −10 s / +10 s'],
-            ['↑ / ↓', 'Volume +10% / −10%'],
-            ['M', 'Mute / Unmute'],
-            ['F', 'Fullscreen'],
-            ['T', 'Theater mode'],
-            ['P', 'Picture-in-picture'],
-            ['N', 'Next item'],
-            ['B', 'Previous item'],
-            [', / .', 'Previous / Next chapter'],
-            ['0–9', 'Seek to 0%–90%'],
-            ['?', 'Show / hide shortcuts'],
+        const shortcutRows: Array<[string, string]> = [
+            ['Space', 'desktop-ui.shortcuts.playPause'],
+            ['← / →', 'desktop-ui.shortcuts.seekBackForward'],
+            ['↑ / ↓', 'desktop-ui.shortcuts.volumeUpDown'],
+            ['M', 'desktop-ui.shortcuts.mute'],
+            ['F', 'desktop-ui.shortcuts.fullscreen'],
+            ['T', 'desktop-ui.shortcuts.theater'],
+            ['P', 'desktop-ui.shortcuts.pip'],
+            ['N', 'desktop-ui.shortcuts.next'],
+            ['B', 'desktop-ui.shortcuts.previous'],
+            ['Shift+N / Shift+P', 'desktop-ui.shortcuts.chapters'],
+            ['?', 'desktop-ui.shortcuts.help'],
         ];
 
         const title = document.createElement('h2');
         title.className = 'nm-shortcuts-title';
-        title.textContent = 'Keyboard shortcuts';
+        title.textContent = this.t('desktop-ui.shortcuts.title', {});
         overlay.appendChild(title);
 
         const grid = document.createElement('dl');
         grid.className = 'nm-shortcuts-grid';
-        for (const [key, desc] of shortcuts) {
+        for (const [key, labelKey] of shortcutRows) {
             const term = document.createElement('dt');
             term.textContent = key;
             const def = document.createElement('dd');
-            def.textContent = desc;
+            def.textContent = this.t(labelKey, {});
             grid.appendChild(term);
             grid.appendChild(def);
         }
@@ -846,6 +857,8 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
                 }
             });
         }
+
+        this.on('plugin:desktop-ui:shortcuts-toggle', () => this.toggleShortcuts());
 
         this.on('play', () => this.setPlayingState(true));
         this.on('pause', () => this.setPlayingState(false));
