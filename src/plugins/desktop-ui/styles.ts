@@ -51,7 +51,7 @@ export const desktopUiCss = `
     display: flex; align-items: center; justify-content: center; backdrop-filter: blur(2px);
     transition: background 0.18s ease, transform 0.18s ease, opacity 0.18s ease;
 }
-.nm-center-btn:hover { background: rgba(108,99,255,0.85); transform: scale(1.08); }
+.nm-center-btn:hover { background: rgba(255,255,255,0.20); transform: scale(1.08); }
 .nm-center.nm-playing .nm-center-btn { opacity: 0; }
 .nmplayer-active:hover .nm-center-btn { opacity: 1; }
 .nm-spinner { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; pointer-events: none; }
@@ -327,7 +327,9 @@ export const desktopUiCss = `
 .menu-wrapper { position: absolute; inset: 0; pointer-events: none; color: #fff; }
 .menu-frame {
     position: absolute;
-    top: 16px; right: 16px; bottom: 16px;
+    top: 16px; 
+    right: 16px; 
+    bottom: 52px;
     display: none;
     flex-direction: column;
     height: auto;
