@@ -148,8 +148,16 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 		(t: number, opts?: ActionOptions): Promise<void>;
 	};
 	declare duration: () => number;
-	declare buffered: () => number;
-	declare bufferedRanges: () => TimeRanges;
+	buffered(): number {
+		if (this._backend) return this._backend.buffered();
+		return 0;
+	}
+
+	bufferedRanges(): TimeRanges {
+		if (this._backend) return this._backend.bufferedRanges();
+		return { length: 0, start: () => 0, end: () => 0 } as unknown as TimeRanges;
+	}
+
 	declare seekable: () => TimeRanges;
 	declare timeData: () => KitTimeState;
 	/** Seek to a position expressed as a percentage (0–100) of total duration. V1 parity. */

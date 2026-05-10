@@ -26,7 +26,7 @@
  */
 
 import { Plugin } from '@nomercy-entertainment/nomercy-player-core';
-import type { NMVideoPlayer, VideoEventMap, VideoPlaylistItem } from '@nomercy-entertainment/nomercy-video-player';
+import { TheaterState, VolumeState, type NMVideoPlayer, type VideoEventMap, type VideoPlaylistItem } from '@nomercy-entertainment/nomercy-video-player';
 
 import { fluentIcons, svgFromIcon } from './icons';
 import { ensureDesktopUiStyles } from './styles';
@@ -672,12 +672,12 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
     // ── Initial state, capability gating, helpers ────────────────────
     private applyInitialState(): void {
         this.applyVolume(this.player.volume?.() ?? 1);
-        this.applyMuted((this.player as any).volumeState?.() === 'muted');
+        this.applyMuted(this.player.volumeState() === VolumeState.MUTED);
         this.applyRate(this.player.playbackRate?.() ?? 1);
         this.applySubsIcon();
         this.applyQualityIcon();
-        this.applyPipIcon(Boolean((document as any).pictureInPictureElement));
-        const theaterActive = (this.player as any).theaterState?.() === 'on';
+        this.applyPipIcon(Boolean(document.pictureInPictureElement));
+        const theaterActive = this.player.theaterState() === TheaterState.ON;
         this.applyTheaterIcon(theaterActive);
         this.player.container.classList.toggle('theater', theaterActive);
         const cur = this.player.current?.();
@@ -835,7 +835,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
         const fromPlayer = this.player.duration?.() ?? 0;
         if (fromPlayer > 0) return fromPlayer;
         if (this.cachedDuration > 0) return this.cachedDuration;
-        const el = (this.player as any).videoElement as HTMLVideoElement | undefined;
+        const el = this.player.videoElement;
         return Number.isFinite(el?.duration) ? (el!.duration ?? 0) : 0;
     }
 
@@ -849,7 +849,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
             this.updateChapterProgress(pct);
         }
         try {
-            const buf = (this.player as any).buffered?.() ?? 0;
+            const buf = this.player.buffered();
             this.sliderBuffer.style.width = `${dur > 0 ? (buf / dur) * 100 : 0}%`;
         }
         catch { /* SourceBuffer detach */ }
@@ -885,7 +885,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
     }
 
     private applyMutedIcon(): void {
-        const muted = (this.player as any).volumeState?.() === 'muted';
+        const muted = this.player.volumeState() === VolumeState.MUTED;
         const v = this.player.volume?.() ?? 1;
         const icon = muted || v === 0
             ? fluentIcons.volumeMuted
@@ -945,7 +945,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
         const subsCount = subs.length;
 
         const audios = (this.player.audioTracks?.() ?? []) as AudioTrackLite[];
-        const levels = ((this.player as any).qualityLevels?.() ?? []) as QualityLevelLite[];
+        const levels = (this.player.qualityLevels?.() ?? []) as QualityLevelLite[];
 
         this.subsBtn.hidden = subsCount === 0;
         this.audioBtn.hidden = audios.length <= 1;
@@ -999,8 +999,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
 
     private safeCurrentIndex(): number {
         try {
-            const fn = (this.player as any).currentIndex;
-            if (typeof fn === 'function') return Number(fn.call(this.player)) || 0;
+            return this.player.currentIndex();
         }
         catch { /* not implemented */ }
         return 0;
@@ -1008,12 +1007,10 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
 
     private safeQueueLength(): number {
         try {
-            const fn = (this.player as any).queueLength;
-            if (typeof fn === 'function') return Number(fn.call(this.player)) || 0;
+            return this.player.queueLength();
         }
         catch { /* not implemented */ }
-        const q = (this.player as any).queue?.();
-        return Array.isArray(q) ? q.length : 0;
+        return this.player.queue().length;
     }
 
     private previousChapter(): void {
@@ -1066,27 +1063,30 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
     }
     
     private syncActiveIndexes(): void {
-        const be = (this.player as any).backend?.();
-        const hls = be?.hls;
+        // backend() is private on NMVideoPlayer; reach it only to inspect the
+        // underlying HLS.js state that is not yet surfaced on the player API.
+        const be = (this.player as unknown as { backend(): { hls?: Record<string, unknown> } }).backend?.();
+        const hls = be?.hls as Record<string, unknown> | undefined;
 
         // Audio
         const audios = (this.player.audioTracks?.() ?? []) as AudioTrackLite[];
         if (audios.length > 0) {
-            const hlsAudio = hls?.audioTrack;
+            const hlsAudio = hls?.['audioTrack'];
             if (typeof hlsAudio === 'number' && hlsAudio >= 0) {
                 this.activeAudioIdx = hlsAudio;
             }
             else {
-                const defIdx = audios.findIndex((t: any) => t?.default === true);
+                const defIdx = audios.findIndex(t => t.default === true);
                 this.activeAudioIdx = defIdx >= 0 ? defIdx : 0;
             }
         }
 
-        const hlsHasSubs = (hls?.subtitleTracks?.length ?? 0) > 0;
+        const hlsSubTracks = hls?.['subtitleTracks'];
+        const hlsHasSubs = Array.isArray(hlsSubTracks) && hlsSubTracks.length > 0;
         if (hlsHasSubs) {
-            const subState = (this.player as any).subtitleState?.();
-            const hlsSub = hls?.subtitleTrack;
-            if (subState === 'off' || subState === 0) {
+            const subState = this.player.subtitleState();
+            const hlsSub = hls?.['subtitleTrack'];
+            if (subState === 'off') {
                 this.activeSubtitleIdx = -1;
             }
             else if (typeof hlsSub === 'number') {
@@ -1095,12 +1095,15 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
         }
 
         if (!this._userPickedQuality) {
-            const qState = (this.player as any).qualityState?.();
-            if (qState === 'auto' || qState === 0) {
+            const qState = this.player.qualityState();
+            if (qState === 'auto') {
                 this.activeQualityIdx = 'auto';
             }
-            else if (typeof hls?.currentLevel === 'number') {
-                this.activeQualityIdx = hls.currentLevel >= 0 ? hls.currentLevel : 'auto';
+            else {
+                const hlsLevel = hls?.['currentLevel'];
+                if (typeof hlsLevel === 'number') {
+                    this.activeQualityIdx = hlsLevel >= 0 ? hlsLevel : 'auto';
+                }
             }
         }
     }

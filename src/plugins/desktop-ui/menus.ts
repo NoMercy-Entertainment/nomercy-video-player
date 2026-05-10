@@ -34,7 +34,7 @@ export type MenuListen = (target: EventTarget, event: string, fn: (e: Event) => 
 export type SubMenuId = 'language' | 'subtitles' | 'quality' | 'speed' | 'playlist' | 'subtitleSettings';
 
 export interface SubtitleTrackLite { id?: string | number; label?: string; language?: string; kind?: string }
-export interface AudioTrackLite { id?: string | number; name?: string; language?: string; label?: string }
+export interface AudioTrackLite { id?: string | number; name?: string; language?: string; label?: string; default?: boolean }
 export interface QualityLevelLite { id?: string | number; index?: number; height?: number; width?: number; name?: string; label?: string; bitrate?: number }
 export interface ChapterLite { index: number; start: number; end: number; title: string }
 
