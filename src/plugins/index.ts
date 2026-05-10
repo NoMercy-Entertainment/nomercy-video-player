@@ -1,4 +1,8 @@
 // Video-specific plugins
+export { desktopUiPlugin, DesktopUiPlugin } from './desktop-ui/index';
+export type { DesktopUiOptions } from './desktop-ui/index';
+export { subtitleOverlayPlugin, SubtitleOverlayPlugin } from './subtitle-overlay/index';
+export type { SubtitleOverlayOptions } from './subtitle-overlay/index';
 export { octopusPlugin, OctopusPlugin } from './octopus';
 export type { OctopusOptions } from './octopus';
 
