@@ -6,6 +6,31 @@ import type { BackendEventPayload, BackendLoaderState, BackendState, IVideoBacke
 
 const HLS_EXT_RE = /\.m3u8(\?|$)/i;
 
+const CODEC_LABELS: Array<[RegExp, string]> = [
+    [/avc1|h264/i, 'H.264'],
+    [/hvc1|hev1|h265/i, 'H.265 (HEVC)'],
+    [/av01/i, 'AV1'],
+    [/vp09|vp9/i, 'VP9'],
+    [/vp8/i, 'VP8'],
+    [/mp4a\.40/i, 'AAC'],
+    [/mp4a\.6b/i, 'MP3'],
+    [/ac-3|ec-3/i, 'Dolby Audio'],
+    [/opus/i, 'Opus'],
+    [/flac/i, 'FLAC'],
+];
+
+function humanCodec(raw: string): string {
+    const parts = raw.split(',').map(s => s.trim());
+    const labels = parts.map(part => {
+        for (const [re, label] of CODEC_LABELS) {
+            if (re.test(part)) return label;
+        }
+        return part;
+    });
+    const unique = Array.from(new Set(labels));
+    return unique.join(' + ');
+}
+
 const policy = (code: string, message: string): BrowserPolicyError => new BrowserPolicyError({
 	code,
 	severity: 'error',
@@ -818,9 +843,22 @@ export class Html5VideoBackend extends EventEmitter<BackendEventPayload> impleme
 			fatal: boolean;
 			type: string;
 			details: string;
+			error?: Error;
 		}) => {
 			if (!data.fatal) {
-				// Non-fatal: inform consumers but do not escalate.
+				if (data.details === 'bufferIncompatibleCodecsError') {
+					const raw = data.error?.message ?? '';
+					const codecMatch = /codecs=([^,;"]+(?:,[^,;"]+)*)/i.exec(raw);
+					const rawCodec = codecMatch?.[1] ?? raw;
+					const humanLabel = rawCodec ? humanCodec(rawCodec) : 'unknown codec';
+					this.emit('stream:error', {
+						details: 'media/codec-not-supported',
+						fatal: false,
+						message: `Your browser can't decode this video format (${humanLabel}).`,
+						rawCodec,
+					});
+					return;
+				}
 				this.emit('stream:error', { details: data.details, fatal: false });
 				return;
 			}

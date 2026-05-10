@@ -1,26 +1,6 @@
 /**
- * Touch / click zones plugin — Step-10 of the wiki tutorial.
- *
- * Lays a 3-column × 6-row CSS grid over the player container:
- *
- *   Desktop:                         Mobile:
- *   ┌──────┬──────┬──────┐           ┌──────┬──────┬──────┐
- *   │      │      │      │           │      │Vol Up│      │
- *   │ Seek │ Play/│ Seek │           │ Seek ├──────┤ Seek │
- *   │ Back │Pause/│ Fwd  │           │ Back │Play/ │ Fwd  │
- *   │  ◄◄  │  FS  │  ►►  │           │  ◄◄  │Pause │  ►►  │
- *   │      │      │      │           │      ├──────┤      │
- *   │      │      │      │           │      │VolDn │      │
- *   └──────┴──────┴──────┘           └──────┴──────┴──────┘
- *
- * Interactions (desktop + mobile):
- *   - Single tap left/right  → hide controls
- *   - Double tap left        → rewind 10 s
- *   - Double tap right       → forward 10 s
- *   - Single tap center      → toggle playback
- *   - Double tap center      → toggle fullscreen
- *   - Double tap vol-up      → volume +10 % (mobile only)
- *   - Double tap vol-down    → volume -10 % (mobile only)
+ * Touch / click zones plugin.
+ * z-index: 10 — sits above the video element (z-0) but below the desktop UI overlay (z-20).
  */
 
 import { Plugin } from '@nomercy-entertainment/nomercy-player-core';
@@ -46,7 +26,7 @@ function ensureStyles(): void {
     el.id = STYLE_ID;
     el.textContent = `
 .nm-touch-zones-root {
-    position: absolute; inset: 0; z-index: 21;
+    position: absolute; inset: 0; z-index: 10;
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
     grid-template-rows: repeat(6, 1fr);
@@ -83,7 +63,7 @@ export class TouchZonesPlugin extends Plugin<NMVideoPlayer<any>, TouchZonesOptio
         this.root = this.mount('root');
         this.player.addClasses(this.root, ['nm-touch-zones-root']);
 
-        this.on('activity', (d: { active: boolean }) => {
+        this.on('activity', d => {
             this.controlsVisible = d.active;
         });
 

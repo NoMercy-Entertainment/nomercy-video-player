@@ -40,7 +40,7 @@ export interface BackendEventPayload {
 	 * retries were exhausted and the player will emit a top-level `error`
 	 * event next.
 	 */
-	'stream:error': { details: string; fatal: boolean };
+	'stream:error': { details: string; fatal: boolean; message?: string; rawCodec?: string };
 	/**
 	 * The backend is about to retry after a fatal HLS error. Consumers can
 	 * use this to show a loading / reconnecting indicator.

@@ -141,6 +141,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
 
     private isMouseDown = false;
     private isScrubbing = false;
+    private _showRemaining = true;
 
     /** True when the user explicitly picked a non-auto quality level via the
      *  menu. Resets to false when "Auto" is picked. HLS level-switched events
@@ -181,6 +182,9 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
         ensureDesktopUiStyles();
         this.buildDom();
         this.wireEvents();
+        void Promise.resolve(this.storage.getJSON('showRemaining')).then(v => {
+            this._showRemaining = (v as boolean | null) ?? true;
+        });
         this.applyInitialState();
         this.bumpActivity();
     }
@@ -526,6 +530,10 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
         this.onVideo('pip', () => {
             this.applyPipIcon(Boolean(document.pictureInPictureElement));
         });
+        this.onVideo('theater', d => {
+            this.applyTheaterIcon(d.active);
+            this.player.container.classList.toggle('theater', d.active);
+        });
 
         this.listen(this.centerBtn, 'click', () => { void this.player.togglePlayback(); this.bumpActivity(); });
         this.listen(this.playBtn, 'click', () => { void this.player.togglePlayback(); this.bumpActivity(); });
@@ -541,6 +549,12 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
         this.listen(this.volSlider, 'input', () => {
             const v = Number(this.volSlider.value) / 100;
             this.player.volume?.(v);
+        });
+
+        this.listen(this.remainingTimeEl, 'click', () => {
+            this._showRemaining = !this._showRemaining;
+            void Promise.resolve(this.storage.setJSON('showRemaining', this._showRemaining));
+            this.applyTime(this.player.currentTime?.() ?? 0);
         });
 
         this.wireSliderBar();
@@ -663,6 +677,9 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
         this.applySubsIcon();
         this.applyQualityIcon();
         this.applyPipIcon(Boolean((document as any).pictureInPictureElement));
+        const theaterActive = (this.player as any).theaterState?.() === 'on';
+        this.applyTheaterIcon(theaterActive);
+        this.player.container.classList.toggle('theater', theaterActive);
         const cur = this.player.current?.();
         if (cur) this.handleCurrentChange(cur);
         const dur = this.player.duration?.();
@@ -837,8 +854,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
         }
         catch { /* SourceBuffer detach */ }
         this.currentTimeEl.textContent = fmt(t);
-        const remaining = Math.max(0, dur - t);
-        this.remainingTimeEl.textContent = dur > 0 ? `-${fmt(remaining)}` : fmt(dur);
+        this.remainingTimeEl.textContent = this._formatRemaining(t, dur);
         this.refreshTransportEnablement();
     }
 
@@ -846,8 +862,14 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
         this.cachedDuration = dur;
         const cur = this.player.currentTime?.() ?? 0;
         this.currentTimeEl.textContent = fmt(cur);
-        this.remainingTimeEl.textContent = dur > 0 ? `-${fmt(Math.max(0, dur - cur))}` : fmt(dur);
+        this.remainingTimeEl.textContent = this._formatRemaining(cur, dur);
         this.renderChapterMarkers();
+    }
+
+    private _formatRemaining(cur: number, dur: number): string {
+        if (dur <= 0) return fmt(0);
+        if (this._showRemaining) return `-${fmt(Math.max(0, dur - cur))}`;
+        return fmt(dur);
     }
 
     private applyVolume(v: number): void {
@@ -895,6 +917,11 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
     private applyFullscreen(): void {
         const fs = Boolean(document.fullscreenElement);
         this.fsBtn.innerHTML = svgFromIcon(fs ? fluentIcons.exitFullscreen : fluentIcons.fullscreen);
+    }
+
+    private applyTheaterIcon(active: boolean): void {
+        this.theaterBtn.innerHTML = svgFromIcon(active ? fluentIcons.theaterExit : fluentIcons.theater);
+        this.theaterBtn.setAttribute('aria-label', active ? 'Exit theater mode' : 'Theater mode');
     }
 
     /** Toggle subtitles button icon between subtitlesOff (no caption
@@ -1067,19 +1094,18 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
             }
         }
 
-        const qState = (this.player as any).qualityState?.();
-        if (qState === 'auto' || qState === 0) {
-            this.activeQualityIdx = 'auto';
-            this._userPickedQuality = false;
-        }
-        else if (typeof hls?.currentLevel === 'number') {
-            this.activeQualityIdx = hls.currentLevel >= 0 ? hls.currentLevel : 'auto';
-            this._userPickedQuality = hls.currentLevel >= 0;
+        if (!this._userPickedQuality) {
+            const qState = (this.player as any).qualityState?.();
+            if (qState === 'auto' || qState === 0) {
+                this.activeQualityIdx = 'auto';
+            }
+            else if (typeof hls?.currentLevel === 'number') {
+                this.activeQualityIdx = hls.currentLevel >= 0 ? hls.currentLevel : 'auto';
+            }
         }
     }
 
     private menuState(): MenuRenderState {
-        
         this.syncActiveIndexes();
         return {
             subtitleIdx: this.activeSubtitleIdx,

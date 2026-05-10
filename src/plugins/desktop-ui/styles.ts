@@ -299,7 +299,8 @@ export const desktopUiCss = `
     color: #ddd;
 }
 .current-time { margin-left: 8px; }
-.remaining-time { margin-right: 8px; }
+.remaining-time { margin-right: 8px; pointer-events: auto; cursor: pointer; border-radius: 4px; padding: 0 4px; transition: background 0.15s ease; }
+.remaining-time:hover { background: rgba(255,255,255,0.10); }
 .divider { display: flex; flex: 1; min-width: 16px; }
 
 /* ── Menu frame (v1) ─────────────────────────────────────────────── */
@@ -369,16 +370,18 @@ export const desktopUiCss = `
 
 .menu-header {
     display: flex; align-items: center;
-    height: 36px;
     min-height: 2.5rem;
     color: #fff;
     border-bottom: 1px solid rgba(209, 213, 219, 0.20);
     width: 100%;
+    padding: 6px 6px 6px 6px;
+    box-sizing: border-box;
+    gap: 4px;
 }
-.menu-header .menu-button-text { font-weight: 600; padding-left: 8px; }
+.menu-header .menu-button-text { font-weight: 600; flex: 1; }
 .menu-header-close, .menu-header-back {
     background: transparent; border: none; color: #fff; cursor: pointer;
-    width: 32px; height: 32px;
+    width: 32px; height: 32px; flex: 0 0 32px;
     display: inline-flex; align-items: center; justify-content: center;
     border-radius: 6px;
 }
@@ -446,15 +449,13 @@ export const desktopUiCss = `
     gap: 4px;
     overflow-x: hidden;
     overflow-y: auto;
-    /* Side padding leaves room for focus outlines and the 1px
-     * .language-button border without the wrapping pane clipping
-     * them at its rounded-corner edge. */
     padding: 12px;
     transition: all 0.3s ease;
     width: 100%;
     max-height: 50vh;
     scrollbar-width: thin;
     scrollbar-color: rgba(255,255,255,0.3) transparent;
+    scrollbar-gutter: stable;
 }
 
 /* ── Playlist sub-menu (two-pane, mirrors v1's createEpisodeMenu) ──────
