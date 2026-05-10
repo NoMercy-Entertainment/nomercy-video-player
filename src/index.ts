@@ -621,6 +621,7 @@ composeMixins(NMVideoPlayer.prototype, ...playerCoreMethods);
 		catch { /* defensive — kit must still finish disposing */ }
 		self._backend = undefined;
 		self.videoElement = undefined;
+		_instances.delete(this.playerId);
 		composedDispose.call(this);
 	};
 }
