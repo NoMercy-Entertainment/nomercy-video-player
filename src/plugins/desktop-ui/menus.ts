@@ -214,6 +214,18 @@ function buildPlaylistPaneShell(
         const header = player.createElement('div', 'menu-header-episodes')
             .addClasses(['menu-header'])
             .appendTo(episodes).get();
+
+        const back = player.createButton('episodes-back', 'Back', () => {});
+        back.classList.add('menu-header-back');
+        back.innerHTML = svgFromIcon(fluentIcons.chevronL);
+        header.appendChild(back);
+        listen(back, 'click', (e: Event) => { e.stopPropagation(); actions.backToMain(); });
+
+        const episodeTitle = document.createElement('span');
+        episodeTitle.className = 'menu-button-text';
+        episodeTitle.textContent = 'Episodes';
+        header.appendChild(episodeTitle);
+
         const close = player.createButton('episodes-close', 'Close', () => {});
         close.classList.add('menu-header-close');
         close.innerHTML = svgFromIcon(fluentIcons.close);
