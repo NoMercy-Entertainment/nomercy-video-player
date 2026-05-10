@@ -104,11 +104,47 @@ import {
     applyAspectRatioIcon,
 } from './buttonState';
 
+/**
+ * Per-button visibility overrides for the desktop UI control bar.
+ *
+ * Default-ON buttons (omit or set `true` to show): play, mute, volume,
+ * fullscreen, settings.
+ *
+ * Default-OFF buttons (set `true` to enable): theater, pip, speed, quality,
+ * subtitles, audio, playlist, chapterPrev, chapterNext, seekBack, seekForward,
+ * aspectRatio.
+ *
+ * Navigation (always-on when queue has multiple items): next, previous.
+ */
+export interface DesktopUiButtonOptions {
+    play?: boolean;
+    mute?: boolean;
+    volume?: boolean;
+    fullscreen?: boolean;
+    settings?: boolean;
+    next?: boolean;
+    previous?: boolean;
+    theater?: boolean;
+    pip?: boolean;
+    speed?: boolean;
+    quality?: boolean;
+    subtitles?: boolean;
+    audio?: boolean;
+    playlist?: boolean;
+    chapterPrev?: boolean;
+    chapterNext?: boolean;
+    seekBack?: boolean;
+    seekForward?: boolean;
+    aspectRatio?: boolean;
+}
+
 export interface DesktopUiOptions {
     hideTitle?: boolean;
     disableClickToPause?: boolean;
     inactivityMs?: number;
     imageBaseUrl?: string;
+    /** Per-button opt-in / opt-out. Unset keys use the button's own default. */
+    buttons?: DesktopUiButtonOptions;
 }
 
 interface SidecarTrackEntry {
@@ -132,6 +168,19 @@ function hasTrackArray(item: unknown): item is ItemWithSidecarTracks {
 function readSidecarTracks(item: unknown): SidecarTrackEntry[] | undefined {
     if (!hasTrackArray(item)) return undefined;
     return item.tracks;
+}
+
+const DEFAULT_ON_BUTTONS: ReadonlySet<keyof DesktopUiButtonOptions> = new Set([
+    'play', 'mute', 'volume', 'fullscreen', 'settings', 'next', 'previous',
+    'seekBack', 'seekForward',
+]);
+
+function buttonVisible(
+    key: keyof DesktopUiButtonOptions,
+    opts: DesktopUiButtonOptions | undefined,
+): boolean {
+    if (opts && key in opts) return Boolean(opts[key]);
+    return DEFAULT_ON_BUTTONS.has(key);
 }
 
 
@@ -284,28 +333,46 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
     }
 
     private buildBottomRow(parent: HTMLElement): void {
+        const btns = this.opts?.buttons;
+        const show = (key: keyof DesktopUiButtonOptions): boolean => buttonVisible(key, btns);
 
         this.playBtn = this.iconBtn('playback', 'play');
+        this.playBtn.hidden = !show('play');
         parent.appendChild(this.playBtn);
+
         this.prevBtn = this.iconBtn('previous', 'previous');
+        this.prevBtn.hidden = !show('previous');
         parent.appendChild(this.prevBtn);
+
         this.rewindBtn = this.iconBtn('seek-back', 'seekBack');
+        this.rewindBtn.hidden = !show('seekBack');
         parent.appendChild(this.rewindBtn);
+
         this.forwardBtn = this.iconBtn('seek-forward', 'seekForward');
+        this.forwardBtn.hidden = !show('seekForward');
         parent.appendChild(this.forwardBtn);
+
         this.chapBackBtn = this.iconBtn('chapter-back', 'chapterBack');
+        this.chapBackBtn.hidden = !show('chapterPrev');
         parent.appendChild(this.chapBackBtn);
+
         this.chapFwdBtn = this.iconBtn('chapter-forward', 'chapterForward');
+        this.chapFwdBtn.hidden = !show('chapterNext');
         parent.appendChild(this.chapFwdBtn);
+
         this.nextBtn = this.iconBtn('next', 'next');
+        this.nextBtn.hidden = !show('next');
         parent.appendChild(this.nextBtn);
 
-        // Volume container (button + collapsible slider).
         const volContainer = this.player.createElement('div', 'volume-container')
             .addClasses(['volume-container'])
             .appendTo(parent).get();
+        volContainer.hidden = !show('mute') && !show('volume');
+
         this.volBtn = this.iconBtn('volume', 'volumeHigh');
+        this.volBtn.hidden = !show('mute');
         volContainer.appendChild(this.volBtn);
+
         this.volSlider = this.player.createElement('input', 'volume-slider')
             .addClasses(['volume-slider'])
             .appendTo(volContainer).get() as HTMLInputElement;
@@ -314,6 +381,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
         this.volSlider.max = '100';
         this.volSlider.value = '100';
         this.volSlider.setAttribute('aria-label', 'Volume');
+        this.volSlider.hidden = !show('volume');
 
         this.currentTimeEl = this.player.createElement('div', 'current-time')
             .addClasses(['current-time', 'time'])
@@ -330,25 +398,44 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
         this.remainingTimeEl.textContent = '0:00';
 
         this.aspectRatioBtn = this.iconBtn('aspect-ratio', 'aspectFit');
+        this.aspectRatioBtn.hidden = !show('aspectRatio');
         parent.appendChild(this.aspectRatioBtn);
+
         this.theaterBtn = this.iconBtn('theater', 'theater');
+        this.theaterBtn.hidden = !show('theater');
         parent.appendChild(this.theaterBtn);
+
         this.pipBtn = this.iconBtn('pip', 'pipEnter');
+        this.pipBtn.hidden = !show('pip');
         parent.appendChild(this.pipBtn);
+
         this.speedBtn = this.iconBtn('speed', 'speed');
         this.speedBtn.setAttribute('aria-label', 'Speed (1x)');
+        this.speedBtn.hidden = !show('speed');
         parent.appendChild(this.speedBtn);
+
         this.subsBtn = this.iconBtn('subtitles', 'subtitles');
+        this.subsBtn.hidden = !show('subtitles');
         parent.appendChild(this.subsBtn);
+
         this.audioBtn = this.iconBtn('audio', 'language');
+        this.audioBtn.hidden = !show('audio');
         parent.appendChild(this.audioBtn);
+
         this.qualityBtn = this.iconBtn('quality', 'quality');
+        this.qualityBtn.hidden = !show('quality');
         parent.appendChild(this.qualityBtn);
+
         this.playlistBtn = this.iconBtn('playlist', 'playlist');
+        this.playlistBtn.hidden = !show('playlist');
         parent.appendChild(this.playlistBtn);
+
         this.settingsBtn = this.iconBtn('settings', 'settings');
+        this.settingsBtn.hidden = !show('settings');
         parent.appendChild(this.settingsBtn);
+
         this.fsBtn = this.iconBtn('fullscreen', 'fullscreen');
+        this.fsBtn.hidden = !show('fullscreen');
         parent.appendChild(this.fsBtn);
     }
 
@@ -835,21 +922,25 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
     }
 
     private refreshCapabilityVisibility(): void {
+        const btns = this.opts?.buttons;
+        const show = (key: keyof DesktopUiButtonOptions): boolean => buttonVisible(key, btns);
+
         const subs = (this.player.subtitles?.() ?? []) as SubtitleTrackLite[];
         const subsCount = subs.length;
 
         const audios = (this.player.audioTracks?.() ?? []) as AudioTrackLite[];
         const levels = (this.player.qualityLevels?.() ?? []) as QualityLevelLite[];
 
-        this.subsBtn.hidden = subsCount === 0;
-        this.audioBtn.hidden = audios.length <= 1;
-        this.qualityBtn.hidden = levels.length < 2;
+        this.subsBtn.hidden = !show('subtitles') || subsCount === 0;
+        this.audioBtn.hidden = !show('audio') || audios.length <= 1;
+        this.qualityBtn.hidden = !show('quality') || levels.length < 2;
+
         const chapters = this.player.chapters();
-        this.chapBackBtn.hidden = chapters.length === 0;
-        this.chapFwdBtn.hidden = chapters.length === 0;
+        this.chapBackBtn.hidden = !show('chapterPrev') || chapters.length === 0;
+        this.chapFwdBtn.hidden = !show('chapterNext') || chapters.length === 0;
 
         const queueLen = this.safeQueueLength();
-        this.playlistBtn.hidden = queueLen < 2;
+        this.playlistBtn.hidden = !show('playlist') || queueLen < 2;
 
         this.menus.mainButtons.subtitles.style.display = subsCount === 0 ? 'none' : 'flex';
         this.menus.mainButtons.language.style.display = audios.length <= 1 ? 'none' : 'flex';
