@@ -570,7 +570,10 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 		(): number | null;
 		(idx: number): void;
 	};
-	declare qualityLevels: () => QualityLevel[];
+	declare qualityLevels: {
+		(): QualityLevel[];
+		(opts: { includeUnsupported: true }): QualityLevel[];
+	};
 	declare currentQuality: {
 		(): number | 'auto';
 		(idx: number | 'auto'): void;

@@ -133,6 +133,7 @@ export interface IVideoBackend {
 	subtitleTracks(): SubtitleTrack[];
 	setSubtitleTrack(idx: number | null): void;
 	qualityLevels(): QualityLevel[];
+	qualityLevels(opts: { includeUnsupported: true }): QualityLevel[];
 	setQuality(idx: number | 'auto'): void;
 
 	// State

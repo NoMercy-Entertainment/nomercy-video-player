@@ -48,6 +48,10 @@ export class Html5VideoBackend extends EventEmitter<BackendEventPayload> impleme
 	 *  switch / dispose without rebuilding the rest of the listeners map. */
 	private cueChangeHandler: (() => void) | null = null;
 
+	/** Codec → supported flag. Populated asynchronously after MANIFEST_PARSED.
+	 *  Keys are CODECS attribute strings from HLS level attributes. */
+	private _capabilityCache = new Map<string, boolean>();
+
 	// ── HLS error-recovery state ──
 	/** Retry count for the current fatal network-error sequence. Reset on
 	 *  successful playback resume. */
@@ -546,15 +550,63 @@ export class Html5VideoBackend extends EventEmitter<BackendEventPayload> impleme
 		this.emit('subtitleCue', change);
 	}
 
-	qualityLevels(): QualityLevel[] {
+	qualityLevels(): QualityLevel[];
+	qualityLevels(opts: { includeUnsupported: true }): QualityLevel[];
+	qualityLevels(opts?: { includeUnsupported?: true }): QualityLevel[] {
 		if (!this.hls?.levels?.length) return [];
-		return this.hls.levels.map((level: any, index: number) => ({
-			bitrate: level.bitrate ?? 0,
-			height: level.height ?? undefined,
-			width: level.width ?? undefined,
-			label: level.name ?? `${level.height ?? '?'}p`,
-			index,
-		}));
+
+		type QL = QualityLevel & { supported: boolean };
+
+		const all: QL[] = this.hls.levels.map((level: any, index: number) => {
+			const codec: string = level.attrs?.CODECS ?? '';
+			const cached = this._capabilityCache.get(codec);
+			return {
+				bitrate: level.bitrate ?? 0,
+				height: level.height ?? undefined,
+				width: level.width ?? undefined,
+				label: level.name ?? `${level.height ?? '?'}p`,
+				index,
+				supported: cached ?? true,
+			};
+		});
+
+		if (opts?.includeUnsupported) return all;
+
+		return all.filter(l => l.supported);
+	}
+
+	private async _probeCodecCapabilities(): Promise<void> {
+		if (!this.hls?.levels?.length) return;
+		if (typeof navigator?.mediaCapabilities?.decodingInfo !== 'function') return;
+
+		const seen = new Set<string>();
+		for (const level of this.hls.levels as any[]) {
+			const codec: string = level.attrs?.CODECS ?? '';
+			if (!codec || seen.has(codec) || this._capabilityCache.has(codec)) continue;
+			seen.add(codec);
+
+			const height: number = level.height ?? 1080;
+			const width: number = level.width ?? 1920;
+			const bitrate: number = level.bitrate ?? 4_000_000;
+			const framerate: number = level.frameRate ?? 30;
+
+			try {
+				const result = await navigator.mediaCapabilities.decodingInfo({
+					type: 'media-source',
+					video: {
+						contentType: `video/mp4; codecs="${codec}"`,
+						width,
+						height,
+						bitrate,
+						framerate,
+					},
+				});
+				this._capabilityCache.set(codec, result.supported);
+			}
+			catch {
+				this._capabilityCache.set(codec, true);
+			}
+		}
 	}
 
 	setQuality(idx: number | 'auto'): void {
@@ -828,8 +880,10 @@ export class Html5VideoBackend extends EventEmitter<BackendEventPayload> impleme
 	private _emitHlsTrackLists(): void {
 		if (!this.hls) return;
 
-		const levels = this.qualityLevels();
-		this.emit('levels', { levels });
+		void this._probeCodecCapabilities().then(() => {
+			const levels = this.qualityLevels();
+			this.emit('levels', { levels });
+		});
 
 		const tracks = this.audioTracks();
 		if (tracks.length > 0) this.emit('audioTracks', { tracks });
