@@ -43,7 +43,7 @@ export const desktopUiCss = `
 .nmplayer-active:hover .nm-center-btn { opacity: 1; }
 .nm-spinner { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; pointer-events: none; }
 .nm-spinner svg { width: 56px; height: 56px; animation: nm-spin 0.9s linear infinite; }
-.nm-buffering .nm-spinner { display: flex; }
+.nomercyplayer.buffering .nm-spinner { display: flex; }
 @keyframes nm-spin { to { transform: rotate(360deg); } }
 
 /* ── Bottom bar (v1: bottom-bar > bottom-bar-shadow + top-row + bottom-row) ── */

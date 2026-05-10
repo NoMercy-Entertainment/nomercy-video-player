@@ -419,6 +419,11 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
             this.repaintQualityIfOpen();
         });
 
+        // Track lists arrive asynchronously after HLS manifest parse — may be
+        // empty at mediaReady. Refresh capability visibility when they land.
+        this.onVideo('levels', () => { this.refreshCapabilityVisibility(); });
+        this.onVideo('audioTracks', () => { this.refreshCapabilityVisibility(); });
+
         this.onVideo('fullscreen', () => {
             this.applyFullscreen();
         });
@@ -451,11 +456,11 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
         this.listen(this.playlistBtn, 'click', (e: Event) => { e.stopPropagation(); this.openSubMenu('playlist'); });
         this.listen(this.settingsBtn, 'click', (e: Event) => { e.stopPropagation(); this.openMainMenu(); });
 
-        this.listen(this.theaterBtn, 'click', () => { (this.player as any).toggleTheater?.(); });
-        this.listen(this.pipBtn, 'click', () => { void (this.player as any).togglePip?.(); });
-        this.listen(this.fsBtn, 'click', () => { void this.player.toggleFullscreen?.(); });
+        this.listen(this.theaterBtn, 'click', () => { this.player.toggleTheater(); });
+        this.listen(this.pipBtn, 'click', () => { this.player.togglePip(); });
+        this.listen(this.fsBtn, 'click', () => { this.player.toggleFullscreen(); });
 
-        const videoEl = (this.player as any).videoElement as HTMLVideoElement | undefined;
+        const videoEl = this.player.videoElement;
         if (videoEl) {
             this.listen(videoEl, 'enterpictureinpicture', () => this.applyPipIcon(true));
             this.listen(videoEl, 'leavepictureinpicture', () => this.applyPipIcon(false));

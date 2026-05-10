@@ -106,7 +106,12 @@ export enum ShuffleState {
 }
 
 export interface VideoEventMap extends BaseEventMap {
+	// Narrow the kit's BasePlaylistItem to the video-specific item type so
+	// video plugins receive a typed item without casts.
+	'current': { item: VideoPlaylistItem | undefined; index: number };
+
 	quality: { level: number; label: string };
+	'quality:requested': { level: number | 'auto' };
 	chapter: { index: number; title: string };
 	pip: { active: boolean };
 	theater: { active: boolean };
@@ -117,6 +122,21 @@ export interface VideoEventMap extends BaseEventMap {
 	repeat: { state: RepeatState };
 	shuffle: { state: ShuffleState };
 	aspectRatio: { value: 'uniform' | 'fill' | 'exactfit' | 'none' };
+
+	// Buffering / network-readiness signals forwarded from the HTML5 backend.
+	// Overlay plugins use these to show / hide the spinner without polling.
+	'waiting': void;
+	'canplay': void;
+	'stalled': void;
+
+	// Track-list availability signals forwarded from the HTML5 backend.
+	// Fires after HLS manifest parse — the list may not be populated at
+	// `mediaReady` time, so overlay plugins subscribe here for button
+	// visibility rather than polling the getter at startup.
+	'levels': { levels: QualityLevel[] };
+	'level-switched': { level: number };
+	'audioTracks': { tracks: import('@nomercy-entertainment/nomercy-player-core').AudioTrack[] };
+
 	// `subtitle` (track index) and `subtitleCue` (active cue stream) are
 	// inherited from `BaseEventMap` — the kit owns those signals so any
 	// consumer (overlay plugins, debug widgets, a11y tooling) can subscribe

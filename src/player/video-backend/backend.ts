@@ -47,6 +47,24 @@ export interface BackendEventPayload {
 	 * `attempt` is 1-based; `maxAttempts` is the ceiling for this error type.
 	 */
 	'stream:recovering': { details: string; attempt: number; maxAttempts: number };
+	/**
+	 * HLS quality levels became available (MANIFEST_PARSED + LEVEL_LOADED).
+	 * Fires whenever the level list changes — initial manifest, after a
+	 * CEA-608 fallback reload, or after a stream switch. Overlay plugins
+	 * subscribe here instead of polling `qualityLevels()` at `mediaReady`
+	 * because the list may not be populated until after the manifest is parsed.
+	 */
+	'levels': { levels: QualityLevel[] };
+	/**
+	 * HLS switched to a different quality level. `level` is the new index.
+	 * Fires on every ABR-driven switch as well as on explicit `setQuality()` calls.
+	 */
+	'level-switched': { level: number };
+	/**
+	 * Audio track list became available. Fires after MANIFEST_PARSED when the
+	 * manifest declares multiple audio renditions.
+	 */
+	'audioTracks': { tracks: AudioTrack[] };
 }
 
 /** Backend-internal events forwarded to the player's eventTarget. */

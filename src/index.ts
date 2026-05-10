@@ -374,6 +374,27 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 			this.emit('duration', { duration: data.duration });
 		});
 
+		// Bridge buffering / readiness signals so overlay plugins can
+		// show/hide the spinner via typed player events.
+		instance.on('waiting', () => { this.emit('waiting', undefined); });
+		instance.on('stalled', () => { this.emit('stalled', undefined); });
+		instance.on('canplay', () => { this.emit('canplay', undefined); });
+
+		// Bridge track-list availability signals so overlay plugins can
+		// update button visibility after the HLS manifest is parsed.
+		instance.on('levels', (data) => {
+			if (!data) return;
+			this.emit('levels', data);
+		});
+		instance.on('level-switched', (data) => {
+			if (!data) return;
+			this.emit('level-switched', data);
+		});
+		instance.on('audioTracks', (data) => {
+			if (!data) return;
+			this.emit('audioTracks', data);
+		});
+
 		return instance;
 	}
 
@@ -419,6 +440,7 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 		void action.catch(() => { /* swallow — UI listens to fullscreen event */ });
 		this.emit('fullscreen', { active: wantActive });
 	}
+
 	pipState(): PipState;
 	pipState(state: PipState | boolean): void;
 	pipState(state?: PipState | boolean): PipState | void {
@@ -440,7 +462,9 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 		void action.catch(() => { /* swallow */ });
 		this.emit('pip', { active: wantActive });
 	}
+
 	private _theaterActive = false;
+
 	theaterState(): TheaterState;
 	theaterState(state: TheaterState | boolean): void;
 	theaterState(state?: TheaterState | boolean): TheaterState | void {
@@ -625,6 +649,24 @@ composeMixins(NMVideoPlayer.prototype, ...playerCoreMethods);
 		composedDispose.call(this);
 	};
 }
+
+{
+	type QualityFn = (idx?: number | 'auto') => number | 'auto' | void;
+	const kitCurrentQuality = NMVideoPlayer.prototype.currentQuality as unknown as QualityFn;
+	const wrapped: QualityFn = function (this: NMVideoPlayer<BasePlaylistItem>, idx?: number | 'auto'): number | 'auto' | void {
+		if (idx === undefined) {
+			return kitCurrentQuality.call(this);
+		}
+		kitCurrentQuality.call(this, idx);
+		this.emit('quality:requested', { level: idx });
+	};
+	Object.defineProperty(NMVideoPlayer.prototype, 'currentQuality', {
+		value: wrapped,
+		writable: true,
+		configurable: true,
+	});
+}
+
 
 /**
  * Factory entry point. Returns the existing instance for a given div id, or

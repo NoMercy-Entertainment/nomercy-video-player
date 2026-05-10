@@ -162,8 +162,7 @@ export class Html5VideoBackend extends EventEmitter<BackendEventPayload> impleme
 			//   - WebVTT absent  → reload the Hls instance with CEA on
 			//                       so pure-CEA streams aren't left
 			//                       silent (rule 2 fallback).
-			const HlsCtor = Hls as unknown as new (config: Record<string, unknown>) => unknown;
-			this.hls = new HlsCtor({
+			this.hls = new Hls({
 				autoStartLoad: true,
 				enableWorker: true,
 				lowLatencyMode: false,
@@ -171,7 +170,10 @@ export class Html5VideoBackend extends EventEmitter<BackendEventPayload> impleme
 			});
 			this.hls.on(Hls.Events.MANIFEST_PARSED, (_e: unknown, data: { subtitleTracks?: unknown[] }) => {
 				const hasWebVttSubs = Array.isArray(data?.subtitleTracks) && data.subtitleTracks.length > 0;
-				if (hasWebVttSubs) return;
+				if (hasWebVttSubs) {
+					this._emitHlsTrackLists();
+					return;
+				}
 				// No WebVTT in the manifest. Tear down + restart with CEA
 				// enabled so the user still gets captions when the source
 				// only carries embedded ones.
@@ -179,7 +181,7 @@ export class Html5VideoBackend extends EventEmitter<BackendEventPayload> impleme
 				catch { /* defensive */ }
 				try { this.hls?.destroy(); }
 				catch { /* defensive */ }
-				const fallback = new HlsCtor({
+				const fallback = new Hls({
 					autoStartLoad: true,
 					enableWorker: true,
 					lowLatencyMode: false,
@@ -188,11 +190,14 @@ export class Html5VideoBackend extends EventEmitter<BackendEventPayload> impleme
 				this.hls = fallback;
 				this.hls.attachMedia(this.element);
 				this.hls.loadSource(url);
+				this.hls.on(Hls.Events.MANIFEST_PARSED, () => { this._emitHlsTrackLists(); });
 				this._attachHlsErrorHandler(Hls, url);
+				this._attachHlsLevelSwitchedHandler(Hls);
 			});
 			this.hls.attachMedia(this.element);
 			this.hls.loadSource(url);
 			this._attachHlsErrorHandler(Hls, url);
+			this._attachHlsLevelSwitchedHandler(Hls);
 		}
 		else {
 			// Clear any previous src before assigning a new one — without this
@@ -812,6 +817,34 @@ export class Html5VideoBackend extends EventEmitter<BackendEventPayload> impleme
 		// is healthy again, so prior retry attempts shouldn't count toward the cap.
 		this.hls.on(Hls.Events.FRAG_LOADED, () => {
 			if (this._netRetryCount > 0) this._netRetryCount = 0;
+		});
+	}
+
+	/**
+	 * Emit `levels` and `audioTracks` backend events from the current HLS
+	 * instance's live lists. Called after every `MANIFEST_PARSED` event so
+	 * overlay plugins can update button visibility without polling.
+	 */
+	private _emitHlsTrackLists(): void {
+		if (!this.hls) return;
+
+		const levels = this.qualityLevels();
+		this.emit('levels', { levels });
+
+		const tracks = this.audioTracks();
+		if (tracks.length > 0) this.emit('audioTracks', { tracks });
+	}
+
+	/**
+	 * Subscribe to `Hls.Events.LEVEL_SWITCHED` on the current `this.hls`
+	 * instance and forward it as the backend's `level-switched` event.
+	 * Must be called after every HLS instance creation alongside
+	 * `_attachHlsErrorHandler`.
+	 */
+	private _attachHlsLevelSwitchedHandler(Hls: any): void {
+		if (!this.hls) return;
+		this.hls.on(Hls.Events.LEVEL_SWITCHED, (_e: unknown, data: { level: number }) => {
+			this.emit('level-switched', { level: data.level });
 		});
 	}
 
