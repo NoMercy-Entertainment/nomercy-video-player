@@ -232,8 +232,11 @@ export class OctopusPlugin extends Plugin<NMVideoPlayer<any>, OctopusOptions> {
 			const fontFiles = fontResolveds.map(r => r.href);
 			const accessToken = await this.resolveAccessToken();
 
+			const videoEl = this.player.videoElement;
+			if (!videoEl) return;
+
 			const opts: NMOctopusOptions = {
-				video: this.player.videoElement,
+				video: videoEl,
 				trackUrl: subUrl,
 				fonts: fontFiles,
 				accessToken,

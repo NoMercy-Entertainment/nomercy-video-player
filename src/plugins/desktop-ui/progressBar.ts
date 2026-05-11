@@ -44,46 +44,65 @@ export interface SliderBarRefs {
 /** Build the slider-bar subtree and return all named refs.
  *  Mirrors v1's `createProgressBar()`. The caller appends to its parent. */
 export function buildSliderBar(player: NMVideoPlayer<any>): SliderBarRefs {
-    const sliderBar = player.createElement('div', 'slider-bar')
+    const sliderBar = player
+        .createElement('div', 'slider-bar')
         .addClasses(['slider-bar'])
-        .get() as HTMLDivElement;
-    sliderBar.setAttribute('role', 'slider');
-    sliderBar.setAttribute('aria-label', 'Seek');
-    sliderBar.setAttribute('aria-valuemin', '0');
-    sliderBar.setAttribute('aria-valuemax', '100');
-    sliderBar.setAttribute('aria-valuenow', '0');
+        .setAttribute('role', 'slider')
+        .setAttribute('aria-label', 'Seek')
+        .setAttribute('aria-valuemin', '0')
+        .setAttribute('aria-valuemax', '100')
+        .setAttribute('aria-valuenow', '0')
+        .get();
 
-    const sliderBuffer = player.createElement('div', 'slider-buffer')
+    const sliderBuffer = player
+        .createElement('div', 'slider-buffer')
         .addClasses(['slider-buffer'])
-        .appendTo(sliderBar).get() as HTMLDivElement;
-    const sliderHover = player.createElement('div', 'slider-hover')
+        .appendTo(sliderBar)
+        .get();
+    const sliderHover = player
+        .createElement('div', 'slider-hover')
         .addClasses(['slider-hover'])
-        .appendTo(sliderBar).get() as HTMLDivElement;
-    const sliderProgress = player.createElement('div', 'slider-progress')
+        .appendTo(sliderBar)
+        .get();
+    const sliderProgress = player
+        .createElement('div', 'slider-progress')
         .addClasses(['slider-progress'])
-        .appendTo(sliderBar).get() as HTMLDivElement;
-    const chapterBar = player.createElement('div', 'chapter-progress')
+        .appendTo(sliderBar)
+        .get();
+    const chapterBar = player
+        .createElement('div', 'chapter-progress')
         .addClasses(['chapter-bar'])
-        .appendTo(sliderBar).get() as HTMLDivElement;
+        .appendTo(sliderBar)
+        .get();
 
-    const sliderNipple = player.createElement('div', 'slider-nipple')
+    const sliderNipple = player
+        .createElement('div', 'slider-nipple')
         .addClasses(['slider-nipple'])
-        .appendTo(sliderBar).get() as HTMLDivElement;
+        .appendTo(sliderBar)
+        .get();
 
-    const sliderPop = player.createElement('div', 'slider-pop')
+    const sliderPop = player
+        .createElement('div', 'slider-pop')
         .addClasses(['slider-pop'])
-        .appendTo(sliderBar).get() as HTMLDivElement;
-    sliderPop.style.setProperty('--visibility', '0');
+        .setProperty('--visibility', '0')
+        .appendTo(sliderBar)
+        .get();
 
-    const sliderPopImage = player.createElement('div', 'slider-pop-image')
+    const sliderPopImage = player
+        .createElement('div', 'slider-pop-image')
         .addClasses(['slider-pop-image'])
-        .appendTo(sliderPop).get() as HTMLDivElement;
-    const sliderPopText = player.createElement('div', 'slider-text')
+        .appendTo(sliderPop)
+        .get();
+    const sliderPopText = player
+        .createElement('div', 'slider-text')
         .addClasses(['slider-pop-text'])
-        .appendTo(sliderPop).get() as HTMLDivElement;
-    const chapterText = player.createElement('div', 'chapter-text')
+        .appendTo(sliderPop)
+        .get();
+    const chapterText = player
+        .createElement('div', 'chapter-text')
         .addClasses(['chapter-text'])
-        .appendTo(sliderPop).get() as HTMLDivElement;
+        .appendTo(sliderPop)
+        .get();
 
     return {
         sliderBar,

@@ -232,11 +232,8 @@ export const desktopUiCss = `
     margin: 0 auto;
 }
 .slider-pop-image[style*="background-image"] {
-    margin: 4px auto 0;
+    margin: 8px 8px 0;
     border-radius: 4px;
-    border-top: 4px solid rgba(255,255,255,0.55);
-    border-left: 4px solid rgba(255,255,255,0.55);
-    border-right: 4px solid rgba(255,255,255,0.55);
     box-sizing: content-box;
 }
 .slider-pop-text {
@@ -378,7 +375,7 @@ export const desktopUiCss = `
     height: auto;
     max-height: calc(100% - 2rem);
     max-width: min(52rem, calc(100% - 2rem));
-    width: fit-content;
+    width: min-content;
     overflow: hidden;
     border-radius: 8px;
     z-index: 50;
@@ -541,7 +538,10 @@ export const desktopUiCss = `
 #playlist-menu.playlist-menu.is-open { display: flex; }
 
 /* Flat playlist (no seasons) — cap width so cards don't stretch too wide. */
-#playlist-menu.playlist-menu.playlist-flat { max-width: min(26rem, calc(100% - 2rem)); }
+#playlist-menu.playlist-menu.playlist-flat { 
+    max-width: min(26rem, calc(100% - 2rem)); 
+    min-width: 640px;
+}
 .seasons-pane {
     width: 33%;
     min-width: 13rem;

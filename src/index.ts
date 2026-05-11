@@ -43,6 +43,9 @@ import type {
 import type { IVideoBackend } from './player/video-backend/backend';
 import { Html5VideoBackend } from './player/video-backend/html5VideoBackend';
 import type { VideoEventMap, VideoPlayerConfig, VideoPlaylistItem } from './types';
+import type { PreloadStrategy, TransitionStrategy } from '@nomercy-entertainment/nomercy-player-core';
+import { GaplessTransitionStrategy } from '@nomercy-entertainment/nomercy-player-core';
+import { VideoPreloadStrategy } from './player/preload';
 import {
 	AudioTrackState,
 	FullscreenState,
@@ -57,6 +60,7 @@ import {
 } from './types';
 
 export type { Stretching, VideoEventMap, VideoPlayerConfig, VideoPlaylistItem, WatchProgress } from './types';
+export { VideoPreloadStrategy } from './player/preload';
 export {
 	AudioTrackState,
 	FullscreenState,
@@ -663,6 +667,12 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 	declare now: () => number;
 	declare announce: (text: string, level?: 'polite' | 'assertive') => void;
 
+	// ── Preload + transition strategies ── composed via `preloadStrategyMethods` mixin.
+	declare setPreloadStrategy: (strategy: PreloadStrategy) => void;
+	declare setTransitionStrategy: (strategy: TransitionStrategy) => void;
+	declare preloadStrategy: () => PreloadStrategy;
+	declare transitionStrategy: () => TransitionStrategy;
+
 	// ── DOM construction helpers ── composed via `domMethods` mixin.
 	declare createElement: IPlayer<VideoEventMap>['createElement'];
 	declare createButton: IPlayer<VideoEventMap>['createButton'];
@@ -729,7 +739,22 @@ export const nmplayer = <T extends BasePlaylistItem = VideoPlaylistItem>(id?: st
 
 	const originalSetup = instance.setup.bind(instance);
 	instance.setup = function (config: VideoPlayerConfig<T>): NMVideoPlayer<T> {
-		const result = originalSetup(config);
+		// Apply video-domain strategy defaults before delegating to the kit pipeline.
+		// Consumer-supplied strategies always win — only inject when absent.
+		// Video defaults to crossfadeEnabled: false (gapless hard-cut transition)
+		// while still preloading assets so the next item starts instantly.
+		const leadSeconds = config.preloadLeadSeconds ?? 10;
+
+		const enrichedConfig: VideoPlayerConfig<T> = {
+			crossfadeEnabled: false,
+			...config,
+			preloadLeadSeconds: leadSeconds,
+			preloadStrategy: config.preloadStrategy ?? new VideoPreloadStrategy(leadSeconds),
+			transitionStrategy: config.transitionStrategy ?? new GaplessTransitionStrategy(),
+		};
+
+		const result = originalSetup(enrichedConfig);
+
 		if (config.expose === true && typeof window !== 'undefined') {
 			Object.assign(window, { nmplayer });
 			const originalDispose = instance.dispose.bind(instance);
