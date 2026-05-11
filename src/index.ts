@@ -27,6 +27,7 @@ import type {
 	PlayerExperimental,
 	PlayerPhase,
 	Plugin,
+	PluginCtorWithId,
 	QualityLevel,
 	ResolvedUrl,
 	SetupState,
@@ -75,6 +76,17 @@ export {
 } from './types';
 
 const _instances: Map<string, NMVideoPlayer<BasePlaylistItem>> = new Map();
+
+
+function _readImageField(item: unknown): string | undefined {
+	if (!item || typeof item !== 'object') return undefined;
+	for (const key of ['image', 'poster', 'thumbnail'] as const) {
+		if (key in item && typeof (item as Record<string, unknown>)[key] === 'string') {
+			return (item as Record<string, unknown>)[key] as string;
+		}
+	}
+	return undefined;
+}
 
 /**
  * Headless video player. Plugin-driven, event-driven, no UI in core.
@@ -226,10 +238,10 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 	declare backlogRemove: (id: string | number) => void;
 	declare backlogClear: () => void;
 
-	declare addPlugin: <P extends Plugin>(PluginClass: new () => P, opts?: P['opts']) => this;
-	declare getPlugin: <P extends Plugin>(PluginClass: new () => P) => P | undefined;
-	declare getPluginById: (id: string) => Plugin | undefined;
-	declare removePlugin: <P extends Plugin>(PluginClass: new () => P) => void;
+	declare addPlugin: <P extends Plugin>(PluginClass: PluginCtorWithId & (new () => P), opts?: P['opts']) => this;
+	declare getPlugin: <P extends object>(PluginClass: PluginCtorWithId & (new () => P)) => P | undefined;
+	declare getPluginById: <P extends object = object>(id: string) => P | undefined;
+	declare removePlugin: <P extends Plugin>(PluginClass: PluginCtorWithId & (new () => P)) => void;
 	declare removePluginById: (id: string) => void;
 	declare plugins: () => ReadonlyArray<Plugin>;
 	declare enabledPlugins: () => ReadonlyArray<Plugin>;
@@ -266,6 +278,12 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 		return base ? base + url : url;
 	}
 
+	private _posterFromCurrentItem(): string | null {
+		const item: unknown = this.current();
+		const raw = _readImageField(item);
+		return raw ? this._resolveImageUrl(raw) : null;
+	}
+
 	private _applyPoster(): void {
 		const queried = this.container?.querySelector?.('video');
 		if (!(queried instanceof HTMLVideoElement)) return;
@@ -298,8 +316,14 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 			: new Html5VideoBackend(this.container);
 		this._backend = instance;
 		this.videoElement = instance.mediaElement();
-		// Real element now exists — apply any poster the cursor moved through
-		// while we were lazy.
+
+		// Ensure _wantedPoster is resolved before applying. queue() pre-positions
+		// the cursor without emitting 'current', so _wantedPoster can be null even
+		// when a valid current item exists. Read the item directly here.
+		if (this._wantedPoster === null) {
+			this._wantedPoster = this._posterFromCurrentItem();
+		}
+
 		this._applyPoster();
 		// Apply the initial stretching config to the video element.
 		const initialStretching = this.options?.stretching;
@@ -479,8 +503,7 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 			});
 		}
 		this._pipActive = wantActive;
-		const videoEl = this.videoElement;
-		const action = wantActive && videoEl ? ctrl.enter(videoEl) : ctrl.exit();
+		const action = wantActive ? ctrl.enter(this.videoElement as HTMLVideoElement) : ctrl.exit();
 		void action.catch(() => { /* swallow */ });
 		this.emit('pip', { active: wantActive });
 	}
