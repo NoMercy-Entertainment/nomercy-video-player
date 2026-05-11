@@ -222,40 +222,40 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
 
     static override readonly translations = {
         en: {
-            'desktop-ui.tooltip.play': 'Play / Pause',
-            'desktop-ui.tooltip.previous': 'Previous',
-            'desktop-ui.tooltip.next': 'Next',
-            'desktop-ui.tooltip.seekBack': 'Seek back 10 s',
-            'desktop-ui.tooltip.seekForward': 'Seek forward 10 s',
-            'desktop-ui.tooltip.chapterPrev': 'Previous chapter',
-            'desktop-ui.tooltip.chapterNext': 'Next chapter',
-            'desktop-ui.tooltip.mute': 'Mute / Unmute',
-            'desktop-ui.tooltip.aspectRatio': 'Aspect ratio',
-            'desktop-ui.tooltip.theater': 'Theater mode',
-            'desktop-ui.tooltip.pip': 'Picture-in-picture',
-            'desktop-ui.tooltip.speed': 'Playback speed',
-            'desktop-ui.tooltip.subtitles': 'Subtitles',
-            'desktop-ui.tooltip.audio': 'Audio track',
-            'desktop-ui.tooltip.quality': 'Quality',
-            'desktop-ui.tooltip.playlist': 'Episodes',
-            'desktop-ui.tooltip.settings': 'Settings',
-            'desktop-ui.tooltip.fullscreen': 'Fullscreen',
-            'desktop-ui.tooltip.nextWithTitle': 'Next: {title}',
-            'desktop-ui.tooltip.previousWithTitle': 'Previous: {title}',
-            'desktop-ui.tooltip.nextChapterWithTitle': 'Next chapter: {title}',
-            'desktop-ui.tooltip.previousChapterWithTitle': 'Previous chapter: {title}',
-            'desktop-ui.shortcuts.title': 'Keyboard shortcuts',
-            'desktop-ui.shortcuts.playPause': 'Play / Pause',
-            'desktop-ui.shortcuts.seekBackForward': 'Seek −10 s / +10 s',
-            'desktop-ui.shortcuts.volumeUpDown': 'Volume +10% / −10%',
-            'desktop-ui.shortcuts.mute': 'Mute / Unmute',
-            'desktop-ui.shortcuts.fullscreen': 'Fullscreen',
-            'desktop-ui.shortcuts.theater': 'Theater mode',
-            'desktop-ui.shortcuts.pip': 'Picture-in-picture',
-            'desktop-ui.shortcuts.next': 'Next item',
-            'desktop-ui.shortcuts.previous': 'Previous item',
-            'desktop-ui.shortcuts.chapters': 'Previous / Next chapter',
-            'desktop-ui.shortcuts.help': 'Show / hide shortcuts',
+            'plugin.desktop-ui.tooltip.play': 'Play / Pause',
+            'plugin.desktop-ui.tooltip.previous': 'Previous',
+            'plugin.desktop-ui.tooltip.next': 'Next',
+            'plugin.desktop-ui.tooltip.seekBack': 'Seek back 10 s',
+            'plugin.desktop-ui.tooltip.seekForward': 'Seek forward 10 s',
+            'plugin.desktop-ui.tooltip.chapterPrev': 'Previous chapter',
+            'plugin.desktop-ui.tooltip.chapterNext': 'Next chapter',
+            'plugin.desktop-ui.tooltip.mute': 'Mute / Unmute',
+            'plugin.desktop-ui.tooltip.aspectRatio': 'Aspect ratio',
+            'plugin.desktop-ui.tooltip.theater': 'Theater mode',
+            'plugin.desktop-ui.tooltip.pip': 'Picture-in-picture',
+            'plugin.desktop-ui.tooltip.speed': 'Playback speed',
+            'plugin.desktop-ui.tooltip.subtitles': 'Subtitles',
+            'plugin.desktop-ui.tooltip.audio': 'Audio track',
+            'plugin.desktop-ui.tooltip.quality': 'Quality',
+            'plugin.desktop-ui.tooltip.playlist': 'Episodes',
+            'plugin.desktop-ui.tooltip.settings': 'Settings',
+            'plugin.desktop-ui.tooltip.fullscreen': 'Fullscreen',
+            'plugin.desktop-ui.tooltip.nextWithTitle': 'Next: {title}',
+            'plugin.desktop-ui.tooltip.previousWithTitle': 'Previous: {title}',
+            'plugin.desktop-ui.tooltip.nextChapterWithTitle': 'Next chapter: {title}',
+            'plugin.desktop-ui.tooltip.previousChapterWithTitle': 'Previous chapter: {title}',
+            'plugin.desktop-ui.shortcuts.title': 'Keyboard shortcuts',
+            'plugin.desktop-ui.shortcuts.playPause': 'Play / Pause',
+            'plugin.desktop-ui.shortcuts.seekBackForward': 'Seek −10 s / +10 s',
+            'plugin.desktop-ui.shortcuts.volumeUpDown': 'Volume +10% / −10%',
+            'plugin.desktop-ui.shortcuts.mute': 'Mute / Unmute',
+            'plugin.desktop-ui.shortcuts.fullscreen': 'Fullscreen',
+            'plugin.desktop-ui.shortcuts.theater': 'Theater mode',
+            'plugin.desktop-ui.shortcuts.pip': 'Picture-in-picture',
+            'plugin.desktop-ui.shortcuts.next': 'Next item',
+            'plugin.desktop-ui.shortcuts.previous': 'Previous item',
+            'plugin.desktop-ui.shortcuts.chapters': 'Previous / Next chapter',
+            'plugin.desktop-ui.shortcuts.help': 'Show / hide shortcuts',
         },
     };
 
@@ -397,22 +397,22 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
             .appendTo(parent).get();
 
         const shortcutRows: Array<[string, string]> = [
-            ['Space', 'desktop-ui.shortcuts.playPause'],
-            ['← / →', 'desktop-ui.shortcuts.seekBackForward'],
-            ['↑ / ↓', 'desktop-ui.shortcuts.volumeUpDown'],
-            ['M', 'desktop-ui.shortcuts.mute'],
-            ['F', 'desktop-ui.shortcuts.fullscreen'],
-            ['T', 'desktop-ui.shortcuts.theater'],
-            ['P', 'desktop-ui.shortcuts.pip'],
-            ['N', 'desktop-ui.shortcuts.next'],
-            ['B', 'desktop-ui.shortcuts.previous'],
-            ['Shift+N / Shift+P', 'desktop-ui.shortcuts.chapters'],
-            ['?', 'desktop-ui.shortcuts.help'],
+            ['Space', 'shortcuts.playPause'],
+            ['← / →', 'shortcuts.seekBackForward'],
+            ['↑ / ↓', 'shortcuts.volumeUpDown'],
+            ['M', 'shortcuts.mute'],
+            ['F', 'shortcuts.fullscreen'],
+            ['T', 'shortcuts.theater'],
+            ['P', 'shortcuts.pip'],
+            ['N', 'shortcuts.next'],
+            ['B', 'shortcuts.previous'],
+            ['Shift+N / Shift+P', 'shortcuts.chapters'],
+            ['?', 'shortcuts.help'],
         ];
 
         const title = document.createElement('h2');
         title.className = 'nm-shortcuts-title';
-        title.textContent = this.t('desktop-ui.shortcuts.title', {});
+        title.textContent = this.t('shortcuts.title', {});
         overlay.appendChild(title);
 
         const grid = document.createElement('dl');
@@ -601,6 +601,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
      * Attach a hover tooltip to a button. `getText` is evaluated lazily on
      * each hover so dynamic labels (next chapter, next item title) stay current.
      * Tooltip appears after 500 ms; dismissed on click or mouseleave.
+     * The tooltip is clamped so it never escapes the player container's left/right edge.
      */
     private addTooltip(btn: HTMLButtonElement, getText: () => string): void {
         const tip = document.createElement('span');
@@ -609,6 +610,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
         const show = (): void => {
             tip.textContent = getText();
             tip.classList.add('nm-tooltip-visible');
+            this.clampTooltip(tip, btn);
         };
         const hide = (): void => {
             if (this._tooltipHoverToken !== null) {
@@ -629,30 +631,54 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
         this.listen(btn, 'click', () => hide());
     }
 
+    private clampTooltip(tip: HTMLSpanElement, btn: HTMLButtonElement): void {
+        const containerRect = this.player.container.getBoundingClientRect();
+        const btnRect = btn.getBoundingClientRect();
+        const tipWidth = tip.offsetWidth;
+
+        const btnCenter = btnRect.left + btnRect.width / 2;
+        const halfTip = tipWidth / 2;
+
+        const rawLeft = btnCenter - halfTip;
+        const rawRight = btnCenter + halfTip;
+
+        const clampedLeft = Math.max(containerRect.left, rawLeft);
+        const clampedRight = Math.min(containerRect.right, rawRight);
+
+        const actualLeft = rawLeft < clampedLeft
+            ? clampedLeft
+            : rawRight > clampedRight
+                ? rawRight - tipWidth
+                : rawLeft;
+
+        const shift = actualLeft - btnCenter + halfTip;
+        tip.style.transform = `translateX(calc(-50% + ${shift}px))`;
+    }
+
     private wireTooltips(): void {
-        this.addTooltip(this.playBtn, () => this.t('desktop-ui.tooltip.play', {}));
-        this.addTooltip(this.rewindBtn, () => this.t('desktop-ui.tooltip.seekBack', {}));
-        this.addTooltip(this.forwardBtn, () => this.t('desktop-ui.tooltip.seekForward', {}));
-        this.addTooltip(this.volBtn, () => this.t('desktop-ui.tooltip.mute', {}));
-        this.addTooltip(this.aspectRatioBtn, () => this.t('desktop-ui.tooltip.aspectRatio', {}));
-        this.addTooltip(this.theaterBtn, () => this.t('desktop-ui.tooltip.theater', {}));
-        this.addTooltip(this.pipBtn, () => this.t('desktop-ui.tooltip.pip', {}));
-        this.addTooltip(this.speedBtn, () => this.t('desktop-ui.tooltip.speed', {}));
-        this.addTooltip(this.subsBtn, () => this.t('desktop-ui.tooltip.subtitles', {}));
-        this.addTooltip(this.audioBtn, () => this.t('desktop-ui.tooltip.audio', {}));
-        this.addTooltip(this.qualityBtn, () => this.t('desktop-ui.tooltip.quality', {}));
-        this.addTooltip(this.playlistBtn, () => this.t('desktop-ui.tooltip.playlist', {}));
-        this.addTooltip(this.settingsBtn, () => this.t('desktop-ui.tooltip.settings', {}));
-        this.addTooltip(this.fsBtn, () => this.t('desktop-ui.tooltip.fullscreen', {}));
+        this.addTooltip(this.playBtn, () => this.t('tooltip.play', {}));
+        this.addTooltip(this.rewindBtn, () => this.t('tooltip.seekBack', {}));
+        this.addTooltip(this.forwardBtn, () => this.t('tooltip.seekForward', {}));
+        this.addTooltip(this.volBtn, () => this.t('tooltip.mute', {}));
+        this.addTooltip(this.aspectRatioBtn, () => this.t('tooltip.aspectRatio', {}));
+        this.addTooltip(this.theaterBtn, () => this.t('tooltip.theater', {}));
+        this.addTooltip(this.pipBtn, () => this.t('tooltip.pip', {}));
+        this.addTooltip(this.speedBtn, () => this.t('tooltip.speed', {}));
+        this.addTooltip(this.subsBtn, () => this.t('tooltip.subtitles', {}));
+        this.addTooltip(this.audioBtn, () => this.t('tooltip.audio', {}));
+        this.addTooltip(this.qualityBtn, () => this.t('tooltip.quality', {}));
+        this.addTooltip(this.playlistBtn, () => this.t('tooltip.playlist', {}));
+        this.addTooltip(this.settingsBtn, () => this.t('tooltip.settings', {}));
+        this.addTooltip(this.fsBtn, () => this.t('tooltip.fullscreen', {}));
 
         this.addTooltip(this.prevBtn, () => {
             const idx = this.safeCurrentIndex();
             const queue = this.player.queue() as VideoPlaylistItem[];
             const prevItem = idx > 0 ? queue[idx - 1] : undefined;
             if (prevItem?.title) {
-                return this.t('desktop-ui.tooltip.previousWithTitle', { title: prevItem.title });
+                return this.t('tooltip.previousWithTitle', { title: prevItem.title });
             }
-            return this.t('desktop-ui.tooltip.previous', {});
+            return this.t('tooltip.previous', {});
         });
 
         this.addTooltip(this.nextBtn, () => {
@@ -660,9 +686,9 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
             const queue = this.player.queue() as VideoPlaylistItem[];
             const nextItem = queue[idx + 1];
             if (nextItem?.title) {
-                return this.t('desktop-ui.tooltip.nextWithTitle', { title: nextItem.title });
+                return this.t('tooltip.nextWithTitle', { title: nextItem.title });
             }
-            return this.t('desktop-ui.tooltip.next', {});
+            return this.t('tooltip.next', {});
         });
 
         this.addTooltip(this.chapBackBtn, () => {
@@ -670,9 +696,9 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
             const time = this.player.currentTime?.() ?? 0;
             const prev = [...chapters].reverse().find(ch => ch.start < time - 1);
             if (prev?.title) {
-                return this.t('desktop-ui.tooltip.previousChapterWithTitle', { title: prev.title });
+                return this.t('tooltip.previousChapterWithTitle', { title: prev.title });
             }
-            return this.t('desktop-ui.tooltip.chapterPrev', {});
+            return this.t('tooltip.chapterPrev', {});
         });
 
         this.addTooltip(this.chapFwdBtn, () => {
@@ -680,9 +706,9 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
             const time = this.player.currentTime?.() ?? 0;
             const next = chapters.find(ch => ch.start > time + 1);
             if (next?.title) {
-                return this.t('desktop-ui.tooltip.nextChapterWithTitle', { title: next.title });
+                return this.t('tooltip.nextChapterWithTitle', { title: next.title });
             }
-            return this.t('desktop-ui.tooltip.chapterNext', {});
+            return this.t('tooltip.chapterNext', {});
         });
     }
 

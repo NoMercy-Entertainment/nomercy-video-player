@@ -210,6 +210,14 @@ export interface VideoPlayerConfig<T extends BasePlaylistItem = VideoPlaylistIte
 	defaultQuality?: 'auto' | number;
 	/** Start in theater mode. */
 	theaterDefault?: boolean;
+	/**
+	 * Base URL prepended to relative `image` / `poster` / `thumbnail` paths on
+	 * playlist items. Useful when the item shape carries TMDB-style relative
+	 * paths (`/abc.jpg`) — set this to `'https://image.tmdb.org/t/p/original'`
+	 * (or your own CDN) and the player resolves the poster URL automatically.
+	 * Absolute URLs (any scheme) pass through unchanged.
+	 */
+	imageBasePath?: string;
 	/** Initial playlist — items inline OR a URL fetched and parsed at setup. */
 	playlist?: T[] | string;
 }
