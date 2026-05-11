@@ -82,6 +82,28 @@ describe('NMVideoPlayer poster sync', () => {
 		expect(videoEl.getAttribute('poster')).toBe('https://cdn/b.jpg');
 	});
 
+	it('applies poster when backend allocates after queue() pre-positioned cursor without current() call', () => {
+		// Regression: queue() silently positions cursor at index 0 without emitting
+		// 'current'. When load(items[0]) detects alreadyCurrent=true it skips
+		// setCurrent, so 'current' never fires. backend() must fall back to reading
+		// the current item directly instead of relying on _wantedPoster being set.
+		const p = new NMVideoPlayer<ItemShape>('poster-test').setup({ playlist: items });
+
+		p.queue(items);
+
+		// Force backend allocation WITHOUT calling current() — mirrors the
+		// VideoPlayer.vue build() path: queue() then load() (which calls backend()
+		// internally). We call backend() directly here since load() is async and
+		// requires a real HLS endpoint.
+		p.backend();
+		const videoEl = document.querySelector<HTMLVideoElement>('#poster-test video');
+		expect(videoEl).not.toBeNull();
+
+		// The cursor is at index 0 (sintel) because queue() pre-positions it.
+		// backend() must have read the image from the current item.
+		expect(videoEl!.getAttribute('poster')).toBe('https://cdn/a.jpg');
+	});
+
 	it('resolves relative image paths against imageBasePath', () => {
 		const relItems: ItemShape[] = [
 			{ id: 'r1', url: '/r1.m3u8', image: '/w780/abc.jpg' },
