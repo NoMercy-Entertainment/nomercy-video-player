@@ -4,6 +4,22 @@ import { NMSubtitleOctopus } from '@nomercy-entertainment/nomercy-subtitle-octop
 import type { OctopusOptions as NMOctopusOptions } from '@nomercy-entertainment/nomercy-subtitle-octopus';
 import type { NMVideoPlayer } from '../index';
 
+
+interface FontManifestEntry {
+	file: string;
+	mimeType?: string;
+}
+
+function isFontEntry(value: unknown): value is FontManifestEntry {
+	return (
+		value !== null
+		&& typeof value === 'object'
+		&& 'file' in value
+		&& typeof (value as Record<string, unknown>)['file'] === 'string'
+	);
+}
+
+
 /** Options for {@link OctopusPlugin}. */
 export interface OctopusOptions {
 	/** Worker URL (modern). Defaults to the bundled `public/` URL inside the fork. */
@@ -190,14 +206,13 @@ export class OctopusPlugin extends Plugin<NMVideoPlayer<any>, OctopusOptions> {
 
 		try {
 			const resolved = await this.resolveUrl(manifestUrl, 'font');
-			const r = await fetch(resolved.href);
-			if (!r.ok) throw new Error(`fonts.json HTTP ${r.status}`);
-			const body: unknown = await r.json();
-			const raw = Array.isArray(body) ? (body as Array<{ file: string; mimeType?: string }>) : [];
+			const body = await this.fetch<unknown>(resolved.href, raw => JSON.parse(raw));
+			const rawEntries: unknown[] = Array.isArray(body) ? body : [];
 			const baseFolder = manifestUrl.replace(/\/[^/]*$/u, '');
-			const urls = raw.map(entry => `${baseFolder}/${entry.file}`);
-			// Concat any plugin-level static fonts after the per-item ones so
-			// consumer overrides remain available even when an item ships a manifest.
+			const urls = rawEntries.flatMap(entry => {
+				const file = isFontEntry(entry) ? entry.file : null;
+				return file ? [`${baseFolder}/${file}`] : [];
+			});
 			this._fontsForCurrent = [...urls, ...(this.opts?.fonts ?? [])];
 		}
 		catch (error) {
