@@ -14,6 +14,7 @@ import type {
 	AuthConfig,
 	BasePlaylistItem,
 	BufferState,
+	CanPlayResult,
 	CastState,
 	Chapter,
 	CueParser,
@@ -69,7 +70,7 @@ export {
 	VolumeState,
 } from './types';
 
-const _instances = new Map<string, NMVideoPlayer<any>>();
+const _instances: Map<string, NMVideoPlayer<BasePlaylistItem>> = new Map();
 
 /**
  * Headless video player. Plugin-driven, event-driven, no UI in core.
@@ -89,15 +90,20 @@ const _instances = new Map<string, NMVideoPlayer<any>>();
 export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 	extends EventEmitter<VideoEventMap>
 	implements IPlayer<VideoEventMap> {
-	readonly playerId: string = '';
+	playerId: string = '';
 	container: HTMLElement = <HTMLElement>{};
-	videoElement: HTMLVideoElement = <HTMLVideoElement>{};
+	videoElement: HTMLVideoElement | undefined;
 
 	get id(): string {
 		return this.playerId;
 	}
 
 	declare options: VideoPlayerConfig<T>;
+
+	// Kit-managed state fields — set by initPlayerCoreState, declared here
+	// so class methods can access them without casts.
+	private declare _phase: string;
+	private declare _playState: string;
 
 	// ── Type-only declarations for the methods composed in from the kit's
 	// `playerCoreMethods`. The bodies live in the kit; these declarations let
@@ -235,20 +241,13 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 		}
 
 		initPlayerCoreState(this, { className: 'NMVideoPlayer' });
-		(this as { playerId: string }).playerId = resolved.id;
+		this.playerId = resolved.id;
 		this.container = resolved.div;
-		_instances.set(resolved.id, this);
+		_instances.set(resolved.id, this as unknown as NMVideoPlayer<BasePlaylistItem>);
 
 		this.on('current', data => {
-			const fields = (data as Record<string, unknown> | undefined);
-			const raw: string | undefined
-				= (fields?.['item'] as Record<string, string> | undefined)?.image
-				?? (fields?.['item'] as Record<string, string> | undefined)?.poster
-				?? (fields?.['item'] as Record<string, string> | undefined)?.thumbnail
-				?? (fields?.['image'] as string | undefined)
-				?? (fields?.['poster'] as string | undefined)
-				?? (fields?.['thumbnail'] as string | undefined);
-
+			const item = data?.item;
+			const raw: string | undefined = item?.image ?? item?.poster ?? item?.thumbnail;
 			this._wantedPoster = raw ? this._resolveImageUrl(raw) : null;
 			this._applyPoster();
 		});
@@ -258,13 +257,14 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 
 	private _resolveImageUrl(url: string): string {
 		if (/^[a-z][a-z\d+\-.]*:/iu.test(url)) return url;
-		const base = (this.options as VideoPlayerConfig<BasePlaylistItem>)?.imageBasePath ?? '';
+		const base = this.options?.imageBasePath ?? '';
 		return base ? base + url : url;
 	}
 
 	private _applyPoster(): void {
-		const el = this.container?.querySelector?.('video') as HTMLVideoElement | null;
-		if (!el) return;
+		const queried = this.container?.querySelector?.('video');
+		if (!(queried instanceof HTMLVideoElement)) return;
+		const el = queried;
 		const want = this._wantedPoster;
 		if (want)
 			el.setAttribute('poster', want);
@@ -289,7 +289,7 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 		if (this._backend) return this._backend;
 		const factory = this.options?.backendFactory;
 		const instance = factory
-			? factory('html5', this.options as VideoPlayerConfig<BasePlaylistItem>)
+			? factory('html5', this.options)
 			: new Html5VideoBackend(this.container);
 		this._backend = instance;
 		this.videoElement = instance.mediaElement();
@@ -297,7 +297,7 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 		// while we were lazy.
 		this._applyPoster();
 		// Apply the initial stretching config to the video element.
-		const initialStretching = (this.options as VideoPlayerConfig<BasePlaylistItem>)?.stretching;
+		const initialStretching = this.options?.stretching;
 		if (initialStretching) {
 			this._aspectRatio = initialStretching;
 			this._applyObjectFit(initialStretching);
@@ -311,19 +311,17 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 		instance.on('canplay', () => {
 			if (firstFrameEmitted) return;
 			firstFrameEmitted = true;
-			const self = this as unknown as { _phase: string; emit: (e: string, d?: any) => void };
-			if (self._phase === 'starting') {
-				const from = self._phase;
-				self._phase = 'playing';
+			if (this._phase === 'starting') {
+				const from = this._phase;
+				this._phase = 'playing';
 				this.emit('phase', { from, to: 'playing' });
 			}
 			this.emit('firstFrame', undefined);
 		});
 		instance.on('ended', () => {
-			const self = this as unknown as { _phase: string; emit: (e: string, d?: any) => void };
-			const from = self._phase;
+			const from = this._phase;
 			if (from !== 'ended') {
-				self._phase = 'ended';
+				this._phase = 'ended';
 				this.emit('phase', { from, to: 'ended' });
 			}
 			this.emit('ended', undefined);
@@ -334,16 +332,15 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 		// load()) leaves `_playState='playing'` lying — `togglePlayback`
 		// then sees `playing` and silently calls `pause()` again, so the
 		// next user "play" click is a no-op.
-		const self = this as unknown as { _playState: string; emit: (e: string, d?: any) => void };
 		instance.on('play', () => {
-			if (self._playState !== 'playing') {
-				self._playState = 'playing';
+			if (this._playState !== 'playing') {
+				this._playState = 'playing';
 				this.emit('play', undefined);
 			}
 		});
 		instance.on('pause', () => {
-			if (self._playState === 'playing' && !instance.mediaElement().ended) {
-				self._playState = 'paused';
+			if (this._playState === 'playing' && !instance.mediaElement().ended) {
+				this._playState = 'paused';
 				this.emit('pause', undefined);
 			}
 		});
@@ -356,8 +353,8 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 		// and silently calls pause() on the already-paused element.
 		const onResetToPaused = () => {
 			firstFrameEmitted = false;
-			if (self._playState === 'playing') {
-				self._playState = 'paused';
+			if (this._playState === 'playing') {
+				this._playState = 'paused';
 				this.emit('pause', undefined);
 			}
 		};
@@ -431,7 +428,7 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 	fullscreenState(): FullscreenState;
 	fullscreenState(state: FullscreenState | boolean): void;
 	fullscreenState(state?: FullscreenState | boolean): FullscreenState | void {
-		const platform = (this as unknown as { platform(): IPlatform }).platform();
+		const platform = this.platform();
 		const ctrl = platform.fullscreen;
 		if (state === undefined) {
 			// Prefer browser truth when available; fall back to tracked state for
@@ -461,7 +458,7 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 	pipState(): PipState;
 	pipState(state: PipState | boolean): void;
 	pipState(state?: PipState | boolean): PipState | void {
-		const platform = (this as unknown as { platform(): IPlatform }).platform();
+		const platform = this.platform();
 		const ctrl = platform.pip;
 		if (state === undefined) {
 			if (ctrl?.isActive()) return PipState.ON;
@@ -477,7 +474,8 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 			});
 		}
 		this._pipActive = wantActive;
-		const action = wantActive ? ctrl.enter(this.videoElement) : ctrl.exit();
+		const videoEl = this.videoElement;
+		const action = wantActive && videoEl ? ctrl.enter(videoEl) : ctrl.exit();
 		void action.catch(() => { /* swallow */ });
 		this.emit('pip', { active: wantActive });
 	}
@@ -525,8 +523,8 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 		if (!list || list.length === 0) return;
 		let current = -1;
 		try {
-			const state = (this as unknown as { subtitleState: () => any }).subtitleState();
-			if (typeof state === 'number') current = state;
+			const idx = this.currentSubtitle();
+			if (typeof idx === 'number') current = idx;
 		}
 		catch { /* state unavailable — start from off */ }
 		// Walk: -1 (off) → 0 → 1 → ... → list.length-1 → -1 (off)
@@ -540,8 +538,8 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 		if (!list || list.length === 0) return;
 		let current = -1;
 		try {
-			const state = (this as unknown as { audioTrackState: () => any }).audioTrackState();
-			if (typeof state === 'number') current = state;
+			const idx = this.currentAudioTrack();
+			if (typeof idx === 'number') current = idx;
 		}
 		catch { /* state unavailable — start from 0 */ }
 		const next = current >= list.length - 1 ? 0 : current + 1;
@@ -627,7 +625,7 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 	declare device: () => DeviceCapabilities;
 
 	// ── MediaCapabilities + ABR ── composed in via `abrMethods` mixin.
-	declare canPlay: (profile: { contentType: string; width?: number; height?: number; bitrate?: number; framerate?: number }) => Promise<MediaCapabilitiesDecodingInfo>;
+	declare canPlay: (profile: { contentType: string; width?: number; height?: number; bitrate?: number; framerate?: number }) => Promise<CanPlayResult>;
 	declare bandwidth: () => number;
 	declare bandwidthEstimator: {
 		(): (() => number) | undefined;
@@ -671,6 +669,14 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 	declare createSVG: IPlayer<VideoEventMap>['createSVG'];
 	declare addClasses: IPlayer<VideoEventMap>['addClasses'];
 	declare removeClasses: IPlayer<VideoEventMap>['removeClasses'];
+
+	_disposeBackend(): void {
+		try { this._backend?.dispose?.(); }
+		catch { /* defensive — kit must still finish disposing */ }
+		this._backend = undefined;
+		this.videoElement = undefined;
+		_instances.delete(this.playerId);
+	}
 }
 
 // Compose every shared player method onto the prototype. The kit's logic
@@ -685,22 +691,17 @@ composeMixins(NMVideoPlayer.prototype, ...playerCoreMethods);
 // MediaSource, surfaced as `segment_0.ts` requested thousands of
 // times after a single playlist switch in HMR-heavy dev sessions.
 {
-	const composedDispose = NMVideoPlayer.prototype.dispose as () => void;
+	const composedDispose: () => void = NMVideoPlayer.prototype.dispose;
 	NMVideoPlayer.prototype.dispose = function (this: NMVideoPlayer<BasePlaylistItem>): void {
-		const self = this as unknown as { _backend?: { dispose?: () => void }; videoElement?: HTMLVideoElement };
-		try { self._backend?.dispose?.(); }
-		catch { /* defensive — kit must still finish disposing */ }
-		self._backend = undefined;
-		self.videoElement = undefined;
-		_instances.delete(this.playerId);
+		this._disposeBackend();
 		composedDispose.call(this);
 	};
 }
 
 {
-	type QualityFn = (idx?: number | 'auto') => number | 'auto' | void;
-	const kitCurrentQuality = NMVideoPlayer.prototype.currentQuality as unknown as QualityFn;
-	const wrapped: QualityFn = function (this: NMVideoPlayer<BasePlaylistItem>, idx?: number | 'auto'): number | 'auto' | void {
+	type _KitQualityFn = (idx?: number | 'auto') => number | 'auto' | void;
+	const kitCurrentQuality: _KitQualityFn = NMVideoPlayer.prototype.currentQuality as _KitQualityFn;
+	const wrapped: _KitQualityFn = function (this: NMVideoPlayer<BasePlaylistItem>, idx?: number | 'auto'): number | 'auto' | void {
 		if (idx === undefined) {
 			return kitCurrentQuality.call(this);
 		}
