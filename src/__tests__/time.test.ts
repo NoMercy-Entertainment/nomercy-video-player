@@ -29,18 +29,18 @@ describe('NMVideoPlayer — time', () => {
 		const order: string[] = [];
 		p.on('beforeSeek' as any, () => order.push('beforeSeek'));
 		p.on('seek' as any, () => order.push('seek'));
-		await (p.currentTime(10) as Promise<void>);
+		await p.currentTime(10);
 		expect(order).toEqual(['beforeSeek', 'seek']);
 		expect(p.currentTime()).toBe(10);
 	});
 
 	it('preventDefault on beforeSeek leaves the value unchanged + emits seekPrevented', async () => {
 		const p = setup();
-		await (p.currentTime(5) as Promise<void>);
+		await p.currentTime(5);
 		let preventedReason: string | undefined;
 		p.on('beforeSeek' as any, (e: any) => { e.preventDefault(); });
 		p.on('seekPrevented' as any, (data: any) => { preventedReason = data.reason; });
-		await (p.currentTime(99) as Promise<void>);
+		await p.currentTime(99);
 		expect(p.currentTime()).toBe(5);
 		expect(preventedReason).toBe('listener-prevented');
 	});
@@ -69,7 +69,7 @@ describe('NMVideoPlayer — time', () => {
 
 	it('timeData() exposes the aggregated TimeState shape', async () => {
 		const p = setup();
-		await (p.currentTime(3) as Promise<void>);
+		await p.currentTime(3);
 		const data = p.timeData();
 		expect(data.position).toBe(3);
 		expect(data.duration).toBe(0);

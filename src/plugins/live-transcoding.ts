@@ -111,10 +111,13 @@ export class LiveTranscodingPlugin extends Plugin<NMVideoPlayer<any>, LiveTransc
 	private onServerMessage(raw: unknown): void {
 		let msg: ServerStatusMessage | undefined;
 		if (typeof raw === 'string') {
-			try { msg = JSON.parse(raw) as ServerStatusMessage; }
+			try {
+				const parsed: unknown = JSON.parse(raw);
+				if (parsed !== null && typeof parsed === 'object') msg = parsed as ServerStatusMessage;
+			}
 			catch { return; }
 		}
-		else if (raw && typeof raw === 'object') {
+		else if (raw !== null && typeof raw === 'object') {
 			msg = raw as ServerStatusMessage;
 		}
 		if (!msg) return;

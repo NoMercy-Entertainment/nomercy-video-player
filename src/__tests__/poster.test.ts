@@ -30,7 +30,7 @@ describe('NMVideoPlayer poster sync', () => {
 		// Force backend allocation.
 		p.backend();
 
-		const videoEl = document.querySelector('#poster-test video') as HTMLVideoElement | null;
+		const videoEl = document.querySelector<HTMLVideoElement>('#poster-test video');
 		expect(videoEl).not.toBeNull();
 
 		p.queue(items);
@@ -51,7 +51,7 @@ describe('NMVideoPlayer poster sync', () => {
 
 		// Allocating the backend should retroactively apply the poster.
 		p.backend();
-		const videoEl = document.querySelector('#poster-test video') as HTMLVideoElement | null;
+		const videoEl = document.querySelector<HTMLVideoElement>('#poster-test video');
 		expect(videoEl).not.toBeNull();
 		expect(videoEl!.getAttribute('poster')).toBe('https://cdn/a.jpg');
 	});
@@ -62,7 +62,7 @@ describe('NMVideoPlayer poster sync', () => {
 		p.queue(items);
 
 		p.current('a');
-		const videoEl = document.querySelector('#poster-test video') as HTMLVideoElement;
+		const videoEl = document.querySelector<HTMLVideoElement>('#poster-test video')!
 		expect(videoEl.getAttribute('poster')).toBe('https://cdn/a.jpg');
 
 		p.current('c');
@@ -75,7 +75,7 @@ describe('NMVideoPlayer poster sync', () => {
 		p.queue(items);
 
 		p.current('a');
-		const videoEl = document.querySelector('#poster-test video') as HTMLVideoElement;
+		const videoEl = document.querySelector<HTMLVideoElement>('#poster-test video')!
 		expect(videoEl.getAttribute('poster')).toBe('https://cdn/a.jpg');
 
 		p.current('b');
@@ -95,7 +95,7 @@ describe('NMVideoPlayer poster sync', () => {
 		p.queue(relItems);
 		p.current('r1');
 
-		const videoEl = document.querySelector('#poster-test video') as HTMLVideoElement;
+		const videoEl = document.querySelector<HTMLVideoElement>('#poster-test video')!
 		expect(videoEl.getAttribute('poster')).toBe('https://image.tmdb.org/t/p/w780/abc.jpg');
 	});
 
@@ -112,7 +112,7 @@ describe('NMVideoPlayer poster sync', () => {
 		p.queue(absItems);
 		p.current('abs');
 
-		const videoEl = document.querySelector('#poster-test video') as HTMLVideoElement;
+		const videoEl = document.querySelector<HTMLVideoElement>('#poster-test video')!
 		expect(videoEl.getAttribute('poster')).toBe('https://other.cdn/img.jpg');
 	});
 });

@@ -216,6 +216,7 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 		(target: T | string | number, opts?: ActionOptions): void;
 	};
 	declare currentIndex: () => number;
+	declare seekToIndex: (position: number, opts?: ActionOptions) => void;
 
 	declare backlog: {
 		(): ReadonlyArray<T>;

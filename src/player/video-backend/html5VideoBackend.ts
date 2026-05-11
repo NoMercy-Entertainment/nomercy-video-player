@@ -137,7 +137,7 @@ export class Html5VideoBackend extends EventEmitter<BackendEventPayload> impleme
 
 	constructor(container: HTMLElement) {
 		super();
-		const existing = container.querySelector('video') as HTMLVideoElement | null;
+		const existing = container.querySelector<HTMLVideoElement>('video');
 		if (existing) {
 			this.element = existing;
 			this.ownsElement = false;

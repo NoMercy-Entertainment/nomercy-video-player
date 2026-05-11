@@ -116,10 +116,10 @@ export class SubtitleOverlayPlugin extends Plugin<NMVideoPlayer, SubtitleOverlay
         while (this.areas.length < n) {
             const area = this.player.createElement('div', `subtitle-area-${this.areas.length}`)
                 .addClasses(['subtitle-area', 'aligned-center'])
-                .appendTo(this.safezone).get() as HTMLDivElement;
+                .appendTo(this.safezone).get();
             const text = this.player.createElement('span', `subtitle-text-${this.areas.length}`)
                 .addClasses(['subtitle-text'])
-                .appendTo(area).get() as HTMLSpanElement;
+                .appendTo(area).get();
             this.areas.push({ area, text });
             this.applyStyleTo(text, area);
             if (this.currentLanguage) text.setAttribute('data-language', this.currentLanguage);

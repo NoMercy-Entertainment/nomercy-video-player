@@ -215,7 +215,7 @@ export interface DesktopUiEvents {
 }
 
 
-export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions, DesktopUiEvents> {
+export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, DesktopUiOptions, DesktopUiEvents> {
     static override readonly id: string = 'desktop-ui';
     static override readonly version: string = '2.0.0';
     static override readonly description: string = 'Official desktop UI overlay (v2 rewrite)';
@@ -507,7 +507,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
 
         this.volSlider = this.player.createElement('input', 'volume-slider')
             .addClasses(['volume-slider'])
-            .appendTo(volContainer).get() as HTMLInputElement;
+            .appendTo(volContainer).get();
         this.volSlider.type = 'range';
         this.volSlider.min = '0';
         this.volSlider.max = '100';
@@ -521,7 +521,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
             .appendTo(volContainer).get();
         const vertInput = this.player.createElement('input', 'volume-slider-vertical-input')
             .addClasses(['volume-slider-vertical-input'])
-            .appendTo(vertPop).get() as HTMLInputElement;
+            .appendTo(vertPop).get();
         vertInput.type = 'range';
         vertInput.min = '0';
         vertInput.max = '100';
@@ -673,7 +673,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
 
         this.addTooltip(this.prevBtn, () => {
             const idx = this.safeCurrentIndex();
-            const queue = this.player.queue() as VideoPlaylistItem[];
+            const queue = this.player.queue() ?? [];
             const prevItem = idx > 0 ? queue[idx - 1] : undefined;
             if (prevItem?.title) {
                 return this.t('tooltip.previousWithTitle', { title: prevItem.title });
@@ -683,7 +683,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
 
         this.addTooltip(this.nextBtn, () => {
             const idx = this.safeCurrentIndex();
-            const queue = this.player.queue() as VideoPlaylistItem[];
+            const queue = this.player.queue() ?? [];
             const nextItem = queue[idx + 1];
             if (nextItem?.title) {
                 return this.t('tooltip.nextWithTitle', { title: nextItem.title });
@@ -1218,7 +1218,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
 
     /** Rebuild the segmented chapter-marker DOM for the current item. */
     private renderChapterMarkers(): void {
-        const chapters = this.player.chapters() as ChapterLite[];
+        const chapters = this.player.chapters();
         const dur = this.resolveDuration();
 
         if (!dur || chapters.length === 0) {
@@ -1354,11 +1354,11 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
         const btns = this.opts?.buttons;
         const show = (key: keyof DesktopUiButtonOptions): boolean => buttonVisible(key, btns);
 
-        const subs = (this.player.subtitles?.() ?? []) as SubtitleTrackLite[];
+        const subs = this.player.subtitles?.() ?? [];
         const subsCount = subs.length;
 
-        const audios = (this.player.audioTracks?.() ?? []) as AudioTrackLite[];
-        const levels = (this.player.qualityLevels?.() ?? []) as QualityLevelLite[];
+        const audios = this.player.audioTracks?.() ?? [];
+        const levels = this.player.qualityLevels?.() ?? [];
 
         this.subsBtn.hidden = !show('subtitles') || subsCount === 0;
         this.audioBtn.hidden = !show('audio') || audios.length <= 1;
@@ -1477,7 +1477,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<any>, DesktopUiOptions
     }
     
     private syncActiveIndexes(): void {
-        const audios = (this.player.audioTracks?.() ?? []) as AudioTrackLite[];
+        const audios = this.player.audioTracks?.() ?? [];
         if (audios.length > 0) {
             const defIdx = audios.findIndex(t => t.default === true);
             this.activeAudioIdx = defIdx >= 0 ? defIdx : 0;

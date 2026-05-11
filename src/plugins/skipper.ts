@@ -42,7 +42,7 @@ const KINDS: ReadonlyArray<SkipperKind> = ['intro', 'recap', 'credits'];
  * and exposes `skip(kind)` to jump the player past the range. Auto-skip kicks
  * in for any kinds listed in `options.autoSkip`.
  */
-export class SkipperPlugin extends Plugin<NMVideoPlayer<any>, SkipperOptions, SkipperEvents> {
+export class SkipperPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, SkipperOptions, SkipperEvents> {
 	static override readonly id: string = 'skipper';
 	static override readonly version: string = '2.0.0';
 	static override readonly description: string = 'Skip-intro / skip-recap / skip-credits with auto-skip + UI prompts';
@@ -92,15 +92,16 @@ export class SkipperPlugin extends Plugin<NMVideoPlayer<any>, SkipperOptions, Sk
 	/** Fetch a JSON skip file and parse into entries. */
 	async fetchSkipFile(url: string): Promise<SkipperEntry[]> {
 		const raw = await this.fetch<string>(url);
-		const parsed = JSON.parse(raw) as Array<{ type: SkipperKind; start: number; end: number }>;
-		return parsed
-			.filter(p => p && KINDS.includes(p.type) && typeof p.start === 'number' && typeof p.end === 'number')
-			.map(p => ({ kind: p.type, range: { start: p.start, end: p.end } }));
+		const body: unknown = JSON.parse(raw);
+		const entries = Array.isArray(body) ? (body as Array<{ type: SkipperKind; start: number; end: number }>) : [];
+		return entries
+			.filter(entry => entry && KINDS.includes(entry.type) && typeof entry.start === 'number' && typeof entry.end === 'number')
+			.map(entry => ({ kind: entry.type, range: { start: entry.start, end: entry.end } }));
 	}
 
 	private currentItem(): VideoPlaylistItem | undefined {
 		try {
-			return this.player.current() as VideoPlaylistItem | undefined;
+			return this.player.current();
 		}
 		catch {
 			return undefined;

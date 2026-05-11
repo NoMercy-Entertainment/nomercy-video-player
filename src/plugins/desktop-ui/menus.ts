@@ -81,7 +81,7 @@ export function buildMenuFrame(
 ): MenuFrameRefs {
     const frameDialog = player.createElement('dialog', 'menu-frame-dialog')
         .addClasses(['menu-frame-dialog'])
-        .appendTo(parent).get() as HTMLDialogElement;
+        .appendTo(parent).get();
     frameDialog.setAttribute('popover', 'manual');
     frameDialog.setAttribute('role', 'modal');
 
@@ -618,7 +618,7 @@ export function renderPlaylistPane(
     onPick: () => void,
     opts: PlaylistRenderOptions = {},
 ): void {
-    const queue = ((player.queue?.() ?? []) as PlaylistItemLite[]);
+    const queue = coerceArray<PlaylistItemLite>(player.queue?.() ?? []);
     const curIdx = player.currentIndex?.() ?? 0;
 
     const hasSeason = queue.some(item => typeof item.season === 'number');
@@ -805,7 +805,7 @@ export function renderAudioPane(
     const scroll = pane.querySelector<HTMLDivElement>('.language-scroll-container');
     if (!scroll) return;
     scroll.replaceChildren();
-    const tracks = ((player.audioTracks?.() ?? []) as AudioTrackLite[]);
+    const tracks = coerceArray<AudioTrackLite>(player.audioTracks?.() ?? []);
     tracks.forEach((t, i) => {
         const langSlug = (t.language ?? String(t.id ?? i)).replace(/\W+/g, '-').toLowerCase();
         appendChoice(

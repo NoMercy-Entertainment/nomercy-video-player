@@ -28,7 +28,7 @@ export interface TopBarRefs {
 export function buildTitleBar(player: NMVideoPlayer<any>, parent: HTMLElement): TopBarRefs {
     const bar = player.createElement('div', 'nmplayer-top-bar')
         .addClasses(['nm-top-bar'])
-        .appendTo(parent).get() as HTMLDivElement;
+        .appendTo(parent).get();
 
     const left = player.createElement('div', 'nmplayer-top-bar-left')
         .addClasses(['nm-top-bar-left'])
@@ -48,11 +48,11 @@ export function buildTitleBar(player: NMVideoPlayer<any>, parent: HTMLElement): 
 
     const showInfoText = player.createElement('span', 'nmplayer-show-info')
         .addClasses(['nm-show-info'])
-        .appendTo(right).get() as HTMLSpanElement;
+        .appendTo(right).get();
 
     const titleText = player.createElement('span', 'nmplayer-title')
         .addClasses(['nm-title'])
-        .appendTo(right).get() as HTMLSpanElement;
+        .appendTo(right).get();
 
     return { bar, titleText, showInfoText, backBtn };
 }

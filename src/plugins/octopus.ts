@@ -111,7 +111,7 @@ export class OctopusPlugin extends Plugin<NMVideoPlayer<any>, OctopusOptions> {
 	fonts(urls?: string[]): readonly string[] | Promise<void> {
 		if (urls === undefined)
 			return this._fontsForCurrent ?? this.opts?.fonts ?? [];
-		this.opts = mergeConfig(this.opts ?? {}, { fonts: urls }) as OctopusOptions;
+		this.opts = mergeConfig<OctopusOptions>(this.opts ?? {}, { fonts: urls });
 		this._fontsForCurrent = null;
 		const url = this.currentLoadedUrl;
 		if (url) {
@@ -192,9 +192,10 @@ export class OctopusPlugin extends Plugin<NMVideoPlayer<any>, OctopusOptions> {
 			const resolved = await this.resolveUrl(manifestUrl, 'font');
 			const r = await fetch(resolved.href);
 			if (!r.ok) throw new Error(`fonts.json HTTP ${r.status}`);
-			const raw = await r.json() as Array<{ file: string; mimeType?: string }>;
+			const body: unknown = await r.json();
+			const raw = Array.isArray(body) ? (body as Array<{ file: string; mimeType?: string }>) : [];
 			const baseFolder = manifestUrl.replace(/\/[^/]*$/u, '');
-			const urls = raw.map(f => `${baseFolder}/${f.file}`);
+			const urls = raw.map(entry => `${baseFolder}/${entry.file}`);
 			// Concat any plugin-level static fonts after the per-item ones so
 			// consumer overrides remain available even when an item ships a manifest.
 			this._fontsForCurrent = [...urls, ...(this.opts?.fonts ?? [])];
