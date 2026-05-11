@@ -33,15 +33,36 @@ export const desktopUiCss = `
 .nm-top-bar-right { display: flex; flex-direction: column; align-items: flex-end; text-align: right; max-width: 60%; }
 .nm-show-info { font-size: 0.78rem; font-weight: 600; color: rgba(255,255,255,0.75); margin-bottom: 2px; }
 .nm-title { font-size: 1.05rem; font-weight: 700; text-shadow: 0 1px 4px rgba(0,0,0,0.8); }
-.nm-back-btn {
+.nm-back-btn,
+.nm-close-btn {
     pointer-events: auto; background: rgba(0,0,0,0.35); border: none; color: #fff;
     width: 40px; height: 40px; border-radius: 50%; cursor: pointer;
     display: flex; align-items: center; justify-content: center;
     transition: background 0.18s ease;
     margin-right: 8px;
 }
-.nm-back-btn:hover { background: color-mix(in srgb, #fff 10%, rgba(0,0,0,0.35)); }
-.nm-back-btn[hidden] { display: none !important; }
+.nm-back-btn:hover,
+.nm-close-btn:hover { background: color-mix(in srgb, #fff 10%, rgba(0,0,0,0.35)); }
+.nm-back-btn[hidden],
+.nm-close-btn[hidden] { display: none !important; }
+
+/* ── TV current-item corner block ────────────────────────────────── */
+.nm-tv-current-item {
+    display: flex; flex-direction: column; align-items: flex-end; gap: 4px;
+    pointer-events: none;
+}
+.nm-tv-current-item-show {
+    color: #fff; font-size: 0.875rem; font-weight: 700; white-space: pre;
+}
+.nm-tv-current-item-title-row {
+    display: flex; flex-direction: row; gap: 8px;
+}
+.nm-tv-current-item-episode {
+    font-size: 0.75rem; color: rgba(255,255,255,0.75); white-space: pre;
+}
+.nm-tv-current-item-title {
+    font-size: 0.75rem; color: rgba(255,255,255,0.75); white-space: pre;
+}
 
 /* ── Center play button ──────────────────────────────────────────── */
 .nm-center { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
@@ -706,49 +727,81 @@ export const desktopUiCss = `
     display: none;
     position: absolute;
     inset: 0;
-    z-index: 50;
-    align-items: center;
-    justify-content: center;
-    background: rgba(10, 12, 18, 0.80);
-    backdrop-filter: blur(6px);
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
+    background: rgba(0, 0, 0, 0.92);
+    color: #fff;
+    padding: 2rem;
+    border: none;
+    z-index: 10000;
+    overflow: auto;
     pointer-events: auto;
-    cursor: pointer;
 }
-.nm-shortcuts-overlay.nm-shortcuts-overlay-visible { display: flex; flex-direction: column; }
+.nm-shortcuts-overlay.nm-shortcuts-overlay-visible { display: block; }
+
+.nm-shortcuts-container {
+    max-width: 56rem;
+    margin: 0 auto;
+}
+
+.nm-shortcuts-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+}
 
 .nm-shortcuts-title {
-    font-size: 1rem;
-    font-weight: 700;
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 600;
     color: #fff;
-    margin: 0 0 16px 0;
-    text-align: center;
+}
+
+.nm-shortcuts-hint {
+    font-size: 0.875rem;
+    opacity: 0.6;
 }
 
 .nm-shortcuts-grid {
     display: grid;
-    grid-template-columns: auto 1fr;
-    gap: 6px 24px;
+    grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+    gap: 1.5rem;
     margin: 0;
-    max-width: 380px;
-    width: 100%;
-    padding: 0 16px;
+    padding: 0;
 }
-.nm-shortcuts-grid dt {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 0.80rem;
+
+.nm-shortcuts-category-title {
+    margin: 0 0 0.75rem 0;
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    opacity: 0.7;
+}
+
+.nm-shortcuts-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.35rem 0;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+.nm-shortcuts-label {
+    font-size: 0.875rem;
+}
+
+.nm-shortcuts-kbd {
     background: rgba(255,255,255,0.12);
-    color: #fff;
-    padding: 2px 8px;
-    border-radius: 4px;
+    border-radius: 0.25rem;
+    padding: 0.15rem 0.5rem;
+    font-size: 0.8rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    min-width: 1.5rem;
     text-align: center;
-    white-space: nowrap;
-    align-self: center;
-}
-.nm-shortcuts-grid dd {
-    margin: 0;
-    font-size: 0.82rem;
-    color: rgba(255,255,255,0.80);
-    align-self: center;
 }
 `;
 

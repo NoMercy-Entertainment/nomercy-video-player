@@ -89,6 +89,7 @@ import {
     buildTitleBar,
     updateTitleBar,
     refreshBackButton,
+    refreshCloseButton,
     type TopBarRefs,
 } from './topBar';
 import {
@@ -245,6 +246,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
             'plugin.desktop-ui.tooltip.nextChapterWithTitle': 'Next chapter: {title}',
             'plugin.desktop-ui.tooltip.previousChapterWithTitle': 'Previous chapter: {title}',
             'plugin.desktop-ui.shortcuts.title': 'Keyboard shortcuts',
+            'plugin.desktop-ui.shortcuts.hint': 'Press ? or Esc to close',
             'plugin.desktop-ui.shortcuts.playPause': 'Play / Pause',
             'plugin.desktop-ui.shortcuts.seekBackForward': 'Seek −10 s / +10 s',
             'plugin.desktop-ui.shortcuts.volumeUpDown': 'Volume +10% / −10%',
@@ -396,47 +398,126 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
             .addClasses(['nm-shortcuts-overlay'])
             .appendTo(parent).get();
 
-        const shortcutRows: Array<[string, string]> = [
-            ['Space', 'shortcuts.playPause'],
-            ['← / →', 'shortcuts.seekBackForward'],
-            ['↑ / ↓', 'shortcuts.volumeUpDown'],
-            ['M', 'shortcuts.mute'],
-            ['F', 'shortcuts.fullscreen'],
-            ['T', 'shortcuts.theater'],
-            ['P', 'shortcuts.pip'],
-            ['N', 'shortcuts.next'],
-            ['B', 'shortcuts.previous'],
-            ['Shift+N / Shift+P', 'shortcuts.chapters'],
-            ['?', 'shortcuts.help'],
-        ];
+        const container = document.createElement('div');
+        container.className = 'nm-shortcuts-container';
+
+        const header = document.createElement('div');
+        header.className = 'nm-shortcuts-header';
 
         const title = document.createElement('h2');
         title.className = 'nm-shortcuts-title';
-        title.textContent = this.t('shortcuts.title', {});
-        overlay.appendChild(title);
+        title.textContent = this.t('plugin.desktop-ui.shortcuts.title');
 
-        const grid = document.createElement('dl');
+        const hint = document.createElement('span');
+        hint.className = 'nm-shortcuts-hint';
+        hint.textContent = this.t('plugin.desktop-ui.shortcuts.hint');
+
+        header.append(title, hint);
+        container.appendChild(header);
+
+        const categories: ReadonlyArray<[string, ReadonlyArray<{ key: string; label: string }>]> = [
+            ['Playback', [
+                { key: 'Space', label: 'Play / Pause' },
+                { key: 'e', label: 'Next frame (paused)' },
+                { key: ']', label: 'Speed up' },
+                { key: '[', label: 'Speed down' },
+                { key: '=', label: 'Normal speed' },
+                { key: 't', label: 'Show time' },
+            ]],
+            ['Volume', [
+                { key: '↑', label: 'Volume up' },
+                { key: '↓', label: 'Volume down' },
+                { key: 'm', label: 'Mute / Unmute' },
+            ]],
+            ['Seeking', [
+                { key: '← / →', label: 'Seek back / forward' },
+                { key: 'Shift + ← / →', label: 'Seek 3 seconds' },
+                { key: 'Alt + ← / →', label: 'Seek 10 seconds' },
+                { key: 'Ctrl + ← / →', label: 'Seek 1 minute' },
+            ]],
+            ['Quick Seek', [
+                { key: '3', label: 'Seek 30 seconds' },
+                { key: '6', label: 'Seek 60 seconds' },
+                { key: '9', label: 'Seek 90 seconds' },
+                { key: '1', label: 'Seek 120 seconds' },
+            ]],
+            ['Navigation', [
+                { key: 'n', label: 'Next item' },
+                { key: 'p', label: 'Previous item' },
+                { key: 'Shift + N', label: 'Next chapter' },
+                { key: 'Shift + P', label: 'Previous chapter' },
+            ]],
+            ['Tracks & Subtitles', [
+                { key: 'v / 5', label: 'Cycle subtitles' },
+                { key: 'b / 2', label: 'Cycle audio' },
+                { key: '+', label: 'Subtitle size up' },
+                { key: '-', label: 'Subtitle size down' },
+            ]],
+            ['Display', [
+                { key: 'f / F11', label: 'Toggle fullscreen' },
+                { key: 'Esc', label: 'Exit fullscreen' },
+                { key: 'a', label: 'Cycle aspect ratio' },
+            ]],
+        ];
+
+        const grid = document.createElement('div');
         grid.className = 'nm-shortcuts-grid';
-        for (const [key, labelKey] of shortcutRows) {
-            const term = document.createElement('dt');
-            term.textContent = key;
-            const def = document.createElement('dd');
-            def.textContent = this.t(labelKey, {});
-            grid.appendChild(term);
-            grid.appendChild(def);
-        }
-        overlay.appendChild(grid);
 
-        this.listen(overlay, 'click', () => this.toggleShortcuts());
+        for (const [category, shortcuts] of categories) {
+            const section = document.createElement('div');
+
+            const catTitle = document.createElement('h3');
+            catTitle.className = 'nm-shortcuts-category-title';
+            catTitle.textContent = this.t(`plugin.desktop-ui.shortcuts.category.${category}`) || category;
+            section.appendChild(catTitle);
+
+            for (const shortcut of shortcuts) {
+                const row = document.createElement('div');
+                row.className = 'nm-shortcuts-row';
+
+                const label = document.createElement('span');
+                label.className = 'nm-shortcuts-label';
+                label.textContent = this.t(`plugin.desktop-ui.shortcuts.label.${shortcut.label}`) || shortcut.label;
+
+                const kbd = document.createElement('kbd');
+                kbd.className = 'nm-shortcuts-kbd';
+                kbd.textContent = shortcut.key;
+
+                row.append(label, kbd);
+                section.appendChild(row);
+            }
+
+            grid.appendChild(section);
+        }
+
+        container.appendChild(grid);
+        overlay.appendChild(container);
+
+        // Close on click outside the container content.
+        this.listen(overlay, 'click', (e: Event) => {
+            if (e.target === overlay) this.hideShortcuts();
+        });
 
         return overlay;
     }
 
     private toggleShortcuts(): void {
-        this._shortcutsVisible = !this._shortcutsVisible;
-        if (this.shortcutsOverlay) {
-            this.shortcutsOverlay.classList.toggle('nm-shortcuts-overlay-visible', this._shortcutsVisible);
+        if (this._shortcutsVisible) {
+            this.hideShortcuts();
         }
+        else {
+            this.showShortcuts();
+        }
+    }
+
+    private showShortcuts(): void {
+        this._shortcutsVisible = true;
+        this.shortcutsOverlay?.classList.add('nm-shortcuts-overlay-visible');
+    }
+
+    private hideShortcuts(): void {
+        this._shortcutsVisible = false;
+        this.shortcutsOverlay?.classList.remove('nm-shortcuts-overlay-visible');
     }
 
     private buildBottomBar(parent: HTMLElement): HTMLDivElement {
@@ -879,6 +960,10 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
                     ke.preventDefault();
                     this.toggleShortcuts();
                 }
+                else if (ke.key === 'Escape' && this._shortcutsVisible) {
+                    ke.preventDefault();
+                    this.hideShortcuts();
+                }
             });
             this.listen(container, 'mouseleave', () => this.maybeHide());
             this.listen(container, 'click', (e: Event) => {
@@ -899,6 +984,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
 
         this.on('listeners-changed', (d) => {
             if (d.name === 'back' && this.topBarRefs) refreshBackButton(this.topBarRefs, this.player);
+            if (d.name === 'close' && this.topBarRefs) refreshCloseButton(this.topBarRefs, this.player);
         });
 
         // mediaReady: refresh chapters + duration, then sync all track lists
@@ -1140,6 +1226,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
         if (dur) this.applyDuration(dur);
         this.refreshCapabilityVisibility();
         if (this.topBarRefs) refreshBackButton(this.topBarRefs, this.player);
+        if (this.topBarRefs) refreshCloseButton(this.topBarRefs, this.player);
     }
 
     private setPlayingState(playing: boolean): void {

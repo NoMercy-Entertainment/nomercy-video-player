@@ -1,10 +1,11 @@
 /**
  * Top-bar concern — title bar DOM construction, title/show-info update,
- * and back-button refresh logic.
+ * and back-button / close-button refresh logic. Also owns the TV current-item
+ * info block (show title, episode, episode title) in the top-right corner.
  *
  * Integration: `buildTitleBar()` is called from `DesktopUiPlugin.buildDom()`.
  * It returns `TopBarRefs` which the plugin stores for later updates via
- * `updateTitleBar()` and `refreshBackButton()`.
+ * `updateTitleBar()`, `refreshBackButton()`, and `refreshCloseButton()`.
  */
 
 import type { NMVideoPlayer, VideoPlaylistItem } from '@nomercy-entertainment/nomercy-video-player';
@@ -19,12 +20,16 @@ export interface TopBarRefs {
     titleText: HTMLSpanElement;
     showInfoText: HTMLSpanElement;
     backBtn: HTMLButtonElement;
+    closeBtn: HTMLButtonElement;
+    tvCurrentItemShow: HTMLDivElement;
+    tvCurrentItemEpisode: HTMLDivElement;
+    tvCurrentItemTitle: HTMLDivElement;
 }
 
 
 // ── DOM construction ───────────────────────────────────────────────────────────
 
-/** Build the top bar (back button + show info + title) and return named refs. */
+/** Build the top bar (back/close buttons + show info + title + TV current item) and return named refs. */
 export function buildTitleBar(player: NMVideoPlayer<any>, parent: HTMLElement): TopBarRefs {
     const bar = player.createElement('div', 'nmplayer-top-bar')
         .addClasses(['nm-top-bar'])
@@ -42,6 +47,14 @@ export function buildTitleBar(player: NMVideoPlayer<any>, parent: HTMLElement): 
     backBtn.hidden = true;
     left.appendChild(backBtn);
 
+    const closeBtn = player.createButton('nmplayer-close-btn', 'Close', () => {
+        player.emit('close', undefined);
+    });
+    player.addClasses(closeBtn, ['nm-close-btn']);
+    closeBtn.innerHTML = svgFromIcon(fluentIcons.close);
+    closeBtn.hidden = true;
+    left.appendChild(closeBtn);
+
     const right = player.createElement('div', 'nmplayer-top-bar-right')
         .addClasses(['nm-top-bar-right'])
         .appendTo(bar).get();
@@ -54,7 +67,36 @@ export function buildTitleBar(player: NMVideoPlayer<any>, parent: HTMLElement): 
         .addClasses(['nm-title'])
         .appendTo(right).get();
 
-    return { bar, titleText, showInfoText, backBtn };
+    const tvCurrentItemContainer = player.createElement('div', 'nm-tv-current-item')
+        .addClasses(['nm-tv-current-item'])
+        .appendTo(right).get();
+
+    const tvCurrentItemShow = player.createElement('div', 'nm-tv-current-item-show')
+        .addClasses(['nm-tv-current-item-show'])
+        .appendTo(tvCurrentItemContainer).get();
+
+    const tvCurrentItemTitleRow = player.createElement('div', 'nm-tv-current-item-title-row')
+        .addClasses(['nm-tv-current-item-title-row'])
+        .appendTo(tvCurrentItemContainer).get();
+
+    const tvCurrentItemEpisode = player.createElement('div', 'nm-tv-current-item-episode')
+        .addClasses(['nm-tv-current-item-episode'])
+        .appendTo(tvCurrentItemTitleRow).get();
+
+    const tvCurrentItemTitle = player.createElement('div', 'nm-tv-current-item-title')
+        .addClasses(['nm-tv-current-item-title'])
+        .appendTo(tvCurrentItemTitleRow).get();
+
+    return {
+        bar,
+        titleText,
+        showInfoText,
+        backBtn,
+        closeBtn,
+        tvCurrentItemShow,
+        tvCurrentItemEpisode,
+        tvCurrentItemTitle,
+    };
 }
 
 
@@ -87,10 +129,33 @@ export function updateTitleBar(refs: TopBarRefs, item: VideoPlaylistItem | undef
     }
 
     refs.showInfoText.hidden = !refs.showInfoText.textContent;
+
+    updateTvCurrentItem(refs, item);
+}
+
+/** Sync the TV corner current-item block to the active playlist item. */
+export function updateTvCurrentItem(refs: TopBarRefs, item: VideoPlaylistItem | undefined | null): void {
+    refs.tvCurrentItemShow.textContent = item?.show ?? '';
+
+    let episodeLabel = '';
+    if (item?.season) episodeLabel += `S${item.season}`;
+    if (item?.season && item?.episode) episodeLabel += `:E${item.episode}`;
+    refs.tvCurrentItemEpisode.textContent = episodeLabel;
+
+    const rawTitle = item?.title ?? '';
+    const showName = item?.show ?? '';
+    const strippedTitle = rawTitle.replace(showName, '').trim();
+    refs.tvCurrentItemTitle.textContent = strippedTitle ? `"${strippedTitle}"` : '';
 }
 
 /** Show or hide the back button based on whether the player has 'back' listeners. */
 export function refreshBackButton(refs: TopBarRefs, player: NMVideoPlayer<any>): void {
     if (!refs.backBtn) return;
     refs.backBtn.hidden = !player.hasListeners('back');
+}
+
+/** Show or hide the close button based on whether the player has 'close' listeners. */
+export function refreshCloseButton(refs: TopBarRefs, player: NMVideoPlayer<any>): void {
+    if (!refs.closeBtn) return;
+    refs.closeBtn.hidden = !player.hasListeners('close');
 }
