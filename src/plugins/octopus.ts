@@ -1,4 +1,4 @@
-import { Plugin } from '@nomercy-entertainment/nomercy-player-core';
+import { mergeConfig, Plugin } from '@nomercy-entertainment/nomercy-player-core';
 import type { ResolvedUrl } from '@nomercy-entertainment/nomercy-player-core';
 import { NMSubtitleOctopus } from '@nomercy-entertainment/nomercy-subtitle-octopus';
 import type { OctopusOptions as NMOctopusOptions } from '@nomercy-entertainment/nomercy-subtitle-octopus';
@@ -111,7 +111,7 @@ export class OctopusPlugin extends Plugin<NMVideoPlayer<any>, OctopusOptions> {
 	fonts(urls?: string[]): readonly string[] | Promise<void> {
 		if (urls === undefined)
 			return this._fontsForCurrent ?? this.opts?.fonts ?? [];
-		this.opts = { ...(this.opts ?? {}), fonts: urls } as OctopusOptions;
+		this.opts = mergeConfig(this.opts ?? {}, { fonts: urls }) as OctopusOptions;
 		this._fontsForCurrent = null;
 		const url = this.currentLoadedUrl;
 		if (url) {
