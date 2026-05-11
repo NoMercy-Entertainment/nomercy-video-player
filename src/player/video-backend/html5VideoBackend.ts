@@ -217,63 +217,27 @@ export class Html5VideoBackend extends EventEmitter<BackendEventPayload> impleme
 					suggestion: 'Use a Chromium-based browser, Safari, or Firefox 119+ for HLS support.',
 				});
 			}
-			// Caption-source priority (WCAG 2.1 SC 1.2.2, FCC §79.4):
-			//   1. WebVTT declared in the manifest (`EXT-X-MEDIA:TYPE=SUBTITLES`)
-			//      is the authoritative caption source — richer styling,
-			//      explicit positioning, named regions, multiple languages.
-			//   2. CEA-608 / CEA-708 embedded in the MPEG-TS user_data is
-			//      the fallback for streams that declare no WebVTT.
-			//
-			// NEVER surface BOTH for the same language — HLS.js silently
-			// merges them under one `kind:captions` textTrack (same lang +
-			// label), the user sees one "English" track that's actually
-			// two interleaved streams, and per-cue positioning becomes
-			// non-deterministic. The accessibility contract is "user can
-			// pick exactly one caption track per language", not "user
-			// gets a duplicated cue stream."
-			//
-			// HLS.js doesn't let us toggle CEA mid-stream, so we
-			// conservatively disable CEA on construction. After
-			// `MANIFEST_PARSED` we check whether WebVTT was declared:
-			//   - WebVTT present → keep CEA off (rule 1 satisfied)
-			//   - WebVTT absent  → reload the Hls instance with CEA on
-			//                       so pure-CEA streams aren't left
-			//                       silent (rule 2 fallback).
-			const initialHls: HlsInstance = new Hls({
+			// Enable CEA-608/CEA-708 always so pure-CEA streams (no WebVTT
+			// renditions in the manifest) still surface captions. When a
+			// stream ALSO carries WebVTT, `resolveSubtitleTextTrack` prefers
+			// `kind:'subtitles'` over `kind:'captions'` (line 563-580), so
+			// the user never sees a duplicated cue stream. The old destroy-
+			// reload pattern broke playback for the majority case (streams
+			// with 0 SUBTITLES renditions) because the fallback instance's
+			// streamController never received a valid MEDIA_ATTACHED event
+			// and parked in IDLE indefinitely.
+			const hlsInstance: HlsInstance = new Hls({
 				autoStartLoad: true,
 				enableWorker: true,
 				lowLatencyMode: false,
-				enableCEA708Captions: false,
+				enableCEA708Captions: true,
 			});
-			this.hls = initialHls;
-			initialHls.on(Hls.Events.MANIFEST_PARSED, (_e: unknown, data: { subtitleTracks?: unknown[] }) => {
-				const hasWebVttSubs = Array.isArray(data?.subtitleTracks) && data.subtitleTracks.length > 0;
-				if (hasWebVttSubs) {
-					this._emitHlsTrackLists();
-					return;
-				}
-				// No WebVTT in the manifest. Tear down + restart with CEA
-				// enabled so the user still gets captions when the source
-				// only carries embedded ones.
-				try { this.hls?.detachMedia(); }
-				catch { /* defensive */ }
-				try { this.hls?.destroy(); }
-				catch { /* defensive */ }
-				const fallback: HlsInstance = new Hls({
-					autoStartLoad: true,
-					enableWorker: true,
-					lowLatencyMode: false,
-					enableCEA708Captions: true,
-				});
-				this.hls = fallback;
-				fallback.attachMedia(this.element);
-				fallback.loadSource(url);
-				fallback.on(Hls.Events.MANIFEST_PARSED, () => { this._emitHlsTrackLists(); });
-				this._attachHlsErrorHandler(Hls, url);
-				this._attachHlsLevelSwitchedHandler(Hls);
+			this.hls = hlsInstance;
+			hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
+				this._emitHlsTrackLists();
 			});
-			initialHls.attachMedia(this.element);
-			initialHls.loadSource(url);
+			hlsInstance.attachMedia(this.element);
+			hlsInstance.loadSource(url);
 			this._attachHlsErrorHandler(Hls, url);
 			this._attachHlsLevelSwitchedHandler(Hls);
 		}
