@@ -141,15 +141,27 @@ function buildMainMenu(
         .addClasses(['main-menu'])
         .appendTo(parent).get();
 
-    // Header (close).
+    // Header (title + close) — mirrors the sub-menu shell so the main menu
+    // has the same visual rhythm as every category pane.
     const header = player.createElement('div', 'menu-header-main')
         .addClasses(['menu-header'])
         .appendTo(main).get();
+
+    const titleSpan = document.createElement('span');
+    titleSpan.className = 'menu-button-text';
+    titleSpan.textContent = 'Settings';
+    header.appendChild(titleSpan);
+
     const closeBtn = player.createButton('menu-close', 'Close', () => {});
     closeBtn.classList.add('menu-header-close');
     closeBtn.innerHTML = svgFromIcon(fluentIcons.close);
     header.appendChild(closeBtn);
     listen(closeBtn, 'click', (e: Event) => { e.stopPropagation(); actions.closeMenu(); });
+
+    // Scroll container — same `.scroll-container` styling as the sub-menus.
+    const scroll = player.createElement('div', 'main-scroll-container')
+        .addClasses(['scroll-container', 'main-scroll-container'])
+        .appendTo(main).get();
 
     // Category buttons. v1 order: language, subtitles, subtitle settings,
     // quality, speed, aspect ratio, playlist.
@@ -170,7 +182,7 @@ function buildMainMenu(
             <span class="menu-button-text">${c.label}</span>
             <span class="menu-button-chevron">${svgFromIcon(fluentIcons.chevronR)}</span>
         `;
-        main.appendChild(btn);
+        scroll.appendChild(btn);
         listen(btn, 'click', (e: Event) => { e.stopPropagation(); actions.openSubMenu(c.id); });
     }
     return main;
@@ -195,60 +207,48 @@ function buildPlaylistPaneShell(
         .addClasses(['sub-menu-content', 'playlist-menu'])
         .appendTo(parent).get();
 
-    // Left pane — Seasons rail.
+    // Header — flex column header.
+    const header = player.createElement('div', 'menu-header-playlist')
+        .addClasses(['menu-header'])
+        .appendTo(root).get();
+
+    const back = player.createButton('playlist-back', 'Back', () => {});
+    back.classList.add('menu-header-back');
+    back.innerHTML = svgFromIcon(fluentIcons.chevronL);
+    header.appendChild(back);
+    listen(back, 'click', (e: Event) => { e.stopPropagation(); actions.backToMain(); });
+
+    const title = document.createElement('span');
+    title.className = 'menu-button-text playlist-title';
+    title.textContent = 'Playlist';
+    header.appendChild(title);
+
+    const close = player.createButton('playlist-close', 'Close', () => {});
+    close.classList.add('menu-header-close');
+    close.innerHTML = svgFromIcon(fluentIcons.close);
+    header.appendChild(close);
+    listen(close, 'click', (e: Event) => { e.stopPropagation(); actions.closeMenu(); });
+
+    // Row wrapper — flex-row containing the two columns.
+    const cols = player.createElement('div', 'playlist-cols')
+        .addClasses(['playlist-cols'])
+        .appendTo(root).get();
+
+    // Seasons column.
     const seasons = player.createElement('div', 'playlist-seasons-pane')
         .addClasses(['sub-menu-content', 'seasons-pane'])
-        .appendTo(root).get();
-    {
-        const header = player.createElement('div', 'menu-header-seasons')
-            .addClasses(['menu-header'])
-            .appendTo(seasons).get();
-        const back = player.createButton('seasons-back', 'Back', () => {});
-        back.classList.add('menu-header-back');
-        back.innerHTML = svgFromIcon(fluentIcons.chevronL);
-        header.appendChild(back);
-        listen(back, 'click', (e: Event) => { e.stopPropagation(); actions.backToMain(); });
+        .appendTo(cols).get();
+    player.createElement('div', 'playlist-seasons-scroll-container')
+        .addClasses(['scroll-container', 'playlist-seasons-scroll-container'])
+        .appendTo(seasons);
 
-        const title = document.createElement('span');
-        title.className = 'menu-button-text';
-        title.textContent = 'Seasons';
-        header.appendChild(title);
-
-        player.createElement('div', 'playlist-seasons-scroll-container')
-            .addClasses(['scroll-container', 'playlist-seasons-scroll-container'])
-            .appendTo(seasons);
-    }
-
-    // Right pane — Episodes / movies rail.
+    // Episode column.
     const episodes = player.createElement('div', 'episode-menu')
         .addClasses(['sub-menu-content', 'episode-menu'])
-        .appendTo(root).get();
-    {
-        const header = player.createElement('div', 'menu-header-episodes')
-            .addClasses(['menu-header'])
-            .appendTo(episodes).get();
-
-        const back = player.createButton('episodes-back', 'Back', () => {});
-        back.classList.add('menu-header-back');
-        back.innerHTML = svgFromIcon(fluentIcons.chevronL);
-        header.appendChild(back);
-        listen(back, 'click', (e: Event) => { e.stopPropagation(); actions.backToMain(); });
-
-        const episodeTitle = document.createElement('span');
-        episodeTitle.className = 'menu-button-text';
-        episodeTitle.textContent = 'Episodes';
-        header.appendChild(episodeTitle);
-
-        const close = player.createButton('episodes-close', 'Close', () => {});
-        close.classList.add('menu-header-close');
-        close.innerHTML = svgFromIcon(fluentIcons.close);
-        header.appendChild(close);
-        listen(close, 'click', (e: Event) => { e.stopPropagation(); actions.closeMenu(); });
-
-        player.createElement('div', 'playlist-scroll-container')
-            .addClasses(['scroll-container', 'playlist-scroll-container'])
-            .appendTo(episodes);
-    }
+        .appendTo(cols).get();
+    player.createElement('div', 'playlist-scroll-container')
+        .addClasses(['scroll-container', 'playlist-scroll-container'])
+        .appendTo(episodes);
 
     return root;
 }
@@ -623,17 +623,17 @@ export function renderPlaylistPane(
 
     const hasSeason = queue.some(item => typeof item.season === 'number');
 
-    const seasonPane = pane.querySelector<HTMLDivElement>('.seasons-pane');
     const episodePane = pane.querySelector<HTMLDivElement>('.episode-menu');
     const seasonScroll = pane.querySelector<HTMLDivElement>('.playlist-seasons-scroll-container');
     const scroll = pane.querySelector<HTMLDivElement>('.playlist-scroll-container');
+    const title = pane.querySelector<HTMLSpanElement>('.playlist-title');
+
+    if (title) title.textContent = hasSeason ? 'Episodes' : 'Playlist';
 
     if (!scroll || !episodePane) return;
 
     if (!hasSeason) {
         pane.classList.add('playlist-flat');
-        if (seasonPane) seasonPane.style.display = 'none';
-        episodePane.style.flex = '1';
         scroll.replaceChildren();
         queue.forEach((item, idx) => {
             scroll.appendChild(buildPlaylistCard(player, item, idx, idx === curIdx, listen, onPick, opts));
@@ -642,8 +642,6 @@ export function renderPlaylistPane(
     }
 
     pane.classList.remove('playlist-flat');
-    if (seasonPane) seasonPane.style.display = '';
-    episodePane.style.flex = '';
 
     const seasons = Array.from(new Set(queue.map(it => it.season).filter((s): s is number => typeof s === 'number'))).sort((a, b) => a - b);
     const currentItem = queue[curIdx];

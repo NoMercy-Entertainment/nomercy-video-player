@@ -21,9 +21,6 @@ export interface TopBarRefs {
     showInfoText: HTMLSpanElement;
     backBtn: HTMLButtonElement;
     closeBtn: HTMLButtonElement;
-    tvCurrentItemShow: HTMLDivElement;
-    tvCurrentItemEpisode: HTMLDivElement;
-    tvCurrentItemTitle: HTMLDivElement;
 }
 
 
@@ -59,33 +56,16 @@ export function buildTitleBar(player: NMVideoPlayer<any>, parent: HTMLElement): 
         .addClasses(['nm-top-bar-right'])
         .appendTo(bar).get();
 
-    const showInfoText = player.createElement('span', 'nmplayer-show-info')
-        .addClasses(['nm-show-info'])
-        .appendTo(right).get();
-
+    // Mirrors the Android MobileTopBar two-line layout: primary `nm-title`
+    // (show name or movie title) on top, secondary `nm-show-info` (season +
+    // episode + episode title) below — only rendered when non-empty.
     const titleText = player.createElement('span', 'nmplayer-title')
         .addClasses(['nm-title'])
         .appendTo(right).get();
 
-    const tvCurrentItemContainer = player.createElement('div', 'nm-tv-current-item')
-        .addClasses(['nm-tv-current-item'])
+    const showInfoText = player.createElement('span', 'nmplayer-show-info')
+        .addClasses(['nm-show-info'])
         .appendTo(right).get();
-
-    const tvCurrentItemShow = player.createElement('div', 'nm-tv-current-item-show')
-        .addClasses(['nm-tv-current-item-show'])
-        .appendTo(tvCurrentItemContainer).get();
-
-    const tvCurrentItemTitleRow = player.createElement('div', 'nm-tv-current-item-title-row')
-        .addClasses(['nm-tv-current-item-title-row'])
-        .appendTo(tvCurrentItemContainer).get();
-
-    const tvCurrentItemEpisode = player.createElement('div', 'nm-tv-current-item-episode')
-        .addClasses(['nm-tv-current-item-episode'])
-        .appendTo(tvCurrentItemTitleRow).get();
-
-    const tvCurrentItemTitle = player.createElement('div', 'nm-tv-current-item-title')
-        .addClasses(['nm-tv-current-item-title'])
-        .appendTo(tvCurrentItemTitleRow).get();
 
     return {
         bar,
@@ -93,59 +73,50 @@ export function buildTitleBar(player: NMVideoPlayer<any>, parent: HTMLElement): 
         showInfoText,
         backBtn,
         closeBtn,
-        tvCurrentItemShow,
-        tvCurrentItemEpisode,
-        tvCurrentItemTitle,
     };
 }
 
 
 // ── Update helpers ─────────────────────────────────────────────────────────────
 
-/** Sync the title bar text content to the current playlist item. */
+/** Sync the title bar text content to the current playlist item.
+ *  Mirrors `MobileTopBar.kt` (Android): primary line is the show name when the
+ *  item belongs to a series, otherwise the movie title; secondary line is
+ *  `S{n}E{n} • {episodeTitle}` for TV, `Extras E{n} • {episodeTitle}` for
+ *  season-0 specials, blank for movies. */
 export function updateTitleBar(refs: TopBarRefs, item: VideoPlaylistItem | undefined | null): void {
     if (!refs.titleText) return;
 
-    refs.titleText.textContent = item?.title ?? '';
+    const show = item?.show?.trim() ?? '';
+    const rawTitle = item?.title?.trim() ?? '';
+    const hasShow = show.length > 0;
+    const hasEpisode = typeof item?.episode === 'number';
+    const seasonNum = typeof item?.season === 'number' ? item.season : null;
+    const episodeNum = typeof item?.episode === 'number' ? item.episode : null;
 
-    const hasSeries = Boolean(item?.show);
-    const hasEpisode = item?.season !== undefined && item?.episode !== undefined;
+    // Primary: show name for series, otherwise the movie/standalone title.
+    refs.titleText.textContent = hasShow ? show : rawTitle;
 
-    if (hasSeries && hasEpisode) {
-        const s = String(item!.season).padStart(2, '0');
-        const e = String(item!.episode).padStart(2, '0');
-        refs.showInfoText.textContent = `${item!.show}  ·  S${s}E${e}`;
+    // Secondary: episode label + episode title (when applicable).
+    let secondary = '';
+    if (hasShow && hasEpisode) {
+        const epTitle = rawTitle && rawTitle !== show ? rawTitle : '';
+        if (seasonNum !== null && seasonNum > 0) {
+            const label = `S${seasonNum}E${episodeNum}`;
+            secondary = epTitle ? `${label} • ${epTitle}` : label;
+        }
+        else if (seasonNum === 0) {
+            const label = `Extras E${episodeNum}`;
+            secondary = epTitle ? `${label} • ${epTitle}` : label;
+        }
+        else {
+            const label = `A${episodeNum}`;
+            secondary = epTitle ? `${label} • ${epTitle}` : label;
+        }
     }
-    else if (hasSeries) {
-        refs.showInfoText.textContent = item!.show!;
-    }
-    else if (hasEpisode) {
-        const s = String(item!.season ?? 0).padStart(2, '0');
-        const e = String(item!.episode).padStart(2, '0');
-        refs.showInfoText.textContent = `S${s}E${e}`;
-    }
-    else {
-        refs.showInfoText.textContent = '';
-    }
 
-    refs.showInfoText.hidden = !refs.showInfoText.textContent;
-
-    updateTvCurrentItem(refs, item);
-}
-
-/** Sync the TV corner current-item block to the active playlist item. */
-export function updateTvCurrentItem(refs: TopBarRefs, item: VideoPlaylistItem | undefined | null): void {
-    refs.tvCurrentItemShow.textContent = item?.show ?? '';
-
-    let episodeLabel = '';
-    if (item?.season) episodeLabel += `S${item.season}`;
-    if (item?.season && item?.episode) episodeLabel += `:E${item.episode}`;
-    refs.tvCurrentItemEpisode.textContent = episodeLabel;
-
-    const rawTitle = item?.title ?? '';
-    const showName = item?.show ?? '';
-    const strippedTitle = rawTitle.replace(showName, '').trim();
-    refs.tvCurrentItemTitle.textContent = strippedTitle ? `"${strippedTitle}"` : '';
+    refs.showInfoText.textContent = secondary;
+    refs.showInfoText.hidden = secondary.length === 0;
 }
 
 /** Show or hide the back button based on whether the player has 'back' listeners. */

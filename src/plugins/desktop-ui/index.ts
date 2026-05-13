@@ -52,11 +52,10 @@
  * segments with chapter dividers automatically.
  */
 
-import { Plugin } from '@nomercy-entertainment/nomercy-player-core';
+import { Plugin, Translations, translationsFromGlob } from '@nomercy-entertainment/nomercy-player-core';
 import { TheaterState, VolumeState, type NMVideoPlayer, type VideoEventMap, type VideoPlaylistItem } from '@nomercy-entertainment/nomercy-video-player';
 
 import { svgFromIcon, fluentIcons } from './icons';
-import { ensureDesktopUiStyles } from './styles';
 import { loadSpriteSet, lookupCue, type SpriteSet } from './sprite';
 import {
     buildMenuFrame,
@@ -67,12 +66,9 @@ import {
     renderSpeedPane,
     renderSubsPane,
     renderSubtitleSettingsPane,
-    type AudioTrackLite,
     type MenuFrameRefs,
     type MenuRenderState,
-    type QualityLevelLite,
     type SubMenuId,
-    type SubtitleTrackLite,
 } from './menus';
 import {
     fmt,
@@ -83,7 +79,6 @@ import {
     updateChapterHover,
     type SliderBarRefs,
     type ChapterMarkerRef,
-    type ChapterLite,
 } from './progressBar';
 import {
     buildTitleBar,
@@ -220,46 +215,9 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
     static override readonly id: string = 'desktop-ui';
     static override readonly version: string = '2.0.0';
     static override readonly description: string = 'Official desktop UI overlay (v2 rewrite)';
+    static override readonly moduleUrl: string = import.meta.url;
 
-    static override readonly translations = {
-        en: {
-            'plugin.desktop-ui.tooltip.play': 'Play / Pause',
-            'plugin.desktop-ui.tooltip.previous': 'Previous',
-            'plugin.desktop-ui.tooltip.next': 'Next',
-            'plugin.desktop-ui.tooltip.seekBack': 'Seek back 10 s',
-            'plugin.desktop-ui.tooltip.seekForward': 'Seek forward 10 s',
-            'plugin.desktop-ui.tooltip.chapterPrev': 'Previous chapter',
-            'plugin.desktop-ui.tooltip.chapterNext': 'Next chapter',
-            'plugin.desktop-ui.tooltip.mute': 'Mute / Unmute',
-            'plugin.desktop-ui.tooltip.aspectRatio': 'Aspect ratio',
-            'plugin.desktop-ui.tooltip.theater': 'Theater mode',
-            'plugin.desktop-ui.tooltip.pip': 'Picture-in-picture',
-            'plugin.desktop-ui.tooltip.speed': 'Playback speed',
-            'plugin.desktop-ui.tooltip.subtitles': 'Subtitles',
-            'plugin.desktop-ui.tooltip.audio': 'Audio track',
-            'plugin.desktop-ui.tooltip.quality': 'Quality',
-            'plugin.desktop-ui.tooltip.playlist': 'Episodes',
-            'plugin.desktop-ui.tooltip.settings': 'Settings',
-            'plugin.desktop-ui.tooltip.fullscreen': 'Fullscreen',
-            'plugin.desktop-ui.tooltip.nextWithTitle': 'Next: {title}',
-            'plugin.desktop-ui.tooltip.previousWithTitle': 'Previous: {title}',
-            'plugin.desktop-ui.tooltip.nextChapterWithTitle': 'Next chapter: {title}',
-            'plugin.desktop-ui.tooltip.previousChapterWithTitle': 'Previous chapter: {title}',
-            'plugin.desktop-ui.shortcuts.title': 'Keyboard shortcuts',
-            'plugin.desktop-ui.shortcuts.hint': 'Press ? or Esc to close',
-            'plugin.desktop-ui.shortcuts.playPause': 'Play / Pause',
-            'plugin.desktop-ui.shortcuts.seekBackForward': 'Seek −10 s / +10 s',
-            'plugin.desktop-ui.shortcuts.volumeUpDown': 'Volume +10% / −10%',
-            'plugin.desktop-ui.shortcuts.mute': 'Mute / Unmute',
-            'plugin.desktop-ui.shortcuts.fullscreen': 'Fullscreen',
-            'plugin.desktop-ui.shortcuts.theater': 'Theater mode',
-            'plugin.desktop-ui.shortcuts.pip': 'Picture-in-picture',
-            'plugin.desktop-ui.shortcuts.next': 'Next item',
-            'plugin.desktop-ui.shortcuts.previous': 'Previous item',
-            'plugin.desktop-ui.shortcuts.chapters': 'Previous / Next chapter',
-            'plugin.desktop-ui.shortcuts.help': 'Show / hide shortcuts',
-        },
-    };
+	static override readonly translations: Translations = translationsFromGlob('./i18n/*.ts');
 
     // ── top bar ─────────────────────────────────────────────────────
     private topBarRefs!: TopBarRefs;
@@ -341,7 +299,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
     private _resizeObserver: ResizeObserver | null = null;
 
     override use(): void {
-        ensureDesktopUiStyles();
+        this.appendStyles('./styles.css', 'nmplayer-desktop-ui-styles');
         this.buildDom();
         this.wireTooltips();
         this.wireEvents();
@@ -387,7 +345,10 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
 
         this.centerBtn = this.player.createButton('nmplayer-center-btn', fluentIcons.bigPlay.title || 'Play', () => {});
         this.player.addClasses(this.centerBtn, ['nm-center-btn']);
-        this.centerBtn.innerHTML = svgFromIcon(fluentIcons.bigPlay, 32);
+        const centerIconHolder = document.createElement('span');
+        centerIconHolder.className = 'nm-btn-icon';
+        centerIconHolder.innerHTML = svgFromIcon(fluentIcons.bigPlay, 32);
+        this.centerBtn.appendChild(centerIconHolder);
         wrap.appendChild(this.centerBtn);
         return wrap;
     }
@@ -674,7 +635,10 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
         const btn = this.player.createButton(id, icon.title || iconName, () => {});
         this.player.addClasses(btn, ['nm-btn']);
         btn.style.position = 'relative';
-        btn.innerHTML = svgFromIcon(icon);
+        const iconHolder = document.createElement('span');
+        iconHolder.className = 'nm-btn-icon';
+        iconHolder.innerHTML = svgFromIcon(icon);
+        btn.appendChild(iconHolder);
         return btn;
     }
 
@@ -713,7 +677,11 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
     }
 
     private clampTooltip(tip: HTMLSpanElement, btn: HTMLButtonElement): void {
-        const containerRect = this.player.container.getBoundingClientRect();
+        // Use the slider-bar's bounds so tooltips share the same horizontal
+        // clamp as the slider-pop scrubbing preview, instead of bleeding to the
+        // player container's edges.
+        const boundsRect = this.sliderRefs?.sliderBar.getBoundingClientRect()
+            ?? this.player.container.getBoundingClientRect();
         const btnRect = btn.getBoundingClientRect();
         const tipWidth = tip.offsetWidth;
 
@@ -723,17 +691,19 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
         const rawLeft = btnCenter - halfTip;
         const rawRight = btnCenter + halfTip;
 
-        const clampedLeft = Math.max(containerRect.left, rawLeft);
-        const clampedRight = Math.min(containerRect.right, rawRight);
+        const clampedLeft = Math.max(boundsRect.left, rawLeft);
+        const clampedRight = Math.min(boundsRect.right, rawRight);
 
         const actualLeft = rawLeft < clampedLeft
             ? clampedLeft
             : rawRight > clampedRight
-                ? rawRight - tipWidth
+                ? clampedRight - tipWidth
                 : rawLeft;
 
         const shift = actualLeft - btnCenter + halfTip;
         tip.style.transform = `translateX(calc(-50% + ${shift}px))`;
+        // Pull the arrow the other way so it stays anchored over the button center.
+        tip.style.setProperty('--arrow-x', `calc(50% - ${shift}px)`);
     }
 
     private wireTooltips(): void {
@@ -1016,8 +986,8 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
 
         // 'backend:ratechange' is the correct player-level event — emitted by
         // base-player.ts:playbackRate() and carried on the typed event map.
-        this.on('backend:ratechange', (d) => {
-            this.applyRate(d.rate);
+        this.on('backend:ratechange', () => {
+            this.applyRate();
             this.repaintSpeedIfOpen();
         });
 
@@ -1068,8 +1038,8 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
             this.player.container.classList.toggle('theater', d.active);
         });
 
-        this.onVideo('aspectRatio', d => {
-            this.applyAspectRatioIcon(d.value);
+        this.onVideo('aspectRatio', () => {
+            this.applyAspectRatioIcon();
             this.repaintAspectRatioIfOpen();
         });
 
@@ -1212,10 +1182,10 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
     private applyInitialState(): void {
         this.applyVolume(this.player.volume?.() ?? 1);
         this.applyMuted(this.player.volumeState() === VolumeState.MUTED);
-        this.applyRate(this.player.playbackRate?.() ?? 1);
+        this.applyRate();
         this.applySubsIcon();
         this.applyQualityIcon();
-        this.applyAspectRatioIcon(this.player.aspectRatio?.() ?? 'uniform');
+        this.applyAspectRatioIcon();
         this.applyPipIcon(Boolean(document.pictureInPictureElement));
         const theaterActive = this.player.theaterState() === TheaterState.ON;
         this.applyTheaterIcon(theaterActive);
@@ -1232,10 +1202,11 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
     private setPlayingState(playing: boolean): void {
         this.centerWrap.classList.toggle('nm-playing', playing);
         const icon = playing ? fluentIcons.pause : fluentIcons.play;
-        this.playBtn.innerHTML = svgFromIcon(icon);
-        this.centerBtn.innerHTML = svgFromIcon(playing ? fluentIcons.pause : fluentIcons.bigPlay, 32);
-        this.playBtn.title = icon.title || (playing ? 'Pause' : 'Play');
-        this.playBtn.setAttribute('aria-label', playing ? 'Pause' : 'Play');
+        const playIconHolder = this.playBtn.querySelector('.nm-btn-icon') ?? this.playBtn;
+        playIconHolder.innerHTML = svgFromIcon(icon);
+        const centerIconHolder = this.centerBtn.querySelector('.nm-btn-icon') ?? this.centerBtn;
+        centerIconHolder.innerHTML = svgFromIcon(playing ? fluentIcons.pause : fluentIcons.bigPlay, 32);
+        this.playBtn.setAttribute('aria-label', this.t('tooltip.play'));
     }
 
     /**
@@ -1406,15 +1377,15 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
     }
 
     private applyMutedIcon(): void {
-        applyMutedIcon(this.volBtn, this.player);
+        applyMutedIcon(this.volBtn, this.player, this.t.bind(this));
     }
 
-    private applyRate(rate: number): void {
-        applyRate(this.speedBtn, rate);
+    private applyRate(): void {
+        applyRate(this.speedBtn, this.t.bind(this));
     }
 
     private applyQualityIcon(): void {
-        applyQualityIcon(this.qualityBtn, this._userPickedQuality);
+        applyQualityIcon(this.qualityBtn, this.t.bind(this));
     }
 
     private applyFullscreen(): void {
@@ -1422,19 +1393,28 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
     }
 
     private applyTheaterIcon(active: boolean): void {
-        applyTheaterIcon(this.theaterBtn, active);
+        applyTheaterIcon(this.theaterBtn, active, this.t.bind(this));
     }
 
     private applySubsIcon(): void {
-        applySubsIcon(this.subsBtn, this.activeSubtitleIdx);
+        applySubsIcon(this.subsBtn, this.activeSubtitleIdx, this.t.bind(this));
+        this.applyMenuSubsIcon();
+    }
+
+    /** Mirror the bottom-bar subtitle on/off state onto the menu category button. */
+    private applyMenuSubsIcon(): void {
+        const slot = this.menus?.mainButtons?.subtitles?.querySelector('.menu-button-icon-left');
+        if (!slot) return;
+        const on = this.activeSubtitleIdx !== null && this.activeSubtitleIdx !== -1;
+        slot.innerHTML = svgFromIcon(on ? fluentIcons.subtitles : fluentIcons.subtitlesOff);
     }
 
     private applyPipIcon(active: boolean): void {
-        applyPipIcon(this.pipBtn, active);
+        applyPipIcon(this.pipBtn, active, this.t.bind(this));
     }
 
-    private applyAspectRatioIcon(value: 'uniform' | 'fill' | 'exactfit' | 'none'): void {
-        applyAspectRatioIcon(this.aspectRatioBtn, value);
+    private applyAspectRatioIcon(): void {
+        applyAspectRatioIcon(this.aspectRatioBtn, this.t.bind(this));
     }
 
     private refreshCapabilityVisibility(): void {
@@ -1579,7 +1559,10 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
     }
 
     private menuState(): MenuRenderState {
-        this.syncActiveIndexes();
+        // `syncActiveIndexes` resets indexes to "default track" which would
+        // overwrite the user's pick every time the pane repaints. Active indexes
+        // are kept current by the `subtitle` / `audioTrack` / `level-switched`
+        // event handlers — read them as-is here.
         return {
             subtitleIdx: this.activeSubtitleIdx,
             audioIdx: this.activeAudioIdx,
