@@ -135,6 +135,13 @@ export interface IVideoBackend {
 	qualityLevels(): QualityLevel[];
 	qualityLevels(opts: { includeUnsupported: true }): QualityLevel[];
 	setQuality(idx: number | 'auto'): void;
+	/**
+	 * The level index the backend is actually playing right now. Returns -1
+	 * when no HLS source is bound, when no level has been selected yet, or
+	 * when the backend isn't level-aware. UI plugins read this to surface the
+	 * playing quality without waiting for the next `level-switched` event.
+	 */
+	currentLevel(): number;
 
 	// State
 	state(): BackendState;

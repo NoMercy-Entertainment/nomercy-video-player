@@ -1430,11 +1430,28 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
      * available (before `level-switched` lands, or non-HLS sources).
      */
     private playingQualityLabel(): string | undefined {
-        if (this._playingQualityIdx === null) return undefined;
+        const idx = this.resolvePlayingQualityIdx();
+        if (idx === null) return undefined;
         const levels = this.player.qualityLevels?.() ?? [];
-        const level = levels[this._playingQualityIdx];
+        const level = levels[idx];
         if (!level) return undefined;
         return level.label ?? (level.height ? `${level.height}p` : undefined);
+    }
+
+    /**
+     * The level index the backend is actually playing. Prefers the cached
+     * `_playingQualityIdx` (updated on every `level-switched` event), and
+     * falls back to peeking the backend's `currentLevel()` for the case
+     * where the user opens the menu before the first `level-switched` fires
+     * (HLS doesn't always emit one before the first fragment lands).
+     * Returns null when no level is known.
+     */
+    private resolvePlayingQualityIdx(): number | null {
+        if (this._playingQualityIdx !== null) return this._playingQualityIdx;
+        const backend = this.player.backend?.();
+        const idx = backend?.currentLevel?.();
+        if (typeof idx === 'number' && idx >= 0) return idx;
+        return null;
     }
 
     private applyFullscreen(): void {
@@ -1640,7 +1657,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
             subtitleIdx: this.activeSubtitleIdx,
             audioIdx: this.activeAudioIdx,
             qualityIdx: this.activeQualityIdx,
-            playingQualityIdx: this._playingQualityIdx,
+            playingQualityIdx: this.resolvePlayingQualityIdx(),
         };
     }
 

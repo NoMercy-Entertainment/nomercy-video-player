@@ -7,7 +7,7 @@ import type { BackendEventPayload, BackendLoaderState, BackendState, IVideoBacke
 const HLS_EXT_RE = /\.m3u8(\?|$)/i;
 
 interface HlsLevel {
-	attrs?: { CODECS?: string };
+	attrs?: { CODECS?: string; 'VIDEO-RANGE'?: string };
 	bitrate?: number;
 	height?: number;
 	width?: number;
@@ -598,6 +598,8 @@ export class Html5VideoBackend extends EventEmitter<BackendEventPayload> impleme
 		const all: QL[] = this.hls.levels.map((level, index) => {
 			const codec: string = level.attrs?.CODECS ?? '';
 			const cached = this._capabilityCache.get(codec);
+			const videoRange: string = (level.attrs?.['VIDEO-RANGE'] ?? '').toUpperCase();
+			const dynamicRange: 'sdr' | 'hdr' = (videoRange === 'PQ' || videoRange === 'HLG') ? 'hdr' : 'sdr';
 			return {
 				bitrate: level.bitrate ?? 0,
 				height: level.height ?? undefined,
@@ -605,6 +607,7 @@ export class Html5VideoBackend extends EventEmitter<BackendEventPayload> impleme
 				label: level.name ?? `${level.height ?? '?'}p`,
 				index,
 				supported: cached ?? true,
+				dynamicRange,
 			};
 		});
 
@@ -650,6 +653,10 @@ export class Html5VideoBackend extends EventEmitter<BackendEventPayload> impleme
 	setQuality(idx: number | 'auto'): void {
 		if (!this.hls) return;
 		this.hls.currentLevel = idx === 'auto' ? -1 : idx;
+	}
+
+	currentLevel(): number {
+		return this.hls?.currentLevel ?? -1;
 	}
 
 	// ── State ──
