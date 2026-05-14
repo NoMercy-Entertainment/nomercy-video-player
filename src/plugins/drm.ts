@@ -99,20 +99,29 @@ export class DrmPlugin extends Plugin<NMVideoPlayer<any>, DrmOptions, DrmEvents>
 			: challenge;
 
 		// When customSignRequest is provided, build a Request, run it through
-		// the signer, and fetch via the auth-aware kit fetch helper using the
-		// signed URL. The signer can mutate headers via its returned Request.
+		// the signer, and forward the signer's URL + headers to the kit fetch
+		// helper. License servers expect POST with the challenge as the body.
 		if (this.opts?.customSignRequest && typeof Request !== 'undefined') {
 			const req = new Request(url, { method: 'POST', body: transformedChallenge as BodyInit });
 			const signed = await this.opts.customSignRequest(req);
-			const raw = await this.fetch<string>(signed.url);
-			const buf = new TextEncoder().encode(raw).buffer as ArrayBuffer;
+			const signedHeaders: Record<string, string> = {};
+			signed.headers.forEach((value, name) => { signedHeaders[name] = value; });
+			const buf = await this.fetch<ArrayBuffer>(signed.url, {
+				responseType: 'arrayBuffer',
+				method: 'POST',
+				body: transformedChallenge as BodyInit,
+				headers: signedHeaders,
+			});
 			return this.opts?.transformLicenseResponse
 				? await this.opts.transformLicenseResponse(buf)
 				: buf;
 		}
 
-		const raw = await this.fetch<string>(url);
-		const buf = new TextEncoder().encode(raw).buffer as ArrayBuffer;
+		const buf = await this.fetch<ArrayBuffer>(url, {
+			responseType: 'arrayBuffer',
+			method: 'POST',
+			body: transformedChallenge as BodyInit,
+		});
 		return this.opts?.transformLicenseResponse
 			? await this.opts.transformLicenseResponse(buf)
 			: buf;
@@ -131,7 +140,9 @@ export class DrmPlugin extends Plugin<NMVideoPlayer<any>, DrmOptions, DrmEvents>
 			requestMediaKeySystemAccess?: (keySystem: string, configs: MediaKeySystemConfiguration[]) => Promise<unknown>;
 		};
 		if (typeof nav.requestMediaKeySystemAccess !== 'function') {
-			this.emit('unsupported', { reason: 'requestMediaKeySystemAccess unavailable at handshake time' });
+			this.emit('unsupported', { 
+				reason: 'requestMediaKeySystemAccess unavailable at handshake time' 
+			});
 			return;
 		}
 		try {
@@ -145,7 +156,12 @@ export class DrmPlugin extends Plugin<NMVideoPlayer<any>, DrmOptions, DrmEvents>
 			}]);
 		}
 		catch (err) {
-			this.emit('key:error', { sessionId: 'init', error: err instanceof Error ? err : new Error(String(err)) });
+			this.emit('key:error', { 
+				sessionId: 'init', 
+				error: err instanceof Error 
+					? err 
+					: new Error(String(err)) 
+			});
 		}
 	}
 }
