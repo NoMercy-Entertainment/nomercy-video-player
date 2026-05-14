@@ -104,14 +104,14 @@ export class DrmPlugin extends Plugin<NMVideoPlayer<any>, DrmOptions, DrmEvents>
 		if (this.opts?.customSignRequest && typeof Request !== 'undefined') {
 			const req = new Request(url, { method: 'POST', body: transformedChallenge as BodyInit });
 			const signed = await this.opts.customSignRequest(req);
-			const raw = await this.fetch<string>(signed.url, r => r);
+			const raw = await this.fetch<string>(signed.url);
 			const buf = new TextEncoder().encode(raw).buffer as ArrayBuffer;
 			return this.opts?.transformLicenseResponse
 				? await this.opts.transformLicenseResponse(buf)
 				: buf;
 		}
 
-		const raw = await this.fetch<string>(url, r => r);
+		const raw = await this.fetch<string>(url);
 		const buf = new TextEncoder().encode(raw).buffer as ArrayBuffer;
 		return this.opts?.transformLicenseResponse
 			? await this.opts.transformLicenseResponse(buf)

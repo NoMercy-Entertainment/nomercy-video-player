@@ -62,6 +62,13 @@ export interface OctopusOptions {
  *
  * Consumers can also call `subtitle(url)` directly for ASS files that
  * aren't part of the playlist item's `subtitles` array.
+ *
+ * Security: all network I/O (subtitle body + font binaries) goes through
+ * `this.fetch` (kit auth pipeline). The libass worker receives pre-fetched
+ * content as blob URLs / inline strings — it never performs authenticated XHR.
+ * TODO(security): strip the auth XHR paths from the worker binaries
+ * (`public/subtitles-octopus-worker*.js`) in a follow-up to close the
+ * remaining surface in the vendored WASM bundle.
  */
 export class OctopusPlugin extends Plugin<NMVideoPlayer<any>, OctopusOptions> {
 	static override readonly id: string = 'octopus';
@@ -70,8 +77,10 @@ export class OctopusPlugin extends Plugin<NMVideoPlayer<any>, OctopusOptions> {
 
 	private instance: NMSubtitleOctopus | null = null;
 	private currentLoadedUrl: string | null = null;
-	/** Memoised font URL list for the active playlist item. Null = not yet fetched. */
-	private _fontsForCurrent: string[] | null = null;
+	/** Memoised font name→blobUrl map for the active playlist item. Null = not yet fetched. */
+	private _availableFontsForCurrent: Record<string, string> | null = null;
+	/** Blob URLs created during load — revoked in destroy() to avoid memory leaks. */
+	private ownedBlobs: string[] = [];
 
 	/** Wires `subtitle` and `current` listeners to load ASS/SSA tracks into the libass renderer. */
 	override use(): void {
@@ -79,11 +88,9 @@ export class OctopusPlugin extends Plugin<NMVideoPlayer<any>, OctopusOptions> {
 			void this.applyActive(data?.track);
 		});
 
-		// New playlist item — clear the cached URL + fonts list so the next
-		// `subtitle` event re-resolves against the new item's track list.
 		this.on('current', () => {
 			this.destroy();
-			this._fontsForCurrent = null;
+			this._availableFontsForCurrent = null;
 		});
 
 		this.lifecycle.addCleanup(() => this.destroy());
@@ -126,9 +133,11 @@ export class OctopusPlugin extends Plugin<NMVideoPlayer<any>, OctopusOptions> {
 	fonts(urls: string[]): Promise<void>;
 	fonts(urls?: string[]): readonly string[] | Promise<void> {
 		if (urls === undefined)
-			return this._fontsForCurrent ?? this.opts?.fonts ?? [];
+			return Object.keys(this._availableFontsForCurrent ?? {}).length > 0
+				? Object.values(this._availableFontsForCurrent ?? {})
+				: (this.opts?.fonts ?? []);
 		this.opts = mergeConfig<OctopusOptions>(this.opts ?? {}, { fonts: urls });
-		this._fontsForCurrent = null;
+		this._availableFontsForCurrent = null;
 		const url = this.currentLoadedUrl;
 		if (url) {
 			this.destroy();
@@ -154,12 +163,8 @@ export class OctopusPlugin extends Plugin<NMVideoPlayer<any>, OctopusOptions> {
 			return;
 		}
 
-		// Resolver gives us a parsed URL with `.ext` already stripped of
-		// query/fragment — no string fiddling needed to gate on file type.
 		const resolved = await this.resolveUrl(url, 'subtitle');
 		if (resolved.ext !== 'ass' && resolved.ext !== 'ssa') {
-			// Native textTracks handle SRT/VTT; tear down libass and let the
-			// browser take over.
 			this.destroy();
 			return;
 		}
@@ -168,9 +173,6 @@ export class OctopusPlugin extends Plugin<NMVideoPlayer<any>, OctopusOptions> {
 	}
 
 	private resolveTrackUrl(track: string | number): string | null {
-		// Use the player's merged subtitles() list — backend HLS-managed +
-		// sidecar .ass / .vtt tracks. `current().subtitles` doesn't exist;
-		// the kit derives the list from the item's `tracks[]` array.
 		const list = this.player.subtitles?.() ?? [];
 
 		if (typeof track === 'number') {
@@ -182,38 +184,38 @@ export class OctopusPlugin extends Plugin<NMVideoPlayer<any>, OctopusOptions> {
 	}
 
 	/**
-	 * Resolve the active playlist item's font URL list.
+	 * Resolve the active playlist item's font name→blobUrl map.
 	 *
-	 * Mirrors v1's behaviour: the item carries a `fonts` track whose `file`
-	 * points at a JSON manifest of `[{ file, mimeType }]`; each `file` is
-	 * resolved relative to the manifest's directory. Memoised per item — the
-	 * `current` event resets the cache.
+	 * Fetches the `fonts.json` manifest via `this.fetch` (kit auth pipeline),
+	 * then fetches each font binary as an ArrayBuffer and creates a blob URL.
+	 * Blob URLs are tracked in `ownedBlobs` and revoked when the renderer
+	 * is torn down. Memoised per item — the `current` event resets the cache.
 	 */
-	private async resolveFontsForCurrent(): Promise<string[]> {
-		if (this._fontsForCurrent) return this._fontsForCurrent;
+	private async resolveFontsForCurrent(): Promise<Record<string, string>> {
+		if (this._availableFontsForCurrent) return this._availableFontsForCurrent;
 
 		const item = this.player.current?.();
 		const tracks = Array.isArray(item?.tracks) ? item!.tracks! : [];
 		const fontsTrack = tracks.find((t: { kind?: string; file?: string }) => t?.kind === 'fonts');
 		const manifestUrl = fontsTrack?.file;
 
-		// No fonts track on this item — fall back to the plugin-level static fonts.
 		if (!manifestUrl) {
-			const fallback = this.opts?.fonts ?? [];
-			this._fontsForCurrent = [...fallback];
-			return this._fontsForCurrent;
+			const fallbackMap = await this.buildFontMap(this.opts?.fonts ?? []);
+			this._availableFontsForCurrent = fallbackMap;
+			return this._availableFontsForCurrent;
 		}
 
 		try {
 			const resolved = await this.resolveUrl(manifestUrl, 'font');
-			const body = await this.fetch<unknown>(resolved.href, raw => JSON.parse(raw));
-			const rawEntries: unknown[] = Array.isArray(body) ? body : [];
+			const rawEntries = await this.fetch<FontManifestEntry[]>(resolved.href, { responseType: 'json' });
+			const validEntries: FontManifestEntry[] = Array.isArray(rawEntries)
+				? rawEntries.filter(isFontEntry)
+				: [];
+
 			const baseFolder = manifestUrl.replace(/\/[^/]*$/u, '');
-			const urls = rawEntries.flatMap(entry => {
-				const file = isFontEntry(entry) ? entry.file : null;
-				return file ? [`${baseFolder}/${file}`] : [];
-			});
-			this._fontsForCurrent = [...urls, ...(this.opts?.fonts ?? [])];
+			const manifestFontUrls = validEntries.map(entry => `${baseFolder}/${entry.file}`);
+			const allUrls = [...manifestFontUrls, ...(this.opts?.fonts ?? [])];
+			this._availableFontsForCurrent = await this.buildFontMap(allUrls);
 		}
 		catch (error) {
 			this.report({
@@ -222,9 +224,43 @@ export class OctopusPlugin extends Plugin<NMVideoPlayer<any>, OctopusOptions> {
 				context: { manifestUrl },
 				cause: error,
 			});
-			this._fontsForCurrent = [...(this.opts?.fonts ?? [])];
+			this._availableFontsForCurrent = await this.buildFontMap(this.opts?.fonts ?? []);
 		}
-		return this._fontsForCurrent;
+
+		return this._availableFontsForCurrent;
+	}
+
+	/**
+	 * Fetch each font URL as an ArrayBuffer, create a blob URL, and return a
+	 * libass name→blobUrl map. Font name is derived from the file path basename
+	 * minus extension, lowercased — matching v1's convention and libass expectations.
+	 */
+	private async buildFontMap(urls: string[]): Promise<Record<string, string>> {
+		const entries = await Promise.allSettled(
+			urls.map(async (fontUrl) => {
+				const buffer = await this.fetch<ArrayBuffer>(fontUrl, { responseType: 'arrayBuffer' });
+				const blob = new Blob([buffer]);
+				const blobUrl = URL.createObjectURL(blob);
+				this.ownedBlobs.push(blobUrl);
+				const name = this.fontNameFromUrl(fontUrl);
+				return [name, blobUrl] as [string, string];
+			}),
+		);
+
+		const map: Record<string, string> = {};
+		for (const result of entries) {
+			if (result.status === 'fulfilled') {
+				const [name, blobUrl] = result.value;
+				map[name] = blobUrl;
+			}
+		}
+		return map;
+	}
+
+	private fontNameFromUrl(url: string): string {
+		const pathname = url.split('?')[0] ?? url;
+		const basename = pathname.split('/').at(-1) ?? pathname;
+		return basename.replace(/\.[^.]+$/u, '').toLowerCase();
 	}
 
 	private async load(url: string, prefetched?: ResolvedUrl): Promise<void> {
@@ -236,26 +272,17 @@ export class OctopusPlugin extends Plugin<NMVideoPlayer<any>, OctopusOptions> {
 		try {
 			if (this.currentLoadedUrl !== url) return;
 
-			// Push subtitle + font URLs through the player's URL resolver so
-			// query-string / signed-URL schemes reach libass intact. Reuse a
-			// prefetched resolved form when applyActive() already paid for it.
 			const subResolved = prefetched ?? (await this.resolveUrl(url, 'subtitle'));
-			const subUrl = subResolved.href;
-			const fontUrls = await this.resolveFontsForCurrent();
-			const fontResolveds = await Promise.all(
-				fontUrls.map(f => this.resolveUrl(f, 'font')),
-			);
-			const fontFiles = fontResolveds.map(r => r.href);
-			const accessToken = await this.resolveAccessToken();
+			const subContent = await this.fetch(subResolved.href);
+			const availableFonts = await this.resolveFontsForCurrent();
 
 			const videoEl = this.player.videoElement;
 			if (!videoEl) return;
 
 			const opts: NMOctopusOptions = {
 				video: videoEl,
-				trackUrl: subUrl,
-				fonts: fontFiles,
-				accessToken,
+				trackContent: subContent,
+				availableFonts,
 				targetFps: this.opts?.targetFps,
 				renderMode: this.opts?.renderMode,
 				lazyFileLoading: this.opts?.lazyFileLoading,
@@ -294,6 +321,8 @@ export class OctopusPlugin extends Plugin<NMVideoPlayer<any>, OctopusOptions> {
 
 	private destroy(): void {
 		this.currentLoadedUrl = null;
+		this.revokeOwnedBlobs();
+		this._availableFontsForCurrent = null;
 		const inst = this.instance;
 		this.instance = null;
 		if (!inst) return;
@@ -305,25 +334,16 @@ export class OctopusPlugin extends Plugin<NMVideoPlayer<any>, OctopusOptions> {
 		}
 	}
 
-	/**
-	 * Resolve the live bearer token. Reads through `player.auth()` so token
-	 * refreshes (`auth()` setter / `refreshAuth`) propagate — reading
-	 * `options.auth` would freeze on the setup-time value.
-	 */
-	private async resolveAccessToken(): Promise<string | undefined> {
-		const v = this.player.auth?.()?.bearerToken;
-		if (!v) return undefined;
-		if (typeof v === 'string') return v;
-		if (typeof v === 'function') {
+	private revokeOwnedBlobs(): void {
+		for (const blobUrl of this.ownedBlobs) {
 			try {
-				const out = (v as () => string | Promise<string>)();
-				return out instanceof Promise ? await out : out;
+				URL.revokeObjectURL(blobUrl);
 			}
 			catch {
-				return undefined;
+				// Defensive — invalid blob URL should not propagate.
 			}
 		}
-		return undefined;
+		this.ownedBlobs = [];
 	}
 }
 

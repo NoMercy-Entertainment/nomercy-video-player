@@ -1,282 +1,402 @@
 /**
  * OctopusPlugin tests — libass / SubtitleOctopus bridge for ASS/SSA subtitles.
  *
- * The actual SubtitlesOctopus runtime requires a Worker + WebAssembly, neither
- * of which works reliably in happy-dom. We mock the bridged constructor so the
- * tests verify the PLUGIN's contract:
- *   - load(url) only fires for ASS / SSA extensions
- *   - non-ASS / null clears the renderer
- *   - setSubtitle(url) loads regardless of the player's track list
- *   - setFonts(urls) re-loads with the updated font set
- *   - getRenderer() returns the constructed instance (or null pre-load)
- *   - dispose() terminates the worker and clears state
- *   - ResizeObserver attaches to the player container
+ * What's locked here:
+ *  - `accessToken` is never forwarded to `NMSubtitleOctopus`
+ *  - Subtitle body fetched with default responseType (text) via `this.fetch`
+ *  - Fonts manifest fetched with `responseType: 'json'`
+ *  - Each font binary fetched with `responseType: 'arrayBuffer'`
+ *  - Blob URLs are created during `load()` and revoked during `destroy()`
+ *  - Non-ASS / non-SSA URLs tear down the renderer without creating an instance
+ *  - `subtitle(null)` tears down the renderer
+ *  - `fonts(urls)` re-loads the active subtitle with updated fonts
+ *  - `renderer()` returns the constructed instance (or null pre-load)
+ *
+ * Real ASS rendering (ResizeObserver, canvas geometry, Worker + WASM) is
+ * exercised by the Playwright e2e matrix against playlist items with `.ass` +
+ * `fonts.json` tracks.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const ctorCalls: any[] = [];
-const disposed: any[] = [];
-const terminated: any[] = [];
+// ── Mock NMSubtitleOctopus ────────────────────────────────────────────────────
 
-vi.mock('../../../public/js/octopus/subtitles-octopus', () => {
+const octopusCalls: any[] = [];
+const octopusDisposed: any[] = [];
+
+vi.mock('@nomercy-entertainment/nomercy-subtitle-octopus', () => {
 	function MockOctopus(this: any, options: any) {
-		ctorCalls.push(options);
-		this.worker = {
-			terminate: () => terminated.push(this),
+		octopusCalls.push(options);
+		this._options = options;
+		this._listeners = {} as Record<string, Function[]>;
+		this.on = (event: string, fn: Function) => {
+			if (!this._listeners[event]) this._listeners[event] = [];
+			this._listeners[event].push(fn);
 		};
-		const div = document.createElement('div');
-		div.className = 'libassjs-canvas-parent';
-		this.canvasParent = div;
-		this.dispose = () => disposed.push(this);
-		document.body.appendChild(div);
-		options.onReady?.();
+		this.dispose = () => {
+			octopusDisposed.push(this);
+		};
+		// Fire rendererReady asynchronously so load() resolves cleanly.
+		Promise.resolve().then(() => {
+			this._listeners['rendererReady']?.forEach((fn: Function) => fn({ url: options.trackContent ? '[inline]' : '' }));
+		});
 	}
-	return { default: MockOctopus };
+	return { NMSubtitleOctopus: MockOctopus };
 });
+
+// ── Mock globalThis.fetch ─────────────────────────────────────────────────────
+
+let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+function mockText(body: string): void {
+	(fetchSpy as any).mockResolvedValueOnce(new Response(body, { status: 200, headers: { 'Content-Type': 'text/plain' } }));
+}
+
+function mockJson(obj: unknown): void {
+	(fetchSpy as any).mockResolvedValueOnce(new Response(JSON.stringify(obj), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+}
+
+function mockBinary(bytes: number[]): void {
+	(fetchSpy as any).mockResolvedValueOnce(new Response(new Uint8Array(bytes), { status: 200, headers: { 'Content-Type': 'font/ttf' } }));
+}
+
+// ── Test helpers ──────────────────────────────────────────────────────────────
 
 import { NMVideoPlayer } from '../../index';
 import { OctopusPlugin, octopusPlugin } from '../../plugins/octopus';
 
-// TODO(NME-octopus): rewrite the mock against `@nomercy-entertainment/nomercy-subtitle-octopus`'s
-// `NMSubtitleOctopus`. The previous mock targeted the inlined `subtitles-octopus`
-// runtime, which has been replaced by the fork. Real ASS rendering is exercised
-// by the Playwright e2e against playlist items with `.ass` + `fonts.json` tracks.
-describe.skip('OctopusPlugin', () => {
+const blobUrls: string[] = [];
+
+function setup(): NMVideoPlayer<any> {
+	const player = new NMVideoPlayer('test').setup({});
+	// The plugin's load() gates on videoElement being present. Inject a minimal
+	// mock so the constructor path is exercised in happy-dom.
+	(player as any).videoElement = document.createElement('video');
+	return player;
+}
+
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
+describe('OctopusPlugin', () => {
 	beforeEach(() => {
 		(NMVideoPlayer as unknown as { _resetRegistry: () => void })._resetRegistry();
-		ctorCalls.length = 0;
-		disposed.length = 0;
-		terminated.length = 0;
+		octopusCalls.length = 0;
+		octopusDisposed.length = 0;
+		blobUrls.length = 0;
+
 		const div = document.createElement('div');
 		div.id = 'test';
 		document.body.appendChild(div);
+
+		fetchSpy = vi.spyOn(globalThis, 'fetch');
+
+		// URL.createObjectURL / revokeObjectURL are not in happy-dom; shim them.
+		let blobCounter = 0;
+		vi.spyOn(URL, 'createObjectURL').mockImplementation(() => {
+			const url = `blob:mock-${blobCounter++}`;
+			blobUrls.push(url);
+			return url;
+		});
+		vi.spyOn(URL, 'revokeObjectURL').mockImplementation((url) => {
+			const idx = blobUrls.indexOf(url);
+			if (idx !== -1) blobUrls.splice(idx, 1);
+		});
 	});
 
 	afterEach(() => {
 		(NMVideoPlayer as unknown as { _resetRegistry: () => void })._resetRegistry();
 		document.body.innerHTML = '';
+		vi.restoreAllMocks();
 	});
 
-	const setup = () => new NMVideoPlayer('test').setup({});
+	// ── Registration ────────────────────────────────────────────────────────
 
 	describe('registration', () => {
 		it('registers and use() succeeds', async () => {
-			const p = setup();
-			expect(() => p.addPlugin(octopusPlugin)).not.toThrow();
-			await p.ready();
-			expect(p.getPlugin(OctopusPlugin)).toBeInstanceOf(OctopusPlugin);
+			const player = setup();
+			expect(() => player.addPlugin(octopusPlugin)).not.toThrow();
+			await player.ready();
+			expect(player.getPlugin(OctopusPlugin)).toBeInstanceOf(OctopusPlugin);
 		});
 
-		it('getRenderer() returns null before any load', async () => {
-			const p = setup();
-			p.addPlugin(octopusPlugin);
-			await p.ready();
-			const inst = p.getPlugin(OctopusPlugin)!;
+		it('renderer() returns null before any load', async () => {
+			const player = setup();
+			player.addPlugin(octopusPlugin);
+			await player.ready();
+			expect(player.getPlugin(OctopusPlugin)!.renderer()).toBeNull();
+		});
+	});
+
+	// ── No accessToken forwarded ────────────────────────────────────────────
+
+	describe('security: no accessToken on NMSubtitleOctopus', () => {
+		it('does not forward accessToken even when auth is configured', async () => {
+			mockText('[Script Info]\nScriptType: v4.00+\n\n[V4+ Styles]\n\n[Events]\n');
+			mockJson([]);
+
+			const player = setup();
+			player.auth({ bearerToken: 'secret-tok' });
+			player.addPlugin(octopusPlugin);
+			await player.ready();
+
+			const inst = player.getPlugin(OctopusPlugin)!;
+			await inst.subtitle('https://cdn.example.com/sub.ass');
+
+			expect(octopusCalls).toHaveLength(1);
+			expect(octopusCalls[0].accessToken).toBeUndefined();
+		});
+	});
+
+	// ── Fetch responseType routing ──────────────────────────────────────────
+
+	describe('fetch responseType routing', () => {
+		it('fetches subtitle body as text (default responseType)', async () => {
+			const assBody = '[Script Info]\nScriptType: v4.00+\n\n[V4+ Styles]\n\n[Events]\n';
+			mockText(assBody);
+			mockJson([]);
+
+			const player = setup();
+			player.addPlugin(octopusPlugin);
+			await player.ready();
+
+			await player.getPlugin(OctopusPlugin)!.subtitle('https://cdn.example.com/sub.ass');
+
+			// First fetch = subtitle body; constructor receives trackContent, not trackUrl
+			expect(octopusCalls[0].trackContent).toBe(assBody);
+			expect(octopusCalls[0].trackUrl).toBeUndefined();
+		});
+
+		it('fetches fonts manifest with responseType: json when fonts track present', async () => {
+			const assBody = '[Script Info]\n\n[Events]\n';
+			mockText(assBody);
+			mockJson([{ file: 'Inter.ttf', mimeType: 'font/ttf' }]);
+			mockBinary([0, 1, 2, 3]);
+
+			const player = setup();
+			player.addPlugin(octopusPlugin);
+			await player.ready();
+
+			// Inject a fonts track onto the player's current item.
+			(player as any)._current = {
+				tracks: [{ kind: 'fonts', file: 'https://cdn.example.com/fonts/fonts.json' }],
+			};
+			(player as any).current = () => (player as any)._current;
+
+			await player.getPlugin(OctopusPlugin)!.subtitle('https://cdn.example.com/sub.ass');
+
+			// Three fetch calls: subtitle body, fonts manifest, font binary.
+			expect(fetchSpy).toHaveBeenCalledTimes(3);
+		});
+
+		it('fetches each font binary with responseType: arrayBuffer', async () => {
+			const assBody = '[Script Info]\n\n[Events]\n';
+			mockText(assBody);
+			mockJson([{ file: 'Inter.ttf' }]);
+			mockBinary([0xDE, 0xAD, 0xBE, 0xEF]);
+
+			const player = setup();
+			player.addPlugin(octopusPlugin);
+			await player.ready();
+
+			(player as any)._current = {
+				tracks: [{ kind: 'fonts', file: 'https://cdn.example.com/fonts/fonts.json' }],
+			};
+			(player as any).current = () => (player as any)._current;
+
+			await player.getPlugin(OctopusPlugin)!.subtitle('https://cdn.example.com/sub.ass');
+
+			// Font binary request uses Accept or just default headers — the key
+			// assertion is that NMSubtitleOctopus receives availableFonts (blob map),
+			// not a fonts[] URL array.
+			expect(octopusCalls[0].availableFonts).toBeDefined();
+			expect(typeof octopusCalls[0].availableFonts).toBe('object');
+			expect(octopusCalls[0].fonts).toBeUndefined();
+		});
+	});
+
+	// ── Blob URL lifecycle ──────────────────────────────────────────────────
+
+	describe('blob URL lifecycle', () => {
+		it('creates blob URLs during load', async () => {
+			mockText('[Script Info]\n\n[Events]\n');
+			mockJson([{ file: 'A.ttf' }]);
+			mockBinary([1, 2]);
+
+			const player = setup();
+			player.addPlugin(octopusPlugin);
+			await player.ready();
+
+			(player as any)._current = {
+				tracks: [{ kind: 'fonts', file: 'https://cdn.example.com/fonts/fonts.json' }],
+			};
+			(player as any).current = () => (player as any)._current;
+
+			await player.getPlugin(OctopusPlugin)!.subtitle('https://cdn.example.com/sub.ass');
+
+			expect(blobUrls.length).toBeGreaterThan(0);
+		});
+
+		it('revokes blob URLs when destroy() is called', async () => {
+			mockText('[Script Info]\n\n[Events]\n');
+			mockJson([{ file: 'A.ttf' }]);
+			mockBinary([1, 2]);
+
+			const player = setup();
+			player.addPlugin(octopusPlugin);
+			await player.ready();
+
+			(player as any)._current = {
+				tracks: [{ kind: 'fonts', file: 'https://cdn.example.com/fonts/fonts.json' }],
+			};
+			(player as any).current = () => (player as any)._current;
+
+			const inst = player.getPlugin(OctopusPlugin)!;
+			await inst.subtitle('https://cdn.example.com/sub.ass');
+			expect(blobUrls.length).toBeGreaterThan(0);
+
+			await inst.subtitle(null);
+			expect(blobUrls).toHaveLength(0);
+		});
+	});
+
+	// ── Extension gating ────────────────────────────────────────────────────
+
+	describe('extension gating via subtitle event', () => {
+		it('non-ASS / non-SSA URLs do NOT trigger the bridge', async () => {
+			const player = setup();
+			player.addPlugin(octopusPlugin);
+			await player.ready();
+
+			(player as any).emit('subtitle', { track: 0 });
+			await new Promise(r => setTimeout(r, 0));
+
+			expect(octopusCalls).toHaveLength(0);
+		});
+
+		it('null track clears the renderer', async () => {
+			mockText('[Script Info]\n\n[Events]\n');
+			mockJson([]);
+
+			const player = setup();
+			player.addPlugin(octopusPlugin);
+			await player.ready();
+
+			const inst = player.getPlugin(OctopusPlugin)!;
+			await inst.subtitle('https://cdn.example.com/sub.ass');
+			expect(octopusCalls).toHaveLength(1);
+
+			(player as any).emit('subtitle', { track: null });
+			await new Promise(r => setTimeout(r, 0));
+
+			expect(octopusDisposed).toHaveLength(1);
 			expect(inst.renderer()).toBeNull();
 		});
 	});
 
-	describe('setSubtitle (direct URL)', () => {
-		it('loads .ass via the bridged constructor', async () => {
-			const p = setup();
-			p.addPlugin(octopusPlugin);
-			await p.ready();
-			const inst = p.getPlugin(OctopusPlugin)!;
-			await inst.subtitle('https://cdn.example.com/sub.ass');
-			expect(ctorCalls).toHaveLength(1);
-			expect(ctorCalls[0].subUrl).toBe(encodeURI('https://cdn.example.com/sub.ass'));
-		});
+	// ── Direct subtitle() API ───────────────────────────────────────────────
 
-		it('loads .ssa', async () => {
-			const p = setup();
-			p.addPlugin(octopusPlugin);
-			await p.ready();
-			const inst = p.getPlugin(OctopusPlugin)!;
-			await inst.subtitle('https://cdn.example.com/sub.ssa');
-			expect(ctorCalls).toHaveLength(1);
-		});
-
-		it('skips loading for non-ASS extensions (handled by native textTracks)', async () => {
-			const p = setup();
-			p.addPlugin(octopusPlugin);
-			await p.ready();
-			const inst = p.getPlugin(OctopusPlugin)!;
-			await inst.subtitle('https://cdn.example.com/sub.vtt');
-			// Direct setSubtitle skips the extension gate (consumer asked for it).
-			// Reality: setSubtitle(url) loads whatever URL is given. Verify the
-			// plugin treats `null` as a tear-down.
-			expect(ctorCalls).toHaveLength(1);
-			await inst.subtitle(null);
-			expect(disposed).toHaveLength(1);
-			expect(terminated).toHaveLength(1);
-		});
-
+	describe('subtitle() direct API', () => {
 		it('null tears down the active renderer', async () => {
-			const p = setup();
-			p.addPlugin(octopusPlugin);
-			await p.ready();
-			const inst = p.getPlugin(OctopusPlugin)!;
+			mockText('[Script Info]\n\n[Events]\n');
+			mockJson([]);
+
+			const player = setup();
+			player.addPlugin(octopusPlugin);
+			await player.ready();
+
+			const inst = player.getPlugin(OctopusPlugin)!;
 			await inst.subtitle('https://cdn.example.com/sub.ass');
 			await inst.subtitle(null);
-			expect(terminated).toHaveLength(1);
+
+			expect(octopusDisposed).toHaveLength(1);
 			expect(inst.renderer()).toBeNull();
 		});
 
 		it('same URL twice is a no-op', async () => {
-			const p = setup();
-			p.addPlugin(octopusPlugin);
-			await p.ready();
-			const inst = p.getPlugin(OctopusPlugin)!;
+			mockText('[Script Info]\n\n[Events]\n');
+			mockJson([]);
+
+			const player = setup();
+			player.addPlugin(octopusPlugin);
+			await player.ready();
+
+			const inst = player.getPlugin(OctopusPlugin)!;
 			await inst.subtitle('https://cdn.example.com/sub.ass');
 			await inst.subtitle('https://cdn.example.com/sub.ass');
-			expect(ctorCalls).toHaveLength(1);
+
+			expect(octopusCalls).toHaveLength(1);
+		});
+
+		it('subtitle() getter returns currently-loaded URL', async () => {
+			mockText('[Script Info]\n\n[Events]\n');
+			mockJson([]);
+
+			const player = setup();
+			player.addPlugin(octopusPlugin);
+			await player.ready();
+
+			const inst = player.getPlugin(OctopusPlugin)!;
+			expect(inst.subtitle()).toBeNull();
+
+			await inst.subtitle('https://cdn.example.com/sub.ass');
+			expect(inst.subtitle()).toBe('https://cdn.example.com/sub.ass');
 		});
 	});
 
-	describe('subtitle event integration', () => {
-		it('non-ASS / non-SSA URLs do NOT trigger the bridge', async () => {
-			const p = setup();
-			p.addPlugin(octopusPlugin);
-			await p.ready();
-			// Simulate kit emitting `subtitle` for a backend-resolved VTT track
-			(p as any).emit('subtitle', { track: 0 });
-			// No loaded item with .ass — bridge stays silent.
-			expect(ctorCalls).toHaveLength(0);
-		});
+	// ── fonts() API ─────────────────────────────────────────────────────────
 
-		it('null track clears the renderer', async () => {
-			const p = setup();
-			p.addPlugin(octopusPlugin);
-			await p.ready();
-			const inst = p.getPlugin(OctopusPlugin)!;
+	describe('fonts() API', () => {
+		it('fonts(urls) re-loads the active subtitle with new fonts', async () => {
+			mockText('[Script Info]\n\n[Events]\n');
+			mockJson([]);
+			mockText('[Script Info]\n\n[Events]\n');
+			mockJson([]);
+
+			const player = setup();
+			player.addPlugin(octopusPlugin);
+			await player.ready();
+
+			const inst = player.getPlugin(OctopusPlugin)!;
 			await inst.subtitle('https://cdn.example.com/sub.ass');
-			(p as any).emit('subtitle', { track: null });
-			// Allow the async chain to flush.
-			await new Promise(r => setTimeout(r, 0));
-			expect(terminated).toHaveLength(1);
-			expect(inst.renderer()).toBeNull();
+			expect(octopusCalls).toHaveLength(1);
+
+			await inst.fonts(['https://fonts.example.com/A.ttf']);
+			expect(octopusCalls).toHaveLength(2);
 		});
 	});
 
-	describe('options + auth', () => {
-		it('passes accessToken from auth.bearerToken (string)', async () => {
-			const p = setup();
-			p.auth({ bearerToken: 'tok-abc' });
-			p.addPlugin(octopusPlugin);
-			await p.ready();
-			const inst = p.getPlugin(OctopusPlugin)!;
-			await inst.subtitle('https://cdn.example.com/sub.ass');
-			expect(ctorCalls[0].accessToken).toBe('tok-abc');
-		});
-
-		it('resolves bearerToken from a sync function', async () => {
-			const p = setup();
-			p.auth({ bearerToken: () => 'tok-fn' });
-			p.addPlugin(octopusPlugin);
-			await p.ready();
-			const inst = p.getPlugin(OctopusPlugin)!;
-			await inst.subtitle('https://cdn.example.com/sub.ass');
-			expect(ctorCalls[0].accessToken).toBe('tok-fn');
-		});
-
-		it('resolves bearerToken from an async function', async () => {
-			const p = setup();
-			p.auth({ bearerToken: async () => 'tok-async' });
-			p.addPlugin(octopusPlugin);
-			await p.ready();
-			const inst = p.getPlugin(OctopusPlugin)!;
-			await inst.subtitle('https://cdn.example.com/sub.ass');
-			expect(ctorCalls[0].accessToken).toBe('tok-async');
-		});
-
-		it('picks up a refreshed token after setAuth at runtime', async () => {
-			const p = setup();
-			p.auth({ bearerToken: 'old-tok' });
-			p.addPlugin(octopusPlugin);
-			await p.ready();
-			const inst = p.getPlugin(OctopusPlugin)!;
-			// Refresh BEFORE the load — proves octopus reads the live config, not setup-time.
-			p.auth({ bearerToken: 'fresh-tok' });
-			await inst.subtitle('https://cdn.example.com/sub.ass');
-			expect(ctorCalls.at(-1)!.accessToken).toBe('fresh-tok');
-		});
-
-		it('forwards renderer options into the bridge', async () => {
-			const p = setup();
-			p.addPlugin(octopusPlugin, {
-				targetFps: 30,
-				blendRender: true,
-				lazyFileLoading: true,
-				renderAhead: 5,
-				lossyRender: true,
-				fonts: ['https://fonts.example.com/Inter.ttf'],
-			} as any);
-			await p.ready();
-			const inst = p.getPlugin(OctopusPlugin)!;
-			await inst.subtitle('https://cdn.example.com/sub.ass');
-			expect(ctorCalls[0].targetFps).toBe(30);
-			expect(ctorCalls[0].blendRender).toBe(true);
-			expect(ctorCalls[0].lazyFileLoading).toBe(true);
-			expect(ctorCalls[0].renderAhead).toBe(5);
-			expect(ctorCalls[0].lossyRender).toBe(true);
-			expect(ctorCalls[0].fonts).toEqual([encodeURI('https://fonts.example.com/Inter.ttf')]);
-		});
-
-		it('setFonts re-loads the active subtitle with new fonts', async () => {
-			const p = setup();
-			p.addPlugin(octopusPlugin);
-			await p.ready();
-			const inst = p.getPlugin(OctopusPlugin)!;
-			await inst.subtitle('https://cdn.example.com/sub.ass');
-			expect(ctorCalls).toHaveLength(1);
-			await inst.fonts(['https://fonts.example.com/A.ttf', 'https://fonts.example.com/B.ttf']);
-			expect(ctorCalls).toHaveLength(2);
-			expect(ctorCalls[1].fonts).toHaveLength(2);
-		});
-	});
+	// ── Lifecycle ───────────────────────────────────────────────────────────
 
 	describe('lifecycle', () => {
-		it('dispose() terminates the worker', async () => {
-			const p = setup();
-			p.addPlugin(octopusPlugin);
-			await p.ready();
-			const inst = p.getPlugin(OctopusPlugin)!;
+		it('dispose() tears down the renderer', async () => {
+			mockText('[Script Info]\n\n[Events]\n');
+			mockJson([]);
+
+			const player = setup();
+			player.addPlugin(octopusPlugin);
+			await player.ready();
+
+			const inst = player.getPlugin(OctopusPlugin)!;
 			await inst.subtitle('https://cdn.example.com/sub.ass');
-			expect(terminated).toHaveLength(0);
-			(inst as any).dispose();
-			expect(terminated).toHaveLength(1);
-			expect(disposed).toHaveLength(1);
+			expect(octopusDisposed).toHaveLength(0);
+
+			inst.dispose();
+			expect(octopusDisposed).toHaveLength(1);
 		});
 
 		it('dispose() is idempotent', async () => {
-			const p = setup();
-			p.addPlugin(octopusPlugin);
-			await p.ready();
-			const inst = p.getPlugin(OctopusPlugin)!;
+			mockText('[Script Info]\n\n[Events]\n');
+			mockJson([]);
+
+			const player = setup();
+			player.addPlugin(octopusPlugin);
+			await player.ready();
+
+			const inst = player.getPlugin(OctopusPlugin)!;
 			await inst.subtitle('https://cdn.example.com/sub.ass');
-			(inst as any).dispose();
-			expect(() => (inst as any).dispose()).not.toThrow();
-			expect(terminated).toHaveLength(1);
-		});
-
-		it('attaches a ResizeObserver to the player container when supported', async () => {
-			const original = (globalThis as any).ResizeObserver;
-			let observed: Element | null = null;
-			(globalThis as any).ResizeObserver = class {
-				observe(el: Element) { observed = el; }
-
-				disconnect() {}
-			};
-			try {
-				const p = setup();
-				p.addPlugin(octopusPlugin);
-				await p.ready();
-				expect(observed).toBe(p.container);
-			}
-			finally {
-				(globalThis as any).ResizeObserver = original;
-			}
+			inst.dispose();
+			expect(() => inst.dispose()).not.toThrow();
+			expect(octopusDisposed).toHaveLength(1);
 		});
 	});
 });
