@@ -43,6 +43,10 @@ interface HlsInstance {
 	audioTrack: number;
 	subtitleTrack: number;
 	currentLevel: number;
+	/** Level being loaded right now. Populated earlier than `currentLevel`
+	 *  (set when ABR picks; `currentLevel` only updates after the fragment
+	 *  finishes loading). Used as a fallback for `currentLevel === -1`. */
+	loadLevel: number;
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	on(event: string, fn: (event: string, data: any) => void): void;
 	attachMedia(el: HTMLVideoElement): void;
@@ -656,7 +660,15 @@ export class Html5VideoBackend extends EventEmitter<BackendEventPayload> impleme
 	}
 
 	currentLevel(): number {
-		return this.hls?.currentLevel ?? -1;
+		if (!this.hls) return -1;
+		// hls.currentLevel returns the variant being played. It can be -1 in
+		// the brief window between manifest parse and the first fragment
+		// landing; loadLevel is populated earlier (it's the level being
+		// fetched right now) so it covers the gap.
+		const current = this.hls.currentLevel;
+		if (current >= 0) return current;
+		const loading = this.hls.loadLevel;
+		return typeof loading === 'number' ? loading : -1;
 	}
 
 	// ── State ──
@@ -946,15 +958,35 @@ export class Html5VideoBackend extends EventEmitter<BackendEventPayload> impleme
 	}
 
 	/**
-	 * Subscribe to `Hls.Events.LEVEL_SWITCHED` on the current `this.hls`
-	 * instance and forward it as the backend's `level-switched` event.
-	 * Must be called after every HLS instance creation alongside
-	 * `_attachHlsErrorHandler`.
+	 * Subscribe to HLS level-change signals on the current `this.hls` instance
+	 * and forward them as the backend's `level-switched` event. Must be called
+	 * after every HLS instance creation alongside `_attachHlsErrorHandler`.
+	 *
+	 * Listens to two HLS events for robustness:
+	 *  - `LEVEL_SWITCHED` — the "official" level change. Fires reliably for
+	 *    the initial pick and explicit setQuality() calls, but can go silent
+	 *    for ABR-driven sub-switches that happen at fragment boundaries.
+	 *  - `FRAG_CHANGED`   — every fragment swap. Carries `frag.level`, so when
+	 *    a fragment lands on a different level than the previous one, that's
+	 *    effectively a level switch. Catches the cases LEVEL_SWITCHED misses.
+	 *
+	 * Both paths dedupe through `lastLevel` so consumers never see two
+	 * `level-switched` emissions for the same actual level.
 	 */
 	private _attachHlsLevelSwitchedHandler(Hls: HlsConstructor): void {
 		if (!this.hls) return;
+		let lastLevel = -1;
+		const emitIfChanged = (level: number): void => {
+			if (level < 0 || level === lastLevel) return;
+			lastLevel = level;
+			this.emit('level-switched', { level });
+		};
 		this.hls.on(Hls.Events.LEVEL_SWITCHED, (_e: unknown, data: { level: number }) => {
-			this.emit('level-switched', { level: data.level });
+			emitIfChanged(data.level);
+		});
+		this.hls.on(Hls.Events.FRAG_CHANGED, (_e: unknown, data: { frag?: { level?: number } }) => {
+			const level = data?.frag?.level;
+			if (typeof level === 'number') emitIfChanged(level);
 		});
 	}
 
