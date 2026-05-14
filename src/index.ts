@@ -520,16 +520,27 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 		this._theaterActive = wantActive;
 		this.emit('theater', { active: wantActive });
 	}
-	private _subtitleState: SubtitleState = SubtitleState.OFF;
+	/**
+	 * Whether any subtitle track is currently active.
+	 *
+	 * The canonical answer comes from the kit's selection (`currentSubtitle()`)
+	 * because plugin-rendered subtitles (ASS via libass / Octopus, image-based
+	 * VOBSUB / PGS, future formats) render to their own surfaces and never
+	 * appear in `videoElement.textTracks`. Falls back to scanning `textTracks`
+	 * for the case where a backend (HLS.js) toggled a native track without
+	 * routing through `currentSubtitle()`.
+	 */
 	subtitleState(): SubtitleState {
-		// Real check: any active text track on the video element?
-		const tt = this._backend?.mediaElement?.()?.textTracks;
-		if (tt) {
-			for (let i = 0; i < tt.length; i++) {
-				if (tt[i]!.mode === 'showing') return SubtitleState.ON;
+		const idx = this.currentSubtitle();
+		if (typeof idx === 'number' && idx >= 0) return SubtitleState.ON;
+
+		const tracks = this._backend?.mediaElement?.()?.textTracks;
+		if (tracks) {
+			for (let i = 0; i < tracks.length; i++) {
+				if (tracks[i]!.mode === 'showing') return SubtitleState.ON;
 			}
 		}
-		return this._subtitleState;
+		return SubtitleState.OFF;
 	}
 	// ── Video-specific actions ──
 	toggleFullscreen(): void {
