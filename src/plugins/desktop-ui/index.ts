@@ -1432,8 +1432,11 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
     private playingQualityLabel(): string | undefined {
         const idx = this.resolvePlayingQualityIdx();
         if (idx === null) return undefined;
+        // `qualityLevels()` filters out unsupported codecs, so the visible
+        // array is a subset of the full HLS level list. Match by the original
+        // HLS index carried on each QualityLevel, not by array position.
         const levels = this.player.qualityLevels?.() ?? [];
-        const level = levels[idx];
+        const level = levels.find(q => q.index === idx);
         if (!level) return undefined;
         return level.label ?? (level.height ? `${level.height}p` : undefined);
     }

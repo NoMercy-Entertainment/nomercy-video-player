@@ -357,8 +357,14 @@ export function renderQualityPane(
     // backend is actually playing right now is shown as a lower-importance
     // sublabel — so the user keeps the "I'm in Auto" signal while still
     // seeing what quality is on screen.
+    // `playingQualityIdx` is the full HLS level index. `qualityLevels()`
+    // returns a filtered subset (unsupported codecs dropped, HDR hidden when
+    // the display can't render it), so a positional lookup gives the wrong
+    // entry — match by the `index` property carried on each QualityLevel.
     const playingIdx = state.playingQualityIdx ?? null;
-    const playingLevel = playingIdx !== null ? levels[playingIdx] : undefined;
+    const playingLevel = playingIdx !== null
+        ? levels.find(q => q.index === playingIdx)
+        : undefined;
     const playingLabel = playingLevel
         ? (playingLevel.label ?? playingLevel.name ?? (playingLevel.height ? `${playingLevel.height}p` : undefined))
         : undefined;
