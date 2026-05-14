@@ -14,13 +14,13 @@ import type { ITranslator } from '@nomercy-entertainment/nomercy-player-core';
 import { fluentIcons, svgFromIcon } from './icons';
 
 /**
- * Render an icon into the button's `.nm-btn-icon` child, falling back to the
+ * Render an icon into the button's `.btn-icon` child, falling back to the
  * button itself for buttons created before the icon-holder pattern. Keeping
  * the icon in a sibling element prevents `innerHTML` reassignments from
- * destroying the `.nm-tooltip` span attached by `addTooltip()`.
+ * destroying the `.tooltip` span attached by `addTooltip()`.
  */
 function setBtnIcon(btn: HTMLElement, html: string): void {
-    const target = btn.querySelector('.nm-btn-icon') ?? btn;
+    const target = btn.querySelector('.btn-icon') ?? btn;
     target.innerHTML = html;
 }
 
@@ -41,7 +41,7 @@ export function applyVolume(
 
 /** Toggle the muted CSS class on the volume button. */
 export function applyMuted(volBtn: HTMLButtonElement, applyMutedIconFn: () => void, muted: boolean): void {
-    volBtn.classList.toggle('nm-muted', muted);
+    volBtn.classList.toggle('muted', muted);
     applyMutedIconFn();
 }
 
@@ -76,10 +76,20 @@ export function applyRate(speedBtn: HTMLButtonElement, t: ITranslator['t']): voi
 
 // ── Quality ────────────────────────────────────────────────────────────────────
 
-/** Update the quality button icon and aria-label. */
-export function applyQualityIcon(qualityBtn: HTMLButtonElement, t: ITranslator['t']): void {
+/**
+ * Update the quality button icon and aria-label. The icon stays generic
+ * (one quality glyph regardless of level), but the aria-label includes the
+ * level currently playing when one is known — so screen readers and hover
+ * tooltips confirm what's actually on screen.
+ */
+export function applyQualityIcon(
+    qualityBtn: HTMLButtonElement,
+    t: ITranslator['t'],
+    playingLabel?: string,
+): void {
     setBtnIcon(qualityBtn, svgFromIcon(fluentIcons.quality));
-    qualityBtn.setAttribute('aria-label', t('tooltip.quality'));
+    const base = t('tooltip.quality');
+    qualityBtn.setAttribute('aria-label', playingLabel ? `${base}: ${playingLabel}` : base);
 }
 
 

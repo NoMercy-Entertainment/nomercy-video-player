@@ -35,7 +35,7 @@ export type SubMenuId = 'language' | 'subtitles' | 'quality' | 'speed' | 'playli
 
 export interface SubtitleTrackLite { id?: string | number; label?: string; language?: string; kind?: string }
 export interface AudioTrackLite { id?: string | number; name?: string; language?: string; label?: string; default?: boolean }
-export interface QualityLevelLite { id?: string | number; index?: number; height?: number; width?: number; name?: string; label?: string; bitrate?: number }
+export interface QualityLevelLite { id?: string | number; index?: number; height?: number; width?: number; name?: string; label?: string; bitrate?: number; dynamicRange?: 'sdr' | 'hdr' }
 export interface ChapterLite { index: number; start: number; end: number; title: string }
 
 /** Coerce an unknown array-returning getter into `T[]`. Each element is an
@@ -302,6 +302,13 @@ export interface MenuRenderState {
     audioIdx: number;
     /** Active quality level index, or `'auto'` for auto. */
     qualityIdx: number | 'auto';
+    /**
+     * Level the backend is actually playing right now. In Auto mode this
+     * differs from `qualityIdx` (which stays `'auto'`); the menu surfaces it
+     * as a lower-importance sublabel on the Auto row. Null before the first
+     * `level-switched` event lands or for non-HLS sources.
+     */
+    playingQualityIdx?: number | null;
 }
 
 export function renderSpeedPane(
@@ -338,9 +345,26 @@ export function renderQualityPane(
     const scroll = pane.querySelector<HTMLDivElement>('.quality-scroll-container');
     if (!scroll) return;
     scroll.replaceChildren();
-    const levels = coerceArray<QualityLevelLite>(player.qualityLevels?.() ?? []);
+    const allLevels = coerceArray<QualityLevelLite>(player.qualityLevels?.() ?? []);
+    // Drop HDR levels when the active display can't render HDR — the browser
+    // would decode them but the colours would map back to SDR and look wrong.
+    const displayHdr = typeof window !== 'undefined'
+        && typeof window.matchMedia === 'function'
+        && window.matchMedia('(dynamic-range: high)').matches;
+    const levels = allLevels.filter(q => q.dynamicRange !== 'hdr' || displayHdr);
     const auto = state.qualityIdx === 'auto';
-    appendChoice(scroll, 'quality-auto', 'Auto', auto, () => { player.currentQuality?.('auto'); onPick(); }, listen, player);
+    // In Auto mode the Auto row gets the primary checkmark. The level the
+    // backend is actually playing right now is shown as a lower-importance
+    // sublabel — so the user keeps the "I'm in Auto" signal while still
+    // seeing what quality is on screen.
+    const playingIdx = state.playingQualityIdx ?? null;
+    const playingLevel = playingIdx !== null ? levels[playingIdx] : undefined;
+    const playingLabel = playingLevel
+        ? (playingLevel.label ?? playingLevel.name ?? (playingLevel.height ? `${playingLevel.height}p` : undefined))
+        : undefined;
+    appendChoice(scroll, 'quality-auto', 'Auto', auto, () => { player.currentQuality?.('auto'); onPick(); }, listen, player, {
+        sublabel: auto && playingLabel ? playingLabel : undefined,
+    });
     levels.forEach((q, i) => {
         const label = q.label ?? q.name ?? (q.height ? `${q.height}p` : `Level ${i + 1}`);
         const id = `quality-${q.height ?? '?'}-${q.bitrate ?? i}`;
@@ -826,12 +850,28 @@ function appendChoice(
     onClick: () => void,
     listen: MenuListen,
     player: NMVideoPlayer,
+    opts?: {
+        /**
+         * Optional lower-importance text rendered between the label and the
+         * checkmark. Used by the quality pane's Auto row to surface the
+         * level the backend is actually playing without competing with the
+         * primary checkmark.
+         */
+        sublabel?: string;
+    },
 ): void {
     const btn = player.createButton(id, label, () => {});
     btn.classList.add('language-button');
     if (active) btn.classList.add('is-active');
+    // Reuses the existing `.menu-button-subtext` styling (muted colour, 10px,
+    // pushed right) so the sublabel sits between the primary label and the
+    // checkmark without competing visually.
+    const sublabelHtml = opts?.sublabel
+        ? `<span class="menu-button-subtext">${escapeHtml(opts.sublabel)}</span>`
+        : '';
     btn.innerHTML = `
         <span class="menu-button-text">${escapeHtml(label)}</span>
+        ${sublabelHtml}
         <span class="menu-button-check">${svgFromIcon(fluentIcons.checkmark, 18)}</span>
     `;
     scroll.appendChild(btn);

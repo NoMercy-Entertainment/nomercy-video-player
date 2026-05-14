@@ -27,8 +27,8 @@
  * DOM tree (mirrors v1 div-by-div):
  *
  *   overlay
- *     ├─ nm-top-bar > nm-title              (topBar.ts)
- *     ├─ nm-center > nm-spinner + nm-center-btn
+ *     ├─ top-bar > title              (topBar.ts)
+ *     ├─ center > spinner + center-btn
  *     ├─ bottom-bar
  *     │   ├─ bottom-bar-shadow
  *     │   ├─ top-row                        (progressBar.ts)
@@ -247,6 +247,15 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
     private activeAudioIdx: number = -1;
     private activeQualityIdx: number | 'auto' = 'auto';
 
+    /** The level index the backend is actually playing right now. Distinct from
+     *  `activeQualityIdx`: in Auto mode the user's pick is `'auto'` but the
+     *  backend (HLS) auto-switches to a specific level. The menu surfaces this
+     *  as a lower-importance sublabel on the Auto row so the user sees what's
+     *  actually playing without losing the "I'm in Auto mode" signal.
+     *  Null until the first `level-switched` event arrives, and reset on
+     *  `current` (new item). */
+    private _playingQualityIdx: number | null = null;
+
     private isMouseDown = false;
     private isScrubbing = false;
     private _showRemaining = true;
@@ -299,7 +308,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
     private _resizeObserver: ResizeObserver | null = null;
 
     override use(): void {
-        this.appendStyles('./styles.css', 'nmplayer-desktop-ui-styles');
+        this.appendStyles('./styles.css', 'desktop-ui-styles');
         this.buildDom();
         this.wireTooltips();
         this.wireEvents();
@@ -314,7 +323,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
     // ── DOM construction ─────────────────────────────────────────────────
     private buildDom(): void {
         const root = this.mount('overlay');
-        this.player.addClasses(root, ['nmplayer-desktop-ui-overlay']);
+        this.player.addClasses(root, ['overlay']);
 
         this.player.container.classList.add('nomercyplayer');
 
@@ -334,19 +343,19 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
     }
 
     private buildCenter(parent: HTMLElement): HTMLDivElement {
-        const wrap = this.player.createElement('div', 'nmplayer-center')
-            .addClasses(['nm-center'])
+        const wrap = this.player.createElement('div', 'center')
+            .addClasses(['center'])
             .appendTo(parent).get();
 
-        this.spinner = this.player.createElement('div', 'nmplayer-spinner')
-            .addClasses(['nm-spinner'])
+        this.spinner = this.player.createElement('div', 'spinner')
+            .addClasses(['spinner'])
             .appendTo(wrap).get();
         this.spinner.innerHTML = '<svg viewBox="0 0 50 50"><circle cx="25" cy="25" r="20" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-dasharray="100 28"/></svg>';
 
-        this.centerBtn = this.player.createButton('nmplayer-center-btn', fluentIcons.bigPlay.title || 'Play', () => {});
-        this.player.addClasses(this.centerBtn, ['nm-center-btn']);
+        this.centerBtn = this.player.createButton('center-btn', fluentIcons.bigPlay.title || 'Play', () => {});
+        this.player.addClasses(this.centerBtn, ['center-btn']);
         const centerIconHolder = document.createElement('span');
-        centerIconHolder.className = 'nm-btn-icon';
+        centerIconHolder.className = 'btn-icon';
         centerIconHolder.innerHTML = svgFromIcon(fluentIcons.bigPlay, 32);
         this.centerBtn.appendChild(centerIconHolder);
         wrap.appendChild(this.centerBtn);
@@ -355,22 +364,22 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
 
     // ── Keyboard shortcuts overlay ───────────────────────────────────────
     private buildShortcutsOverlay(parent: HTMLElement): HTMLDivElement {
-        const overlay = this.player.createElement('div', 'nm-shortcuts-overlay')
-            .addClasses(['nm-shortcuts-overlay'])
+        const overlay = this.player.createElement('div', 'shortcuts-overlay')
+            .addClasses(['shortcuts-overlay'])
             .appendTo(parent).get();
 
         const container = document.createElement('div');
-        container.className = 'nm-shortcuts-container';
+        container.className = 'shortcuts-container';
 
         const header = document.createElement('div');
-        header.className = 'nm-shortcuts-header';
+        header.className = 'shortcuts-header';
 
         const title = document.createElement('h2');
-        title.className = 'nm-shortcuts-title';
+        title.className = 'shortcuts-title';
         title.textContent = this.t('plugin.desktop-ui.shortcuts.title');
 
         const hint = document.createElement('span');
-        hint.className = 'nm-shortcuts-hint';
+        hint.className = 'shortcuts-hint';
         hint.textContent = this.t('plugin.desktop-ui.shortcuts.hint');
 
         header.append(title, hint);
@@ -422,26 +431,26 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
         ];
 
         const grid = document.createElement('div');
-        grid.className = 'nm-shortcuts-grid';
+        grid.className = 'shortcuts-grid';
 
         for (const [category, shortcuts] of categories) {
             const section = document.createElement('div');
 
             const catTitle = document.createElement('h3');
-            catTitle.className = 'nm-shortcuts-category-title';
+            catTitle.className = 'shortcuts-category-title';
             catTitle.textContent = this.t(`plugin.desktop-ui.shortcuts.category.${category}`) || category;
             section.appendChild(catTitle);
 
             for (const shortcut of shortcuts) {
                 const row = document.createElement('div');
-                row.className = 'nm-shortcuts-row';
+                row.className = 'shortcuts-row';
 
                 const label = document.createElement('span');
-                label.className = 'nm-shortcuts-label';
+                label.className = 'shortcuts-label';
                 label.textContent = this.t(`plugin.desktop-ui.shortcuts.label.${shortcut.label}`) || shortcut.label;
 
                 const kbd = document.createElement('kbd');
-                kbd.className = 'nm-shortcuts-kbd';
+                kbd.className = 'shortcuts-kbd';
                 kbd.textContent = shortcut.key;
 
                 row.append(label, kbd);
@@ -473,12 +482,12 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
 
     private showShortcuts(): void {
         this._shortcutsVisible = true;
-        this.shortcutsOverlay?.classList.add('nm-shortcuts-overlay-visible');
+        this.shortcutsOverlay?.classList.add('shortcuts-overlay-visible');
     }
 
     private hideShortcuts(): void {
         this._shortcutsVisible = false;
-        this.shortcutsOverlay?.classList.remove('nm-shortcuts-overlay-visible');
+        this.shortcutsOverlay?.classList.remove('shortcuts-overlay-visible');
     }
 
     private buildBottomBar(parent: HTMLElement): HTMLDivElement {
@@ -633,10 +642,10 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
     private iconBtn(id: string, iconName: string): HTMLButtonElement {
         const icon = fluentIcons[iconName];
         const btn = this.player.createButton(id, icon.title || iconName, () => {});
-        this.player.addClasses(btn, ['nm-btn']);
+        this.player.addClasses(btn, ['btn']);
         btn.style.position = 'relative';
         const iconHolder = document.createElement('span');
-        iconHolder.className = 'nm-btn-icon';
+        iconHolder.className = 'btn-icon';
         iconHolder.innerHTML = svgFromIcon(icon);
         btn.appendChild(iconHolder);
         return btn;
@@ -650,11 +659,11 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
      */
     private addTooltip(btn: HTMLButtonElement, getText: () => string): void {
         const tip = document.createElement('span');
-        tip.className = 'nm-tooltip';
+        tip.className = 'tooltip';
 
         const show = (): void => {
             tip.textContent = getText();
-            tip.classList.add('nm-tooltip-visible');
+            tip.classList.add('tooltip-visible');
             this.clampTooltip(tip, btn);
         };
         const hide = (): void => {
@@ -662,7 +671,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
                 clearTimeout(this._tooltipHoverToken);
                 this._tooltipHoverToken = null;
             }
-            tip.classList.remove('nm-tooltip-visible');
+            tip.classList.remove('tooltip-visible');
         };
 
         btn.removeAttribute('title');
@@ -910,6 +919,13 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
 
     // ── Event wiring ─────────────────────────────────────────────────────
     private wireEvents(): void {
+        // Re-render the quality menu when the display's dynamic-range support
+        // flips — e.g. user drags the window from an SDR to an HDR monitor.
+        if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
+            const hdrMql = window.matchMedia('(dynamic-range: high)');
+            this.listen(hdrMql, 'change', () => this.repaintQualityIfOpen());
+        }
+
         const container = this.player.container;
         if (container) {
             this.listen(container, 'mousemove', (e: Event) => {
@@ -947,7 +963,10 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
 
         this.on(DesktopUiPlugin, 'shortcuts-toggle', () => this.toggleShortcuts());
 
-        this.on('play', () => this.setPlayingState(true));
+        this.on('play', () => {
+            this.centerWrap.classList.add('dismissed');
+            this.setPlayingState(true);
+        });
         this.on('pause', () => this.setPlayingState(false));
         this.on('ended', () => this.setPlayingState(false));
         this.on('current', (d) => this.handleCurrentChange(d.item));
@@ -1013,12 +1032,18 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
         });
 
         this.on('level-switched', (d) => {
+            // Always record the actually-playing level so the Auto row can
+            // surface it as a sublabel and the button aria-label can include it.
+            if (typeof d.level === 'number') {
+                this._playingQualityIdx = d.level;
+            }
             if (!this._userPickedQuality) {
                 this.activeQualityIdx = 'auto';
             }
             else {
                 this.activeQualityIdx = typeof d.level === 'number' ? d.level : this.activeQualityIdx;
             }
+            this.applyQualityIcon();
             this.repaintQualityIfOpen();
         });
 
@@ -1043,7 +1068,13 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
             this.repaintAspectRatioIfOpen();
         });
 
-        this.listen(this.centerBtn, 'click', () => { void this.player.togglePlayback(); this.bumpActivity(); });
+        this.listen(this.centerBtn, 'click', () => {
+            // Center button is a one-shot affordance — once the user clicks
+            // it, the touch zones own play/pause from here on.
+            this.centerWrap.classList.add('dismissed');
+            void this.player.togglePlayback();
+            this.bumpActivity();
+        });
         this.listen(this.playBtn, 'click', () => { void this.player.togglePlayback(); this.bumpActivity(); });
 
         this.listen(this.prevBtn, 'click', () => { void this.player.previous?.(); });
@@ -1200,11 +1231,11 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
     }
 
     private setPlayingState(playing: boolean): void {
-        this.centerWrap.classList.toggle('nm-playing', playing);
+        this.centerWrap.classList.toggle('playing', playing);
         const icon = playing ? fluentIcons.pause : fluentIcons.play;
-        const playIconHolder = this.playBtn.querySelector('.nm-btn-icon') ?? this.playBtn;
+        const playIconHolder = this.playBtn.querySelector('.btn-icon') ?? this.playBtn;
         playIconHolder.innerHTML = svgFromIcon(icon);
-        const centerIconHolder = this.centerBtn.querySelector('.nm-btn-icon') ?? this.centerBtn;
+        const centerIconHolder = this.centerBtn.querySelector('.btn-icon') ?? this.centerBtn;
         centerIconHolder.innerHTML = svgFromIcon(playing ? fluentIcons.pause : fluentIcons.bigPlay, 32);
         this.playBtn.setAttribute('aria-label', this.t('tooltip.play'));
     }
@@ -1231,6 +1262,10 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
         // Reset cached duration so chapter markers are not computed against
         // the previous item's duration while the new media loads.
         this.cachedDuration = 0;
+        // Reset the playing-level cache — the next item's level numbering may
+        // not match the previous item's. The first `level-switched` on the
+        // new source will repopulate it.
+        this._playingQualityIdx = null;
         this.refreshChaptersAndDuration();
         this.refreshCapabilityVisibility();
         this.repaintPlaylistIfOpen();
@@ -1385,7 +1420,21 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
     }
 
     private applyQualityIcon(): void {
-        applyQualityIcon(this.qualityBtn, this.t.bind(this));
+        applyQualityIcon(this.qualityBtn, this.t.bind(this), this.playingQualityLabel());
+    }
+
+    /**
+     * Human label for the level the backend is actually playing right now
+     * (e.g. "1080p"). Used by `applyQualityIcon` to surface the level in the
+     * button's aria-label / tooltip. Returns `undefined` when no level info is
+     * available (before `level-switched` lands, or non-HLS sources).
+     */
+    private playingQualityLabel(): string | undefined {
+        if (this._playingQualityIdx === null) return undefined;
+        const levels = this.player.qualityLevels?.() ?? [];
+        const level = levels[this._playingQualityIdx];
+        if (!level) return undefined;
+        return level.label ?? (level.height ? `${level.height}p` : undefined);
     }
 
     private applyFullscreen(): void {
@@ -1543,18 +1592,42 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
         try { this.menus.frameDialog.close?.(); } catch { /* already closed */ }
     }
     
+    /**
+     * Reconcile our locally-cached active indexes with the kit's canonical
+     * state after a new item has finished loading (`mediaReady`).
+     *
+     * Reads the kit's actual selection via `currentSubtitle()` /
+     * `currentAudioTrack()` first — those are the source of truth and stay
+     * correct for plugin-rendered tracks (ASS via Octopus, etc.) that never
+     * appear in the backend's native track lists. Only falls back to a
+     * default-track heuristic when the kit has no selection yet.
+     */
     private syncActiveIndexes(): void {
         const audios = this.player.audioTracks?.() ?? [];
-        if (audios.length > 0) {
+        const audioIdx = this.player.currentAudioTrack?.();
+        if (typeof audioIdx === 'number' && audioIdx >= 0) {
+            this.activeAudioIdx = audioIdx;
+        }
+        else if (audios.length > 0) {
             const defIdx = audios.findIndex(t => t.default === true);
             this.activeAudioIdx = defIdx >= 0 ? defIdx : 0;
         }
 
-        const subState = this.player.subtitleState();
-        this.activeSubtitleIdx = subState === 'off' ? -1 : 0;
+        const subIdx = this.player.currentSubtitle?.();
+        this.activeSubtitleIdx = typeof subIdx === 'number' && subIdx >= 0 ? subIdx : -1;
 
-        if (!this._userPickedQuality) {
-            this.activeQualityIdx = this.player.qualityState() === 'auto' ? 'auto' : 0;
+        // Read the kit's canonical selection. `currentQuality()` returns either
+        // a number (manual pick) or `'auto'` (auto mode); reflect both straight
+        // into our cache so a late-attached plugin doesn't have to wait for
+        // a level-switched event to converge.
+        const qualityChoice = this.player.currentQuality?.();
+        if (qualityChoice === 'auto' || qualityChoice == null) {
+            this.activeQualityIdx = 'auto';
+            this._userPickedQuality = false;
+        }
+        else {
+            this.activeQualityIdx = qualityChoice;
+            this._userPickedQuality = true;
         }
     }
 
@@ -1567,6 +1640,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
             subtitleIdx: this.activeSubtitleIdx,
             audioIdx: this.activeAudioIdx,
             qualityIdx: this.activeQualityIdx,
+            playingQualityIdx: this._playingQualityIdx,
         };
     }
 
