@@ -219,10 +219,10 @@ export class SubtitleOverlayPlugin extends Plugin<NMVideoPlayer, SubtitleOverlay
 
     /**
      * Mirror v1's `resize()`: size the overlay to the actual video
-     * display rectangle (letterbox-fit), not the player container. The
-     * font-size baseline (28px) is anchored to that rect via the CSS
-     * rules, so cues scale proportionally with the video — not with
-     * the surrounding chrome.
+     * display rectangle (letterbox-fit), not the player container. Cue
+     * font size scales with the overlay rectangle because cqi units resolve
+     * against the nearest container-query ancestor (.nomercyplayer), and
+     * the overlay dimensions are driven by the letterbox-fit calculation.
      */
     private bindOverlayToVideo(): void {
         const fit = (): void => {
@@ -284,7 +284,10 @@ export class SubtitleOverlayPlugin extends Plugin<NMVideoPlayer, SubtitleOverlay
         const t = text.style;
         const a = area.style;
 
-        t.fontSize = `calc(100% * ${style.fontSize / 100})`;
+        // User scale (e.g. 150 → 1.5) drives the CSS variable that feeds
+        // the container-relative clamp formula on .subtitle-area.
+        a.setProperty('--subtitle-scale', String(style.fontSize / 100));
+
         t.fontFamily = style.fontFamily;
         t.color = parseColorToHex(style.textColor, style.textOpacity / 100);
         t.textShadow = getEdgeStyle(style.edgeStyle, style.textOpacity / 100);
@@ -500,7 +503,10 @@ function ensureStyles(): void {
     padding: 0.5rem 0;
     position: absolute;
     height: fit-content;
-    font-size: 28px;
+    /* 4cqi ≈ TV captioning baseline (4% of container inline-size).
+     * clamp enforces WCAG 1.4.4: readable at 16 px min, sane at 72 px max.
+     * --subtitle-scale is set inline per-area from subtitleStyle.fontSize. */
+    font-size: clamp(16px, calc(var(--subtitle-scale, 1) * 4cqi), 72px);
 }
 .subtitle-overlay .subtitle-area.aligned-start { text-align: left; }
 .subtitle-overlay .subtitle-area.aligned-center { text-align: center; }
