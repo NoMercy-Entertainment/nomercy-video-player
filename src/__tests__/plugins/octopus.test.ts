@@ -15,6 +15,11 @@
  * Real ASS rendering (ResizeObserver, canvas geometry, Worker + WASM) is
  * exercised by the Playwright e2e matrix against playlist items with `.ass` +
  * `fonts.json` tracks.
+ *
+ * NMSubtitleOctopus forwarding regression (availableFonts → upstream):
+ * tested in packages/nomercy-subtitle-octopus/src/__tests__/octopus.test.ts.
+ * That test mocks SubtitlesOctopus directly so the real NMSubtitleOctopus
+ * logic runs and we can assert the fonts map reaches the upstream constructor.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
