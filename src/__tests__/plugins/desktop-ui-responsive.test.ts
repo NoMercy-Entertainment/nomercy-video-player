@@ -103,19 +103,21 @@ describe('DesktopUiPlugin — progressive breakpoint system', () => {
             const events: Array<LayoutBreakpointPayload> = [];
             onBreakpoint(player, (data) => events.push(data));
 
-            simulateWidth(400);    // sm (≤ 480, hideAfterRank: 4)
+            simulateWidth(400);    // sm (≤ 480 px)
 
             const smEvent = events.find(e => e.to === 'sm');
             expect(smEvent).toBeDefined();
 
-            // Default priority: play(rank 0) mute(1) volume(2) fullscreen(3) settings(4) …
-            // At sm, hideAfterRank: 4 → ranks 0–4 survive.
-            // volume has no DOM button (null in buttonMap) — skipped entirely.
-            // Visible: play, mute, fullscreen, settings.  Hidden: next(5) and beyond.
+            // Fit-based algorithm at 400px:
+            // Available = 400 - 148 (chrome reserve) = 252px.
+            // Default priority: play → mute → volume(null, skip) → fullscreen → settings → next…
+            // play(40) + mute-with-slider(136) + fullscreen(40) = 216 ≤ 252 → visible.
+            // settings(40) → 256 > 252 → hidden.
+            // next and beyond are hidden (still don't fit after settings is dropped).
             expect(smEvent!.visibleButtons).toContain('play');
             expect(smEvent!.visibleButtons).toContain('mute');
             expect(smEvent!.visibleButtons).toContain('fullscreen');
-            expect(smEvent!.visibleButtons).toContain('settings');
+            expect(smEvent!.hiddenButtons).toContain('settings');
             expect(smEvent!.hiddenButtons).toContain('next');
         });
 
@@ -173,33 +175,38 @@ describe('DesktopUiPlugin — progressive breakpoint system', () => {
     // ── collapseStages shorthand ──────────────────────────────────────────────
 
     describe('collapseStages shorthand', () => {
-        it('generates correct hideAfterRank tiers from collapseStages', async () => {
+        it('fires layout:breakpoint with the sm tier name from collapseStages at 400px', async () => {
             const player = setup({ collapseStages: [1, 3, 5] });
             await player.ready();
 
             const events: Array<LayoutBreakpointPayload> = [];
             onBreakpoint(player, (data) => events.push(data));
 
-            // sm tier has hideAfterRank: 1 — only ranks 0 and 1 survive.
+            // 400px container — sm tier fires (collapseStages feeds the breakpoint event name).
+            // The fit algorithm determines actual button visibility, not the rank threshold.
+            // Available width = 400 - 148 (chrome) = 252px.
+            // play(40) + mute-with-slider-reservation(136) + fullscreen(40) = 216 ≤ 252 → visible.
+            // settings(40) = 256 > 252 → hidden.
             simulateWidth(400);
 
             const smEvent = events.find(e => e.to === 'sm');
             expect(smEvent).toBeDefined();
 
-            // play is rank 0, mute is rank 1 — both survive.
-            // fullscreen is rank 3 — hidden at sm with stages[0]=1.
+            // play and mute survive the fit pass.
             expect(smEvent!.visibleButtons).toContain('play');
-            expect(smEvent!.hiddenButtons).toContain('fullscreen');
+            expect(smEvent!.visibleButtons).toContain('mute');
+            // settings is the first button that exceeds available width.
+            expect(smEvent!.hiddenButtons).toContain('settings');
         });
     });
 
     // ── buttonPriority reordering ─────────────────────────────────────────────
 
     describe('buttonPriority reordering', () => {
-        it('hides the last-priority button first when container narrows', async () => {
+        it('most-important buttons survive the fit pass when container is narrow', async () => {
             const player = setup({
                 buttonPriority: [
-                    // fullscreen is now the most important (rank 0)
+                    // fullscreen first — most important.
                     'fullscreen', 'play', 'settings', 'mute', 'seekBack',
                     'seekForward', 'next', 'previous', 'chapterPrev', 'chapterNext',
                     'theater', 'pip', 'speed', 'quality', 'subtitles', 'audio',
@@ -211,19 +218,30 @@ describe('DesktopUiPlugin — progressive breakpoint system', () => {
             const events: Array<LayoutBreakpointPayload> = [];
             onBreakpoint(player, (data) => events.push(data));
 
-            simulateWidth(400);    // sm (hideAfterRank: 4)
+            // 400px: available = 252px.
+            // fullscreen(40) + play(40) + settings(40) = 120 ≤ 252 → visible.
+            // mute with slider-reservation (136px footprint) → 256 > 252 → hidden.
+            // seekBack: accumulated is still 120, 120+40=160 ≤ 252 → visible.
+            // seekForward: 160+40=200 ≤ 252 → visible.
+            // The fit algorithm continues after a skipped button so smaller
+            // buttons that fit can still show — unlike the old rank cutoff.
+            simulateWidth(400);
 
             const smEvent = events.find(e => e.to === 'sm');
             expect(smEvent).toBeDefined();
 
-            // With custom priority: fullscreen(0) play(1) settings(2) mute(3) seekBack(4) survive at sm.
+            // High-priority buttons are visible.
             expect(smEvent!.visibleButtons).toContain('fullscreen');
             expect(smEvent!.visibleButtons).toContain('play');
             expect(smEvent!.visibleButtons).toContain('settings');
-            expect(smEvent!.visibleButtons).toContain('mute');
 
-            // seekForward is now rank 5 — it is hidden at sm.
-            expect(smEvent!.hiddenButtons).toContain('seekForward');
+            // mute's slider reservation pushes it past the available width.
+            expect(smEvent!.hiddenButtons).toContain('mute');
+
+            // seekBack and seekForward ARE visible: they're only 40px and fit
+            // in the space freed by skipping mute.
+            expect(smEvent!.visibleButtons).toContain('seekBack');
+            expect(smEvent!.visibleButtons).toContain('seekForward');
         });
     });
 

@@ -1126,6 +1126,41 @@
         scrollbar-width: thin;
         scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
     }
+
+    /* ── Portrait orientation — hide navigation/track buttons ─────────
+     * Buttons in portrait: play, seekBack, seekForward, volume, theater,
+     * fullscreen, back, restart, settings, close.
+     * Buttons NOT in portrait (forced hidden by orientation rule):
+     * chapterBack, chapterForward, previous, next, subtitles, audio,
+     * quality, playlist.
+     * JS also applies the same rule via _isPortrait so this CSS layer
+     * is additive redundancy for the non-JS-resize path.             */
+    &[data-orientation="portrait"] {
+        #chapter-back,
+        #chapter-forward,
+        #previous,
+        #next,
+        #subtitles,
+        #audio,
+        #quality,
+        #playlist {
+            display: none !important;
+        }
+    }
+
+    /* ── No-hover touch devices — suppress volume slider ──────────────
+     * On (hover: none) devices the slider never expands and must be
+     * hidden entirely. The volume button remains as a mute-toggle only. */
+    &[data-no-hover] {
+        .volume-slider {
+            display: none !important;
+        }
+
+        .volume-container:hover .volume-slider,
+        .volume-container:focus-within .volume-slider {
+            display: none !important;
+        }
+    }
 }
 
 /* ── Container-query responsive layout (belt-and-suspenders alongside JS) ── */

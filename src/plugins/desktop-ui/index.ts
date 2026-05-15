@@ -384,11 +384,40 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
     private _resizeObserver: ResizeObserver | null = null;
     private _currentBreakpointName = 'xl';
 
+    /** Current orientation state — true when device is in portrait mode. */
+    private _isPortrait = false;
+
+    /** True on (hover: none) and (pointer: coarse) touch-only devices. */
+    private _isNoHover = false;
+
+    /**
+     * Estimated width (px) of each button in the bottom row.
+     * The volume container has two footprints: the base 40px button plus the
+     * expanded slider reservation on hover-capable devices.
+     *
+     * All bottom-row buttons are 40px (min-width from .btn). The volume slider
+     * expands to 80px wide with 8px margins on each side = +96px reservation on
+     * hover-enabled devices (skipped on (hover: none) devices).
+     */
+    private static readonly BUTTON_WIDTH = 40;
+    private static readonly VOL_SLIDER_EXPANDED_WIDTH = 96;
+
+    /**
+     * Buttons hidden in portrait regardless of container width.
+     * Mirrors the reference implementation's `portrait:!hidden` semantics.
+     */
+    private static readonly PORTRAIT_HIDDEN: ReadonlySet<keyof DesktopUiButtonOptions> = new Set([
+        'chapterPrev', 'chapterNext', 'previous', 'next',
+        'subtitles', 'audio', 'quality', 'playlist',
+    ]);
+
     override use(): void {
         this.appendStyles('./styles.css', 'desktop-ui-styles');
         this.buildDom();
         this.wireTooltips();
         this.wireEvents();
+        this.wireOrientation();
+        this.wireNoHover();
         this.wireResponsive();
         void Promise.resolve(this.storage.getJSON('showRemaining')).then(v => {
             this._showRemaining = (v as boolean | null) ?? true;
@@ -1085,12 +1114,62 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
         return DesktopUiPlugin.DEFAULT_BREAKPOINTS;
     }
 
-    private wireResponsive(): void {
-        if (typeof ResizeObserver === 'undefined') return;
+    /**
+     * Wire orientation changes. Sets `data-orientation` on the container and
+     * re-evaluates visibility whenever the device rotates.
+     */
+    private wireOrientation(): void {
+        if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
 
-        const priority = this.opts?.buttonPriority ?? DesktopUiPlugin.DEFAULT_PRIORITY;
+        const mql = window.matchMedia('(orientation: portrait)');
+        this._isPortrait = mql.matches;
+        this.player.container.setAttribute('data-orientation', mql.matches ? 'portrait' : 'landscape');
 
-        const buttonMap: Readonly<Record<keyof DesktopUiButtonOptions, HTMLButtonElement | null>> = {
+        const onChange = (): void => {
+            this._isPortrait = mql.matches;
+            this.player.container.setAttribute('data-orientation', mql.matches ? 'portrait' : 'landscape');
+            this._applyAllVisibilityRules(this._lastContainerWidth);
+        };
+
+        this.listen(mql as unknown as EventTarget, 'change', onChange);
+        this.lifecycle.addCleanup(() => {
+            mql.removeEventListener('change', onChange);
+        });
+    }
+
+    /**
+     * Wire touch-device detection. On `(hover: none) and (pointer: coarse)`
+     * devices the volume slider never expands so we must not reserve space for
+     * it, and the slider container itself should stay hidden via CSS.
+     */
+    private wireNoHover(): void {
+        if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+
+        const mql = window.matchMedia('(hover: none) and (pointer: coarse)');
+        this._isNoHover = mql.matches;
+        this.player.container.toggleAttribute('data-no-hover', mql.matches);
+
+        const onChange = (): void => {
+            this._isNoHover = mql.matches;
+            this.player.container.toggleAttribute('data-no-hover', mql.matches);
+            this._applyAllVisibilityRules(this._lastContainerWidth);
+        };
+
+        this.listen(mql as unknown as EventTarget, 'change', onChange);
+        this.lifecycle.addCleanup(() => {
+            mql.removeEventListener('change', onChange);
+        });
+    }
+
+    /**
+     * Map a button key to its DOM element. Populated by `_initButtonMap` after
+     * `buildBottomRow` has run. `volume` is a slider — no standalone button.
+     */
+    private _buttonMap: Record<keyof DesktopUiButtonOptions, HTMLButtonElement | null> | null = null;
+
+    /** Build the button map once the DOM is ready. Called from `wireResponsive`. */
+    private _initButtonMap(): void {
+        this._buttonMap = {
             play: this.playBtn,
             mute: this.volBtn,
             volume: null,
@@ -1111,59 +1190,126 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
             aspectRatio: this.aspectRatioBtn,
             playlist: this.playlistBtn,
         };
+    }
 
-        const applyBreakpoint = (width: number): void => {
-            const breakpoints = this.resolveBreakpoints();
+    /** Last container width seen by the ResizeObserver. Used when re-evaluating
+     *  visibility after orientation or hover-mode changes without a resize. */
+    private _lastContainerWidth = 0;
 
-            const active = breakpoints.find(bp => width <= bp.maxWidth)
-                ?? breakpoints[breakpoints.length - 1]!;
+    /**
+     * Compose all four visibility rules for a button key:
+     *
+     *   1. Consumer opt-out (`buttons` option says false).
+     *   2. Content gating (`refreshCapabilityVisibility` already applied via .hidden).
+     *   3. Orientation rule (portrait hides a fixed set of buttons).
+     *   4. Container-fit math (accumulated widths vs available space).
+     *
+     * Returns `true` when the button should be visible.
+     */
+    private _shouldShowButton(
+        key: keyof DesktopUiButtonOptions,
+        accumulatedWidth: number,
+        containerWidth: number,
+        isPortrait: boolean,
+    ): boolean {
+        // Rule 1 — consumer opt-out.
+        if (!buttonVisible(key, this.opts?.buttons)) return false;
 
+        // Rule 3 — orientation.
+        if (isPortrait && DesktopUiPlugin.PORTRAIT_HIDDEN.has(key)) return false;
+
+        // Rule 4 — container fit.
+        const btnWidth = DesktopUiPlugin.BUTTON_WIDTH;
+        // The volume (mute) button carries the slider footprint on hover devices.
+        const footprint = (key === 'mute' && !this._isNoHover)
+            ? btnWidth + DesktopUiPlugin.VOL_SLIDER_EXPANDED_WIDTH
+            : btnWidth;
+
+        return accumulatedWidth + footprint <= containerWidth;
+    }
+
+    /**
+     * Primary visibility pass: walk the priority list most-important first,
+     * accumulate widths, hide any button that doesn't fit. Also applies the
+     * orientation layer and emits `layout:breakpoint` for backwards compat.
+     *
+     * The `breakpoints` / `collapseStages` consumer options feed the
+     * `layout:breakpoint` event (for consumers who subscribed to it) but are
+     * NOT used to gate buttons — the fit math is the gate.
+     */
+    private _applyAllVisibilityRules(containerWidth: number): void {
+        if (!this._buttonMap) return;
+
+        const priority = this.opts?.buttonPriority ?? DesktopUiPlugin.DEFAULT_PRIORITY;
+
+        // Reserve space for the time labels and divider (non-button chrome in the bottom row).
+        // current-time ≈ 50px, divider min-width 16px, remaining-time ≈ 50px, padding 32px.
+        const RESERVED_CHROME_WIDTH = 148;
+        const availableWidth = Math.max(0, containerWidth - RESERVED_CHROME_WIDTH);
+
+        let accumulatedWidth = 0;
+        const visibleKeys: Array<keyof DesktopUiButtonOptions> = [];
+        const hiddenKeys: Array<keyof DesktopUiButtonOptions> = [];
+
+        for (const key of priority) {
+            const btn = this._buttonMap[key];
+            if (!btn) continue;
+
+            // Rule 2 — content gating: if already hidden by capability logic, skip.
+            // We only control the fit/orientation hide here, not the content hide.
+            const contentHidden = btn.getAttribute('data-content-hidden') === 'true';
+            if (contentHidden) {
+                hiddenKeys.push(key);
+                continue;
+            }
+
+            const fits = this._shouldShowButton(key, accumulatedWidth, availableWidth, this._isPortrait);
+
+            if (fits) {
+                btn.hidden = false;
+                const btnWidth = DesktopUiPlugin.BUTTON_WIDTH;
+                const footprint = (key === 'mute' && !this._isNoHover)
+                    ? btnWidth + DesktopUiPlugin.VOL_SLIDER_EXPANDED_WIDTH
+                    : btnWidth;
+                accumulatedWidth += footprint;
+                visibleKeys.push(key);
+            }
+            else {
+                btn.hidden = true;
+                hiddenKeys.push(key);
+            }
+        }
+
+        // Emit layout:breakpoint for backwards-compat subscribers.
+        // The breakpoint name is derived from the old threshold model so
+        // consumers that key off `to` still get meaningful values.
+        const breakpoints = this.resolveBreakpoints();
+        const active = breakpoints.find(bp => containerWidth <= bp.maxWidth)
+            ?? breakpoints[breakpoints.length - 1]!;
+        this.player.container.setAttribute('data-breakpoint', active.name);
+
+        if (active.name !== this._currentBreakpointName) {
             const previousName = this._currentBreakpointName;
-            const activeHideAfterRank = active.hideAfterRank;
+            this._currentBreakpointName = active.name;
+            this.emit('layout:breakpoint', {
+                from: previousName,
+                to: active.name,
+                visibleButtons: visibleKeys,
+                hiddenButtons: hiddenKeys,
+            });
+        }
+    }
 
-            const visibleKeys: Array<keyof DesktopUiButtonOptions> = [];
-            const hiddenKeys: Array<keyof DesktopUiButtonOptions> = [];
+    private wireResponsive(): void {
+        if (typeof ResizeObserver === 'undefined') return;
 
-            for (let idx = 0; idx < priority.length; idx++) {
-                const key = priority[idx];
-                if (!key) continue;
-
-                const btn = buttonMap[key];
-                if (!btn) continue;
-
-                const optHidden = !buttonVisible(key, this.opts?.buttons);
-                if (optHidden) continue;
-
-                const rank = idx;
-                const shouldHide = rank > activeHideAfterRank;
-
-                btn.hidden = shouldHide;
-
-                if (shouldHide) {
-                    hiddenKeys.push(key);
-                }
-                else {
-                    visibleKeys.push(key);
-                }
-            }
-
-            this.player.container.setAttribute('data-breakpoint', active.name);
-
-            if (active.name !== previousName) {
-                this._currentBreakpointName = active.name;
-                this.emit('layout:breakpoint', {
-                    from: previousName,
-                    to: active.name,
-                    visibleButtons: visibleKeys,
-                    hiddenButtons: hiddenKeys,
-                });
-            }
-        };
+        this._initButtonMap();
 
         this._resizeObserver = new ResizeObserver(entries => {
             const entry = entries[0];
             if (!entry) return;
-            applyBreakpoint(entry.contentRect.width);
+            this._lastContainerWidth = entry.contentRect.width;
+            this._applyAllVisibilityRules(entry.contentRect.width);
         });
 
         this._resizeObserver.observe(this.player.container);
@@ -1303,9 +1449,20 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
         this.on('play', () => {
             this.centerWrap.classList.add('dismissed');
             this.setPlayingState(true);
+            // Re-arm the inactivity timer whenever playback starts so the
+            // controls auto-hide after 4 s even on programmatic play calls.
+            this.bumpActivity();
         });
-        this.on('pause', () => this.setPlayingState(false));
+        this.on('pause', () => {
+            this.setPlayingState(false);
+            // Keep controls visible while paused — cancel any pending hide.
+            if (this.inactivityToken !== null) {
+                clearTimeout(this.inactivityToken);
+                this.inactivityToken = null;
+            }
+        });
         this.on('ended', () => this.setPlayingState(false));
+
         this.on('current', (d) => this.handleCurrentChange(d.item));
 
         this.on('listeners-changed', (d) => {
@@ -1823,31 +1980,51 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
         applyAspectRatioIcon(this.aspectRatioBtn, this.t.bind(this));
     }
 
-    private refreshCapabilityVisibility(): void {
-        const btns = this.opts?.buttons;
-        const show = (key: keyof DesktopUiButtonOptions): boolean => buttonVisible(key, btns);
+    /**
+     * Mark a button as content-gated (no relevant tracks/items) so the fit
+     * algorithm can skip it without counting its width.
+     * Setting `data-content-hidden="true"` causes `_applyAllVisibilityRules`
+     * to treat the button as absent from the layout.
+     */
+    private setContentHidden(btn: HTMLButtonElement, hidden: boolean): void {
+        if (hidden) {
+            btn.setAttribute('data-content-hidden', 'true');
+            btn.hidden = true;
+        }
+        else {
+            btn.removeAttribute('data-content-hidden');
+            // Fit visibility is re-applied by the next `_applyAllVisibilityRules`
+            // call; don't eagerly show — let the fit pass decide.
+        }
+    }
 
+    private refreshCapabilityVisibility(): void {
         const subs = this.player.subtitles?.() ?? [];
         const subsCount = subs.length;
 
         const audios = this.player.audioTracks?.() ?? [];
         const levels = this.player.qualityLevels?.() ?? [];
 
-        this.subsBtn.hidden = !show('subtitles') || subsCount === 0;
-        this.audioBtn.hidden = !show('audio') || audios.length <= 1;
-        this.qualityBtn.hidden = !show('quality') || levels.length < 2;
+        this.setContentHidden(this.subsBtn, subsCount === 0);
+        this.setContentHidden(this.audioBtn, audios.length <= 1);
+        this.setContentHidden(this.qualityBtn, levels.length < 2);
 
         const chapters = this.player.chapters();
-        this.chapBackBtn.hidden = !show('chapterPrev') || chapters.length === 0;
-        this.chapFwdBtn.hidden = !show('chapterNext') || chapters.length === 0;
+        this.setContentHidden(this.chapBackBtn, chapters.length === 0);
+        this.setContentHidden(this.chapFwdBtn, chapters.length === 0);
 
         const queueLen = this.safeQueueLength();
-        this.playlistBtn.hidden = !show('playlist') || queueLen < 2;
+        this.setContentHidden(this.playlistBtn, queueLen < 2);
 
         this.menus.mainButtons.subtitles.style.display = subsCount === 0 ? 'none' : 'flex';
         this.menus.mainButtons.language.style.display = audios.length <= 1 ? 'none' : 'flex';
         this.menus.mainButtons.quality.style.display = levels.length < 2 ? 'none' : 'flex';
         this.menus.mainButtons.playlist.style.display = queueLen < 2 ? 'none' : 'flex';
+
+        // Re-run fit pass now that content-gating may have freed space.
+        if (this._lastContainerWidth > 0) {
+            this._applyAllVisibilityRules(this._lastContainerWidth);
+        }
 
         this.refreshTransportEnablement();
     }
