@@ -1453,7 +1453,6 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
                     this.hideShortcuts();
                 }
             });
-            this.listen(container, 'focusin', () => this.bumpActivity());
             this.listen(container, 'mouseleave', () => this.maybeHide());
             this.listen(container, 'click', (e: Event) => {
                 this.bumpActivity();
@@ -1466,9 +1465,19 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
 
         // Hovering over the bottom bar or the menu frame suspends the inactivity
         // timer — controls must never hide while the user is actively using them.
+        // Use pointerenter/pointerleave filtered to mouse-type so mobile browsers
+        // don't lock _isControlsHovered via synthesised mouse events from touch.
         for (const zone of [this.bottomBar, this.menus.frame]) {
-            this.listen(zone, 'mouseenter', () => { this._isControlsHovered = true; });
-            this.listen(zone, 'mouseleave', () => { this._isControlsHovered = false; });
+            this.listen(zone, 'pointerenter', (e: Event) => {
+                if ((e as PointerEvent).pointerType === 'mouse') {
+                    this._isControlsHovered = true;
+                }
+            });
+            this.listen(zone, 'pointerleave', (e: Event) => {
+                if ((e as PointerEvent).pointerType === 'mouse') {
+                    this._isControlsHovered = false;
+                }
+            });
         }
 
         this.on(DesktopUiPlugin, 'shortcuts-toggle', () => this.toggleShortcuts());

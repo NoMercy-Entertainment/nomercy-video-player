@@ -290,6 +290,18 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 			this._wantedPoster = raw ? this._resolveImageUrl(raw) : null;
 			this._applyPoster();
 		});
+
+		// Apply the incoming item's poster BEFORE backend.load() clears the
+		// element src — this ensures the browser shows the new poster image
+		// during the blank window between the old source being removed and the
+		// first frame of the new source painting.
+		this.on('beforeLoad', event => {
+			const item: unknown = event?.data?.item;
+			if (!item) return;
+			const raw = _readImageField(item);
+			this._wantedPoster = raw ? this._resolveImageUrl(raw) : null;
+			this._applyPoster();
+		});
 	}
 
 	private _wantedPoster: string | null = null;
