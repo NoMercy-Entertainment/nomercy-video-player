@@ -1764,9 +1764,19 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
         // not match the previous item's. The first `level-switched` on the
         // new source will repopulate it.
         this._playingQualityIdx = null;
+
         this.refreshChaptersAndDuration();
         this.refreshCapabilityVisibility();
+
+        // Immediately repaint any open menu pane so stale tracks from the
+        // previous item are not displayed while the new source loads. The
+        // `mediaReady` event re-fires these after the new tracks arrive; this
+        // call clears the old data in the meantime.
         this.repaintPlaylistIfOpen();
+        this.repaintSubsIfOpen();
+        this.repaintAudioIfOpen();
+        this.repaintQualityIfOpen();
+
         void this.loadSpritesForItem(item);
     }
 

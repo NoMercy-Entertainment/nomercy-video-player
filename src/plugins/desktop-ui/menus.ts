@@ -18,7 +18,7 @@
  * builder takes a `listen` helper and a small action-callback bag.
  */
 
-import type { NMVideoPlayer, VideoPlaylistItem } from '@nomercy-entertainment/nomercy-video-player';
+import type { NMVideoPlayer } from '@nomercy-entertainment/nomercy-video-player';
 import { fluentIcons, svgFromIcon } from './icons';
 import {
     colors,
@@ -802,8 +802,7 @@ function buildPlaylistCard(
     btn.appendChild(right);
 
     listen(btn, 'click', () => {
-        void player.load?.(item as VideoPlaylistItem)
-            ?.then(() => player.play?.({ source: 'user' }));
+        player.current?.(index, { source: 'user', autoplay: true });
         onPick();
     });
 

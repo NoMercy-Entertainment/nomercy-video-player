@@ -922,6 +922,51 @@
         flex: 1;
     }
 
+    /* ── Portrait playlist: vertical stacked list ──────────────────────
+     * In portrait the two-column seasons+episodes layout collapses into a
+     * single vertical scroll. Seasons stack above episodes; the min-width
+     * constraints are dropped so each pane fills the full container width.
+     * Touch targets on each card remain ≥ 44px via .playlist-menu-button. */
+    &[data-orientation="portrait"] {
+        #playlist-menu.playlist-menu {
+            max-height: 70dvh;
+        }
+
+        .playlist-cols {
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        .seasons-pane {
+            min-width: 0;
+            border-right: none;
+            border-bottom: 2px solid rgba(107, 114, 128, 0.20);
+            min-height: 0;
+            height: auto;
+            overflow: visible;
+        }
+
+        .episode-menu {
+            min-width: 0;
+            min-height: 0;
+            height: auto;
+            overflow: visible;
+        }
+
+        .episode-menu .scroll-container {
+            max-height: none;
+        }
+
+        .playlist-menu-button {
+            min-height: 44px;
+        }
+
+        .episode-menu-button-left {
+            width: 28%;
+            flex-basis: 28%;
+        }
+    }
+
     .playlist-menu-button {
         display: flex;
         gap: 8px;
