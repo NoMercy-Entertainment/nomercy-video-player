@@ -238,10 +238,10 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 	declare backlogRemove: (id: string | number) => void;
 	declare backlogClear: () => void;
 
-	declare addPlugin: <P extends Plugin>(PluginClass: PluginCtorWithId & (new () => P), opts?: P['opts']) => this;
+	declare addPlugin: <P extends Plugin<any, any, any>>(PluginClass: PluginCtorWithId & (new () => P), opts?: P['opts']) => this;
 	declare getPlugin: <P extends object>(PluginClass: PluginCtorWithId & (new () => P)) => P | undefined;
 	declare getPluginById: <P extends object = object>(id: string) => P | undefined;
-	declare removePlugin: <P extends Plugin>(PluginClass: PluginCtorWithId & (new () => P)) => void;
+	declare removePlugin: <P extends Plugin<any, any, any>>(PluginClass: PluginCtorWithId & (new () => P)) => void;
 	declare removePluginById: (id: string) => void;
 	declare plugins: () => ReadonlyArray<Plugin>;
 	declare enabledPlugins: () => ReadonlyArray<Plugin>;
