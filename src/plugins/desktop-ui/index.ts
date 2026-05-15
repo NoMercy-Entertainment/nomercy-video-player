@@ -52,7 +52,8 @@
  * segments with chapter dividers automatically.
  */
 
-import { Plugin, Translations, translationsFromGlob } from '@nomercy-entertainment/nomercy-player-core';
+import { Plugin, translationsFromGlob } from '@nomercy-entertainment/nomercy-player-core';
+import type { Translations } from '@nomercy-entertainment/nomercy-player-core';
 import { TheaterState, VolumeState, type NMVideoPlayer, type VideoEventMap, type VideoPlaylistItem } from '@nomercy-entertainment/nomercy-video-player';
 
 import { svgFromIcon, fluentIcons } from './icons';
