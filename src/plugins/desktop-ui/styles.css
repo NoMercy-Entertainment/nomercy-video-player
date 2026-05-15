@@ -922,19 +922,38 @@
         flex: 1;
     }
 
-    /* ── Portrait playlist: vertical stacked list ──────────────────────
-     * In portrait the two-column seasons+episodes layout collapses into a
-     * single vertical scroll. Seasons stack above episodes; the min-width
-     * constraints are dropped so each pane fills the full container width.
-     * Touch targets on each card remain ≥ 44px via .playlist-menu-button. */
+    /* ── Portrait playlist: full-viewport overlay ──────────────────────
+     * In portrait the menu-frame expands to fill the available viewport
+     * (inset 0 with bottom clearance for the control bar). The playlist
+     * menu fills that frame vertically. Seasons and episodes stack into a
+     * single scroll column. Touch targets on each card stay ≥ 44px. */
     &[data-orientation="portrait"] {
+        .menu-frame {
+            top: 0;
+            right: 0;
+            left: 0;
+            bottom: 56px;
+            max-width: 100%;
+            width: 100%;
+            border-radius: 0;
+        }
+
+        .sub-menu {
+            width: 100%;
+            max-height: 100%;
+            border-radius: 0;
+        }
+
         #playlist-menu.playlist-menu {
-            max-height: 70dvh;
+            max-height: 100%;
+            height: 100%;
         }
 
         .playlist-cols {
             flex-direction: column;
             overflow-y: auto;
+            flex: 1;
+            min-height: 0;
         }
 
         .seasons-pane {
@@ -944,17 +963,20 @@
             min-height: 0;
             height: auto;
             overflow: visible;
+            width: 100%;
         }
 
         .episode-menu {
             min-width: 0;
             min-height: 0;
-            height: auto;
-            overflow: visible;
+            flex: 1;
+            overflow-y: auto;
+            width: 100%;
         }
 
         .episode-menu .scroll-container {
             max-height: none;
+            flex: 1;
         }
 
         .playlist-menu-button {
@@ -962,8 +984,12 @@
         }
 
         .episode-menu-button-left {
-            width: 28%;
-            flex-basis: 28%;
+            width: 35%;
+            flex-basis: 35%;
+        }
+
+        .playlist-menu-button-overview {
+            -webkit-line-clamp: 2;
         }
     }
 

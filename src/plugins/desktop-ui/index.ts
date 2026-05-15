@@ -388,6 +388,10 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
     private _resizeObserver: ResizeObserver | null = null;
     private _currentBreakpointName = 'xl';
 
+    /** True while the pointer is inside the bottom bar or menu frame.
+     *  While true, `maybeHide()` is a no-op so controls stay visible. */
+    private _isControlsHovered = false;
+
     /** Current orientation state — true when device is in portrait mode. */
     private _isPortrait = false;
 
@@ -1426,6 +1430,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
             });
             this.listen(container, 'mousedown', () => this.bumpActivity());
             this.listen(container, 'pointerdown', () => this.bumpActivity());
+            this.listen(container, 'touchstart', () => this.bumpActivity());
             this.listen(container, 'keydown', (e: Event) => {
                 this.bumpActivity();
                 const ke = e as KeyboardEvent;
@@ -1438,6 +1443,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
                     this.hideShortcuts();
                 }
             });
+            this.listen(container, 'focusin', () => this.bumpActivity());
             this.listen(container, 'mouseleave', () => this.maybeHide());
             this.listen(container, 'click', (e: Event) => {
                 this.bumpActivity();
@@ -1446,6 +1452,13 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
                     void this.player.togglePlayback();
                 }
             });
+        }
+
+        // Hovering over the bottom bar or the menu frame suspends the inactivity
+        // timer — controls must never hide while the user is actively using them.
+        for (const zone of [this.bottomBar, this.menus.frame]) {
+            this.listen(zone, 'mouseenter', () => { this._isControlsHovered = true; });
+            this.listen(zone, 'mouseleave', () => { this._isControlsHovered = false; });
         }
 
         this.on(DesktopUiPlugin, 'shortcuts-toggle', () => this.toggleShortcuts());
@@ -1464,8 +1477,14 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
                 clearTimeout(this.inactivityToken);
                 this.inactivityToken = null;
             }
+            this.player.emit('activity', { active: true });
         });
         this.on('ended', () => this.setPlayingState(false));
+
+        // Seeking always resets the inactivity timer so controls stay up
+        // during scrubbing, even if the 4 s window already expired.
+        this.on('seek', () => this.bumpActivity());
+        this.on('seeked', () => this.bumpActivity());
 
         this.on('current', (d) => this.handleCurrentChange(d.item));
 
@@ -2138,6 +2157,11 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
         this.menus.content.classList.remove('sub-menu-open');
         for (const pane of Object.values(this.menus.panes)) pane.classList.remove('is-open');
         try { this.menus.frameDialog.close?.(); } catch { /* already closed */ }
+
+        // Restart the inactivity timer now that no menu is blocking it.
+        // If paused, emit active immediately (no timer); if playing, arm
+        // the 4 s countdown from the moment the menu closes.
+        this.bumpActivity();
     }
     
     /**
@@ -2233,6 +2257,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
     private maybeHide(): void {
         if (!this.player.playState || this.player.playState() !== 'playing') return;
         if (this.menuOpen) return;
+        if (this._isControlsHovered) return;
 
         this.player.emit('activity', { active: false });
     }
