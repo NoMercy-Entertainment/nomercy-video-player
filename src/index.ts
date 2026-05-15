@@ -41,8 +41,8 @@ import type {
 	UrlResolver,
 	VisibilityState,
 } from '@nomercy-entertainment/nomercy-player-core';
-import type { IVideoBackend } from './player/video-backend/backend';
-import { Html5VideoBackend } from './player/video-backend/html5VideoBackend';
+import type { IVideoBackend } from './adapters/video-backend/IVideoBackend';
+import { Html5VideoBackend } from './adapters/video-backend/html5';
 import type { VideoEventMap, VideoPlayerConfig, VideoPlaylistItem } from './types';
 import type { PreloadStrategy, TransitionStrategy } from '@nomercy-entertainment/nomercy-player-core';
 import { GaplessTransitionStrategy } from '@nomercy-entertainment/nomercy-player-core';
@@ -74,6 +74,28 @@ export {
 	TheaterState,
 	VolumeState,
 } from './types';
+
+// Adapter ports + default implementations.
+export type {
+	BackendEvent,
+	BackendEventPayload,
+	BackendLoaderState,
+	BackendState,
+	IVideoBackend,
+	SubtitleCue,
+	SubtitleCueChange,
+	VideoBackendKind,
+} from './adapters/video-backend/IVideoBackend';
+export { Html5VideoBackend } from './adapters/video-backend/html5';
+
+export type { IThumbnailSource, ThumbnailFrame } from './adapters/thumbnail-source/IThumbnailSource';
+export { VttSpriteThumbnailSource } from './adapters/thumbnail-source/vtt-sprite';
+
+export type { IChapterSource } from './adapters/chapter-source/IChapterSource';
+export { VttChapterSource } from './adapters/chapter-source/vtt-chapters';
+
+export type { ISubtitleStyleStore } from './adapters/subtitle-style-store/ISubtitleStyleStore';
+export { StorageBackedSubtitleStyleStore } from './adapters/subtitle-style-store/storage-backed';
 
 const _instances: Map<string, NMVideoPlayer<BasePlaylistItem>> = new Map();
 

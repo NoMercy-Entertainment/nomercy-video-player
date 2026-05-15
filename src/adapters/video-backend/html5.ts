@@ -2,7 +2,7 @@
 
 import { BrowserPolicyError, EventEmitter, MediaFormatError } from '@nomercy-entertainment/nomercy-player-core';
 import type { AudioTrack, QualityLevel, SubtitleTrack } from '@nomercy-entertainment/nomercy-player-core';
-import type { BackendEventPayload, BackendLoaderState, BackendState, IVideoBackend, SubtitleCue, SubtitleCueChange } from './backend';
+import type { BackendEventPayload, BackendLoaderState, BackendState, IVideoBackend, SubtitleCue, SubtitleCueChange } from './IVideoBackend';
 
 const HLS_EXT_RE = /\.m3u8(\?|$)/i;
 
@@ -47,6 +47,23 @@ interface HlsInstance {
 	 *  (set when ABR picks; `currentLevel` only updates after the fragment
 	 *  finishes loading). Used as a fallback for `currentLevel === -1`. */
 	loadLevel: number;
+	/**
+	 * Forces the next segment fetch to the given level index regardless of
+	 * what ABR would have chosen. Setting to `-1` returns to ABR control.
+	 * Used for HDR → SDR emergency switching when the display changes.
+	 */
+	nextLevel: number;
+	/**
+	 * Caps the maximum level ABR is allowed to auto-select. `-1` means
+	 * uncapped (all levels eligible). Used to restrict ABR to SDR-only
+	 * levels when the active display cannot render HDR.
+	 *
+	 * Note: when HDR and SDR levels are interleaved by index (e.g. Cosmos
+	 * Laundromat: 0=SDR-2M, 1=HDR-2M, 2=SDR-4M, …), capping by max index
+	 * alone is insufficient. `_applyHdrConstraint` supplements this with a
+	 * `nextLevel` force-switch when the current level is an HDR variant.
+	 */
+	autoLevelCapping: number;
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	on(event: string, fn: (event: string, data: any) => void): void;
 	attachMedia(el: HTMLVideoElement): void;
@@ -139,6 +156,46 @@ export class Html5VideoBackend extends EventEmitter<BackendEventPayload> impleme
 	/** Timer handle for exponential back-off retries. Cleared on unload/dispose. */
 	private _retryTimer: ReturnType<typeof setTimeout> | undefined;
 
+	// ── HDR-aware ABR state ──
+	/**
+	 * Dynamic-range constraint strategy for HLS.js ABR.
+	 *
+	 * On manifests that carry both SDR and HDR (PQ/HLG) level variants —
+	 * e.g. Cosmos Laundromat (7 resolution tiers × SDR + HDR = 14 levels) —
+	 * HLS.js ABR is oblivious to display capability and can freely pick a PQ
+	 * variant on an SDR display (colours look washed out). This block wires
+	 * three responses:
+	 *
+	 *   1. Constraint on load  — after MANIFEST_PARSED, if the display is SDR
+	 *      the highest-SDR-level index is stored in `autoLevelCapping` so ABR
+	 *      never selects above it. For interleaved manifests (HDR index < SDR
+	 *      index at the same resolution) `nextLevel` force-switches away from
+	 *      any currently-playing HDR variant to its SDR peer.
+	 *
+	 *   2. Live display flip   — matchMedia `change` listener (wired in the
+	 *      constructor, torn down in dispose). On SDR→HDR: lift the cap and
+	 *      optionally prefer a PQ peer at the same resolution. On HDR→SDR:
+	 *      cap + force-switch the playing level if it is a PQ variant.
+	 *
+	 *   3. Audio continuity    — switching levels via `nextLevel` is seamless
+	 *      when the new level shares the same audio group ID, which HLS.js
+	 *      ensures for well-formed manifests (same resolution tier). No extra
+	 *      audio continuity guard is needed here.
+	 */
+	/** Whether the active display reported HDR capability at the last check. */
+	private _displayHdr: boolean = false;
+	/**
+	 * Per-level SDR/HDR classification. Populated after each MANIFEST_PARSED.
+	 * Index matches `hls.levels[i]`. `true` = HDR (PQ or HLG), `false` = SDR.
+	 */
+	private _levelIsHdr: boolean[] = [];
+	/** matchMedia query for display HDR capability. Tracked so we can remove
+	 *  the listener on dispose without leaking the closure. */
+	private _hdrMql: MediaQueryList | undefined;
+	/** Bound listener for `_hdrMql` change events. Stored so we can call
+	 *  `removeEventListener` with the same reference on dispose. */
+	private _hdrMqlListener: ((e: MediaQueryListEvent) => void) | undefined;
+
 	constructor(container: HTMLElement) {
 		super();
 		const existing = container.querySelector<HTMLVideoElement>('video');
@@ -152,6 +209,7 @@ export class Html5VideoBackend extends EventEmitter<BackendEventPayload> impleme
 			this.ownsElement = true;
 		}
 		this.wireElementEvents();
+		this._wireHdrMatchMedia();
 	}
 
 	// ── Lifecycle ──
@@ -292,6 +350,7 @@ export class Html5VideoBackend extends EventEmitter<BackendEventPayload> impleme
 			clearTimeout(this._retryTimer);
 			this._retryTimer = undefined;
 		}
+		this._teardownHdrMatchMedia();
 		this.unload();
 		for (const { event, fn } of this.elementListeners) {
 			this.element.removeEventListener(event, fn);
@@ -944,9 +1003,15 @@ export class Html5VideoBackend extends EventEmitter<BackendEventPayload> impleme
 	 * Emit `levels` and `audioTracks` backend events from the current HLS
 	 * instance's live lists. Called after every `MANIFEST_PARSED` event so
 	 * overlay plugins can update button visibility without polling.
+	 *
+	 * Also builds the per-level HDR classification table and immediately
+	 * applies the dynamic-range ABR constraint for the current display.
 	 */
 	private _emitHlsTrackLists(): void {
 		if (!this.hls) return;
+
+		this._classifyHdrLevels();
+		this._applyHdrConstraint(this._displayHdr);
 
 		void this._probeCodecCapabilities().then(() => {
 			const levels = this.qualityLevels();
@@ -955,6 +1020,119 @@ export class Html5VideoBackend extends EventEmitter<BackendEventPayload> impleme
 
 		const tracks = this.audioTracks();
 		if (tracks.length > 0) this.emit('audioTracks', { tracks });
+	}
+
+	// ── HDR-aware ABR helpers ──
+
+	/** Wire the `matchMedia('(dynamic-range: high)')` change listener once. */
+	private _wireHdrMatchMedia(): void {
+		if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+
+		this._displayHdr = window.matchMedia('(dynamic-range: high)').matches;
+
+		const mql = window.matchMedia('(dynamic-range: high)');
+		this._hdrMql = mql;
+
+		const listener = (event: MediaQueryListEvent): void => {
+			this._onDisplayHdrChange(event.matches);
+		};
+		this._hdrMqlListener = listener;
+		mql.addEventListener('change', listener);
+	}
+
+	/** Remove the matchMedia listener. Called from `dispose()`. */
+	private _teardownHdrMatchMedia(): void {
+		if (this._hdrMql && this._hdrMqlListener) {
+			this._hdrMql.removeEventListener('change', this._hdrMqlListener);
+		}
+		this._hdrMql = undefined;
+		this._hdrMqlListener = undefined;
+	}
+
+	/**
+	 * Build `_levelIsHdr[]` from the current HLS level list.
+	 * A level is HDR when its VIDEO-RANGE attribute is `PQ` or `HLG`.
+	 */
+	private _classifyHdrLevels(): void {
+		if (!this.hls?.levels?.length) {
+			this._levelIsHdr = [];
+			return;
+		}
+		this._levelIsHdr = this.hls.levels.map((level) => {
+			const videoRange = (level.attrs?.['VIDEO-RANGE'] ?? '').toUpperCase();
+			return videoRange === 'PQ' || videoRange === 'HLG';
+		});
+	}
+
+	/**
+	 * Constrain HLS.js ABR to the display's dynamic-range capability.
+	 *
+	 * SDR display (`displayHdr = false`):
+	 *   - Sets `hls.autoLevelCapping` to the highest SDR level index so the
+	 *     ABR algorithm never auto-selects above it. For interleaved manifests
+	 *     where some HDR level indices sit below some SDR level indices,
+	 *     `autoLevelCapping` alone is insufficient — we also force a `nextLevel`
+	 *     switch away from any currently-playing HDR variant to its nearest SDR
+	 *     peer at the same (or next-lower) resolution.
+	 *   - Emits a fresh `levels` event so overlay plugins can hide HDR rows.
+	 *
+	 * HDR display (`displayHdr = true`):
+	 *   - Lifts `autoLevelCapping` to `-1` (uncapped). ABR is free to select
+	 *     HDR variants. If the current level is SDR and an HDR peer exists at
+	 *     the same resolution, prefer it by setting `nextLevel` (soft switch —
+	 *     the next fragment boundary picks it up; no stutter).
+	 *   - Emits a fresh `levels` event so overlay plugins can reveal HDR rows.
+	 */
+	private _applyHdrConstraint(displayHdr: boolean): void {
+		this._displayHdr = displayHdr;
+		if (!this.hls || this._levelIsHdr.length === 0) return;
+
+		if (displayHdr) {
+			// Lift the cap — ABR can now pick HDR variants.
+			this.hls.autoLevelCapping = -1;
+
+			// Upgrade the playing level to an HDR peer at the same resolution
+			// if we were previously constrained to SDR.
+			const playingIdx = this.currentLevel();
+			if (playingIdx >= 0 && !this._levelIsHdr[playingIdx]) {
+				const currentHeight = this.hls.levels[playingIdx]?.height;
+				const hdrPeerIdx = this.hls.levels.findIndex(
+					(level, idx) => this._levelIsHdr[idx] && level.height === currentHeight,
+				);
+				if (hdrPeerIdx >= 0) this.hls.nextLevel = hdrPeerIdx;
+			}
+		}
+		else {
+			// Find the highest-indexed SDR level — cap ABR there.
+			let maxSdrIdx = -1;
+			for (let idx = 0; idx < this._levelIsHdr.length; idx++) {
+				if (!this._levelIsHdr[idx]) maxSdrIdx = idx;
+			}
+			this.hls.autoLevelCapping = maxSdrIdx;
+
+			// If currently playing an HDR level, force-switch to the best SDR peer.
+			const playingIdx = this.currentLevel();
+			if (playingIdx >= 0 && this._levelIsHdr[playingIdx]) {
+				const currentHeight = this.hls.levels[playingIdx]?.height;
+				const sdrPeerIdx = this.hls.levels.findIndex(
+					(level, idx) => !this._levelIsHdr[idx] && level.height === currentHeight,
+				);
+				const targetIdx = sdrPeerIdx >= 0 ? sdrPeerIdx : maxSdrIdx;
+				if (targetIdx >= 0) this.hls.nextLevel = targetIdx;
+			}
+		}
+
+		// Re-emit the level list so overlay plugins can update their menus
+		// to show or hide HDR variants without waiting for the next user action.
+		void this._probeCodecCapabilities().then(() => {
+			const levels = this.qualityLevels();
+			this.emit('levels', { levels });
+		});
+	}
+
+	/** Called by the matchMedia listener when the display's HDR capability changes. */
+	private _onDisplayHdrChange(displayNowHdr: boolean): void {
+		this._applyHdrConstraint(displayNowHdr);
 	}
 
 	/**

@@ -1,6 +1,6 @@
 
 
-import type { IVideoBackend, VideoBackendKind } from './player/video-backend/backend';
+import type { IVideoBackend, VideoBackendKind } from './adapters/video-backend/IVideoBackend';
 import type {
 	AudioTrack as KitAudioTrack,
 	BaseEventMap,
