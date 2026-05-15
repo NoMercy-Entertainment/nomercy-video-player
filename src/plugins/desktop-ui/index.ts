@@ -145,21 +145,95 @@ export interface DesktopUiButtonOptions {
  */
 export type ButtonPriorityList = ReadonlyArray<keyof DesktopUiButtonOptions>;
 
+/**
+ * A single responsive breakpoint. Below `maxWidth` (container pixels), only
+ * buttons up to `hideAfterRank` in the priority list are shown. Rank 0 means
+ * only the first button in the priority list survives; `Infinity` means
+ * show all buttons.
+ *
+ * @example
+ * // Hide everything past the 4th-priority button below 480 px:
+ * { name: 'sm', maxWidth: 480, hideAfterRank: 3 }
+ */
+export interface Breakpoint {
+    /** Human-readable name, also set as a `data-breakpoint` attribute on the container. */
+    name: string;
+    /** Container width (px) at which this breakpoint activates. Use `Infinity` for the largest tier. */
+    maxWidth: number;
+    /** Buttons with a priority rank strictly greater than this value are hidden at this breakpoint. */
+    hideAfterRank: number;
+}
+
+/**
+ * Payload emitted on every breakpoint transition.
+ *
+ * Subscribe cross-plugin style:
+ * ```ts
+ * this.on(DesktopUiPlugin, 'layout:breakpoint', (data) => {
+ *     console.log(data.to, data.hiddenButtons);
+ * });
+ * ```
+ */
+export interface LayoutBreakpointPayload {
+    /** Name of the breakpoint that was active before this resize. */
+    from: string;
+    /** Name of the breakpoint now active. */
+    to: string;
+    /** Button keys still visible at the new breakpoint. */
+    visibleButtons: ReadonlyArray<keyof DesktopUiButtonOptions>;
+    /** Button keys hidden by the new breakpoint (excludes always-hidden buttons). */
+    hiddenButtons: ReadonlyArray<keyof DesktopUiButtonOptions>;
+}
+
 export interface DesktopUiOptions {
     hideTitle?: boolean;
     disableClickToPause?: boolean;
     inactivityMs?: number;
     imageBaseUrl?: string;
+
     /** Per-button opt-in / opt-out. Unset keys use the button's own default. */
     buttons?: DesktopUiButtonOptions;
+
     /**
      * Priority order for responsive removal when the container is narrow.
      * Buttons at the end are removed first. Override to change the default order.
+     *
      * Default order: play → mute → volume → fullscreen → settings → next →
      * previous → seekBack → seekForward → chapterPrev → chapterNext →
      * theater → pip → speed → quality → subtitles → audio → aspectRatio → playlist.
      */
     buttonPriority?: ButtonPriorityList;
+
+    /**
+     * Full breakpoint progression. When provided, takes precedence over
+     * `collapseStages`. Each entry says "below `maxWidth` px, hide buttons
+     * whose priority rank exceeds `hideAfterRank`."
+     *
+     * Entries must be ordered from smallest `maxWidth` to largest.
+     * The last entry should use `maxWidth: Infinity` to cover all wider sizes.
+     *
+     * @example
+     * breakpoints: [
+     *   { name: 'xs', maxWidth: 360, hideAfterRank: 0 },
+     *   { name: 'sm', maxWidth: 480, hideAfterRank: 2 },
+     *   { name: 'md', maxWidth: 720, hideAfterRank: 4 },
+     *   { name: 'lg', maxWidth: 1024, hideAfterRank: 6 },
+     *   { name: 'xl', maxWidth: Infinity, hideAfterRank: Infinity },
+     * ]
+     */
+    breakpoints?: Breakpoint[];
+
+    /**
+     * Shorthand alternative to `breakpoints`. Provide an array of `hideAfterRank`
+     * values for the sm / md / lg tiers (xs is always rank 0, xl always shows all).
+     * Ignored when `breakpoints` is provided.
+     *
+     * @example
+     * // Hide after rank 2 at sm, rank 4 at md, rank 6 at lg:
+     * collapseStages: [2, 4, 6]
+     */
+    collapseStages?: [number, number, number];
+
     /**
      * Volume slider orientation.
      * - `'horizontal'` — inline slider that expands on hover (default).
@@ -209,6 +283,7 @@ function buttonVisible(
 /** Events emitted by {@link DesktopUiPlugin} under the `plugin:desktop-ui:` namespace. */
 export interface DesktopUiEvents {
     'shortcuts-toggle': undefined;
+    'layout:breakpoint': LayoutBreakpointPayload;
 }
 
 
@@ -307,6 +382,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
     private _lastMouseY = -1;
     private _tooltipHoverToken: number | null = null;
     private _resizeObserver: ResizeObserver | null = null;
+    private _currentBreakpointName = 'xl';
 
     override use(): void {
         this.appendStyles('./styles.css', 'desktop-ui-styles');
@@ -960,18 +1036,57 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
     }
 
     // ── Responsive button removal ────────────────────────────────────────
+
+    /** Default priority list — most essential first, least essential last. */
+    private static readonly DEFAULT_PRIORITY: ButtonPriorityList = [
+        'play', 'mute', 'volume', 'fullscreen', 'settings',
+        'next', 'previous', 'seekBack', 'seekForward',
+        'chapterPrev', 'chapterNext',
+        'theater', 'pip', 'speed', 'quality', 'subtitles', 'audio', 'aspectRatio', 'playlist',
+    ];
+
+    /**
+     * Default breakpoint progression:
+     * - xs (≤ 360): only rank-0 button visible (play)
+     * - sm (≤ 480): ranks 0–2 visible
+     * - md (≤ 720): ranks 0–4 visible
+     * - lg (≤ 1024): ranks 0–6 visible
+     * - xl (> 1024): all buttons visible
+     */
+    private static readonly DEFAULT_BREAKPOINTS: ReadonlyArray<Breakpoint> = [
+        { name: 'xs', maxWidth: 360, hideAfterRank: 0 },
+        { name: 'sm', maxWidth: 480, hideAfterRank: 2 },
+        { name: 'md', maxWidth: 720, hideAfterRank: 4 },
+        { name: 'lg', maxWidth: 1024, hideAfterRank: 6 },
+        { name: 'xl', maxWidth: Infinity, hideAfterRank: Infinity },
+    ];
+
+    /** Resolve the active breakpoint progression from consumer options. */
+    private resolveBreakpoints(): ReadonlyArray<Breakpoint> {
+        if (this.opts?.breakpoints && this.opts.breakpoints.length > 0) {
+            return this.opts.breakpoints;
+        }
+
+        const stages = this.opts?.collapseStages;
+        if (stages) {
+            return [
+                { name: 'xs', maxWidth: 360, hideAfterRank: 0 },
+                { name: 'sm', maxWidth: 480, hideAfterRank: stages[0] },
+                { name: 'md', maxWidth: 720, hideAfterRank: stages[1] },
+                { name: 'lg', maxWidth: 1024, hideAfterRank: stages[2] },
+                { name: 'xl', maxWidth: Infinity, hideAfterRank: Infinity },
+            ];
+        }
+
+        return DesktopUiPlugin.DEFAULT_BREAKPOINTS;
+    }
+
     private wireResponsive(): void {
         if (typeof ResizeObserver === 'undefined') return;
 
-        const defaultPriority: ButtonPriorityList = [
-            'play', 'mute', 'volume', 'fullscreen', 'settings',
-            'next', 'previous', 'seekBack', 'seekForward',
-            'chapterPrev', 'chapterNext',
-            'theater', 'pip', 'speed', 'quality', 'subtitles', 'audio', 'aspectRatio', 'playlist',
-        ];
-        const priority = this.opts?.buttonPriority ?? defaultPriority;
+        const priority = this.opts?.buttonPriority ?? DesktopUiPlugin.DEFAULT_PRIORITY;
 
-        const buttonMap: Record<keyof DesktopUiButtonOptions, HTMLButtonElement | null> = {
+        const buttonMap: Readonly<Record<keyof DesktopUiButtonOptions, HTMLButtonElement | null>> = {
             play: this.playBtn,
             mute: this.volBtn,
             volume: null,
@@ -993,27 +1108,58 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
             playlist: this.playlistBtn,
         };
 
-        const COLLAPSE_THRESHOLD = 480;
+        const applyBreakpoint = (width: number): void => {
+            const breakpoints = this.resolveBreakpoints();
 
-        const applyResponsive = (width: number): void => {
-            const narrow = width < COLLAPSE_THRESHOLD;
-            for (let idx = priority.length - 1; idx >= 0; idx--) {
+            const active = breakpoints.find(bp => width <= bp.maxWidth)
+                ?? breakpoints[breakpoints.length - 1]!;
+
+            const previousName = this._currentBreakpointName;
+            const activeHideAfterRank = active.hideAfterRank;
+
+            const visibleKeys: Array<keyof DesktopUiButtonOptions> = [];
+            const hiddenKeys: Array<keyof DesktopUiButtonOptions> = [];
+
+            for (let idx = 0; idx < priority.length; idx++) {
                 const key = priority[idx];
                 if (!key) continue;
+
                 const btn = buttonMap[key];
                 if (!btn) continue;
+
                 const optHidden = !buttonVisible(key, this.opts?.buttons);
                 if (optHidden) continue;
-                const rank = priority.length - 1 - idx;
-                const shouldHide = narrow && rank > 3;
+
+                const rank = idx;
+                const shouldHide = rank > activeHideAfterRank;
+
                 btn.hidden = shouldHide;
+
+                if (shouldHide) {
+                    hiddenKeys.push(key);
+                }
+                else {
+                    visibleKeys.push(key);
+                }
+            }
+
+            this.player.container.setAttribute('data-breakpoint', active.name);
+
+            if (active.name !== previousName) {
+                this._currentBreakpointName = active.name;
+                this.emit('layout:breakpoint', {
+                    from: previousName,
+                    to: active.name,
+                    visibleButtons: visibleKeys,
+                    hiddenButtons: hiddenKeys,
+                });
             }
         };
 
         this._resizeObserver = new ResizeObserver(entries => {
             const entry = entries[0];
             if (!entry) return;
-            applyResponsive(entry.contentRect.width);
+            applyBreakpoint(entry.contentRect.width);
         });
 
         this._resizeObserver.observe(this.player.container);

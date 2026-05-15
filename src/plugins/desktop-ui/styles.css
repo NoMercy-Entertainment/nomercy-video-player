@@ -1,4 +1,6 @@
 .nomercyplayer {
+    container-type: inline-size;
+
     .overlay {
         position: absolute;
         inset: 0;
@@ -1121,6 +1123,88 @@
         scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
     }
 }
+
+/* ── Container-query responsive layout (belt-and-suspenders alongside JS) ── */
+
+/* xl / lg: full layout — no overrides needed. */
+
+/* md (≤ 720 px): tighten padding, smaller time labels. */
+@container (max-width: 720px) {
+    .nomercyplayer {
+        .bottom-row {
+            padding: 4px 8px;
+            gap: 0;
+        }
+
+        .top-row {
+            padding: 0 12px;
+        }
+
+        .time {
+            font-size: 0.75rem;
+        }
+
+        .volume-container:hover .volume-slider,
+        .volume-container:focus-within .volume-slider {
+            width: 60px;
+        }
+    }
+}
+
+/* sm (≤ 480 px): hide time labels, compress volume. */
+@container (max-width: 480px) {
+    .nomercyplayer {
+        .current-time,
+        .remaining-time {
+            display: none;
+        }
+
+        .volume-container:hover .volume-slider,
+        .volume-container:focus-within .volume-slider {
+            width: 48px;
+        }
+
+        .top-row {
+            padding: 0 8px;
+        }
+
+        .bottom-row {
+            padding: 4px 4px;
+        }
+
+        .title {
+            font-size: 0.9rem;
+        }
+    }
+}
+
+/* xs (≤ 360 px): minimal layout — hide top bar text, minimal slider. */
+@container (max-width: 360px) {
+    .nomercyplayer {
+        .show-info {
+            display: none;
+        }
+
+        .title {
+            font-size: 0.8rem;
+        }
+
+        .top-row {
+            padding: 0 4px;
+        }
+
+        .bottom-row {
+            gap: 0;
+            padding: 2px 2px;
+        }
+
+        .volume-container:hover .volume-slider,
+        .volume-container:focus-within .volume-slider {
+            width: 32px;
+        }
+    }
+}
+
 @keyframes nm-spin {
     to { transform: rotate(360deg); }
 }
