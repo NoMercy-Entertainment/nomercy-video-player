@@ -205,6 +205,9 @@ describe('DesktopUiPlugin — progressive breakpoint system', () => {
     describe('buttonPriority reordering', () => {
         it('most-important buttons survive the fit pass when container is narrow', async () => {
             const player = setup({
+                // seekBack/seekForward are opt-in; enable them so priority ordering
+                // can be demonstrated against them.
+                buttons: { seekBack: true, seekForward: true },
                 buttonPriority: [
                     // fullscreen first — most important.
                     'fullscreen', 'play', 'settings', 'mute', 'seekBack',
@@ -242,6 +245,52 @@ describe('DesktopUiPlugin — progressive breakpoint system', () => {
             // in the space freed by skipping mute.
             expect(smEvent!.visibleButtons).toContain('seekBack');
             expect(smEvent!.visibleButtons).toContain('seekForward');
+        });
+    });
+
+    // ── Chapter button defaults + content gating ──────────────────────────────
+
+    describe('chapter button defaults', () => {
+        it('seekBack and seekForward default to hidden (not in DEFAULT_ON_BUTTONS)', async () => {
+            // Zero-config setup — seekBack/seekForward should be hidden by default.
+            const player = setup();
+            await player.ready();
+
+            const container = document.getElementById('test')!;
+            const seekBackBtn = container.querySelector<HTMLButtonElement>('#seek-back');
+            const seekFwdBtn  = container.querySelector<HTMLButtonElement>('#seek-forward');
+
+            // Both should be hidden (hidden attribute present) by default.
+            expect(seekBackBtn?.hidden).toBe(true);
+            expect(seekFwdBtn?.hidden).toBe(true);
+        });
+
+        it('consumer opts seekBack back in via buttons option', async () => {
+            const player = setup({ buttons: { seekBack: true } });
+            await player.ready();
+
+            // With seekBack explicitly enabled, the DOM node should be created without
+            // hidden=true from the initial buildBottomRow pass.
+            const container = document.getElementById('test')!;
+            const seekBackBtn = container.querySelector<HTMLButtonElement>('#seek-back');
+            expect(seekBackBtn?.hidden).toBe(false);
+        });
+
+        it('chapterPrev and chapterNext are content-gated hidden when no chapters', async () => {
+            // No chapters loaded → content gating should mark them hidden.
+            const player = setup();
+            await player.ready();
+
+            const container = document.getElementById('test')!;
+            const chapBackBtn = container.querySelector<HTMLButtonElement>('#chapter-back');
+            const chapFwdBtn  = container.querySelector<HTMLButtonElement>('#chapter-forward');
+
+            // Content gating hides these when chapters() returns [].
+            expect(chapBackBtn?.hidden).toBe(true);
+            expect(chapFwdBtn?.hidden).toBe(true);
+            // The data-content-hidden attribute signals content gating (not opt-out).
+            expect(chapBackBtn?.getAttribute('data-content-hidden')).toBe('true');
+            expect(chapFwdBtn?.getAttribute('data-content-hidden')).toBe('true');
         });
     });
 

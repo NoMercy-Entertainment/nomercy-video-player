@@ -15,9 +15,9 @@
  * play/pause zone to rows 3–5.
  *
  * Single-tap vs double-tap behaviour:
- *   Left / right zones:  single-tap hides controls; double-tap seeks ±seekSeconds.
+ *   Left / right zones:  single-tap shows/hides controls (toggle); double-tap seeks ±seekSeconds.
  *   Centre zone:         single-tap toggles play/pause; double-tap toggles fullscreen.
- *   Volume zones (mobile only): single-tap hides controls; double-tap adjusts volume.
+ *   Volume zones (mobile only): single-tap shows/hides controls (toggle); double-tap adjusts volume.
  *
  * Integration: emits `player.emit('activity', { active })` to notify the
  * desktop-ui plugin that controls should be shown or hidden. All other calls
@@ -48,7 +48,13 @@ import { Plugin } from '@nomercy-entertainment/nomercy-player-core';
 import type { NMVideoPlayer } from '@nomercy-entertainment/nomercy-video-player';
 
 export interface TouchZonesOptions {
-    /** Milliseconds between taps that still counts as a double-tap. Default 300. */
+    /**
+     * Milliseconds between taps that still counts as a double-tap. Default 300.
+     * `doubleTapThreshold` is the canonical name; `doubleClickDelay` is kept for
+     * backwards compatibility and takes precedence when both are provided.
+     */
+    doubleTapThreshold?: number;
+    /** @deprecated Use `doubleTapThreshold`. */
     doubleClickDelay?: number;
     /** Seconds to seek on double-tap. Default 10. */
     seekSeconds?: number;
@@ -185,7 +191,7 @@ export class TouchZonesPlugin extends Plugin<NMVideoPlayer<any>, TouchZonesOptio
         onDouble: (e: Event) => void,
         onSingle?: (e: Event) => void,
     ): EventListener {
-        const delay = this.opts?.doubleClickDelay ?? 300;
+        const delay = this.opts?.doubleClickDelay ?? this.opts?.doubleTapThreshold ?? 300;
         let lastTap = 0;
         let singleTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -292,7 +298,7 @@ export class TouchZonesPlugin extends Plugin<NMVideoPlayer<any>, TouchZonesOptio
                 this.showSeekIndicator(this.leftIndicator, seconds, 'back');
             },
             () => {
-                if (this.controlsVisible) this.player.emit('activity', { active: false });
+                this.player.emit('activity', { active: !this.controlsVisible });
             },
         );
         this.listen(el, 'click', handler);
@@ -313,7 +319,7 @@ export class TouchZonesPlugin extends Plugin<NMVideoPlayer<any>, TouchZonesOptio
                 this.showSeekIndicator(this.rightIndicator, seconds, 'forward');
             },
             () => {
-                if (this.controlsVisible) this.player.emit('activity', { active: false });
+                this.player.emit('activity', { active: !this.controlsVisible });
             },
         );
         this.listen(el, 'click', handler);
@@ -339,7 +345,7 @@ export class TouchZonesPlugin extends Plugin<NMVideoPlayer<any>, TouchZonesOptio
         const handler = this.doubleTap(
             () => { this.player.volumeUp?.(); },
             () => {
-                if (this.controlsVisible) this.player.emit('activity', { active: false });
+                this.player.emit('activity', { active: !this.controlsVisible });
             },
         );
         this.listen(el, 'click', handler);
@@ -351,7 +357,7 @@ export class TouchZonesPlugin extends Plugin<NMVideoPlayer<any>, TouchZonesOptio
         const handler = this.doubleTap(
             () => { this.player.volumeDown?.(); },
             () => {
-                if (this.controlsVisible) this.player.emit('activity', { active: false });
+                this.player.emit('activity', { active: !this.controlsVisible });
             },
         );
         this.listen(el, 'click', handler);

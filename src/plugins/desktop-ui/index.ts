@@ -105,11 +105,15 @@ import {
  * Per-button visibility overrides for the desktop UI control bar.
  *
  * Default-ON buttons (omit or set `true` to show): play, mute, volume,
- * fullscreen, settings.
+ * fullscreen, settings, chapterPrev, chapterNext.
+ * Chapter buttons are hidden automatically when the current item has no chapters
+ * (content gating via `data-content-hidden`).
  *
  * Default-OFF buttons (set `true` to enable): theater, pip, speed, quality,
- * subtitles, audio, playlist, chapterPrev, chapterNext, seekBack, seekForward,
- * aspectRatio.
+ * subtitles, audio, playlist, seekBack, seekForward, aspectRatio.
+ * `seekBack` / `seekForward` default to false because ±10 s seek is available
+ * on touch zones (double-tap) and keyboard (ArrowLeft/Right). Chapter buttons
+ * are the unique value in the control bar.
  *
  * Navigation (always-on when queue has multiple items): next, previous.
  */
@@ -199,7 +203,7 @@ export interface DesktopUiOptions {
      * Buttons at the end are removed first. Override to change the default order.
      *
      * Default order: play → mute → volume → fullscreen → settings → next →
-     * previous → seekBack → seekForward → chapterPrev → chapterNext →
+     * previous → chapterPrev → chapterNext → seekBack → seekForward →
      * theater → pip → speed → quality → subtitles → audio → aspectRatio → playlist.
      */
     buttonPriority?: ButtonPriorityList;
@@ -268,7 +272,7 @@ function readSidecarTracks(item: unknown): SidecarTrackEntry[] | undefined {
 
 const DEFAULT_ON_BUTTONS: ReadonlySet<keyof DesktopUiButtonOptions> = new Set([
     'play', 'mute', 'volume', 'fullscreen', 'settings', 'next', 'previous',
-    'seekBack', 'seekForward',
+    'chapterPrev', 'chapterNext',
 ]);
 
 function buttonVisible(
@@ -1069,8 +1073,8 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
     /** Default priority list — most essential first, least essential last. */
     private static readonly DEFAULT_PRIORITY: ButtonPriorityList = [
         'play', 'mute', 'volume', 'fullscreen', 'settings',
-        'next', 'previous', 'seekBack', 'seekForward',
-        'chapterPrev', 'chapterNext',
+        'next', 'previous', 'chapterPrev', 'chapterNext',
+        'seekBack', 'seekForward',
         'theater', 'pip', 'speed', 'quality', 'subtitles', 'audio', 'aspectRatio', 'playlist',
     ];
 
@@ -1078,7 +1082,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
      * Default breakpoint progression:
      * - xs (≤ 320): play + mute only (rank 0–1)
      * - sm (≤ 480): play / mute / fullscreen / settings (rank 0–4)
-     * - md (≤ 720): + seek + nav buttons (rank 0–8)
+     * - md (≤ 720): + nav + chapter buttons (rank 0–8)
      * - lg (≤ 1024): + theater / pip / speed (rank 0–13)
      * - xl (> 1024): all buttons visible
      *
