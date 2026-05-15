@@ -68,8 +68,11 @@ describe('TouchZonesPlugin', () => {
             const toggleSpy = vi.fn().mockResolvedValue(undefined);
             (player as any).togglePlayback = toggleSpy;
 
-            // Make controls visible via the activity event.
+            // Make controls visible via the activity event. The plugin debounces
+            // its controlsVisible flag by doubleClickDelay+10ms, so wait past
+            // that before clicking — otherwise onSingle reads the pre-tap value.
             player.emit('activity' as any, { active: true });
+            await new Promise(resolve => setTimeout(resolve, 320));
 
             const container = document.getElementById('test')!;
             const centerBox = findZoneBox(container, '2', '3');
@@ -137,8 +140,10 @@ describe('TouchZonesPlugin', () => {
             player.addPlugin(touchZonesPlugin, { doubleClickDelay: 300 });
             await player.ready();
 
-            // Make controls visible.
+            // Make controls visible. Wait past the controlsVisible debounce
+            // (doubleClickDelay+10ms) before tapping so onSingle reads true.
             player.emit('activity' as any, { active: true });
+            await new Promise(resolve => setTimeout(resolve, 320));
 
             const emitSpy = vi.spyOn(player, 'emit');
 
