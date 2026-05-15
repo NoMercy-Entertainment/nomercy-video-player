@@ -298,7 +298,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
     private currentSubMenu: SubMenuId | null = null;
 
     // ── keyboard shortcuts overlay ───────────────────────────────────
-    private shortcutsOverlay: HTMLDivElement | null = null;
+    private shortcutsDialog: HTMLDialogElement | null = null;
     private _shortcutsVisible = false;
 
     private inactivityToken: number | null = null;
@@ -319,6 +319,18 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
         });
         this.applyInitialState();
         this.bumpActivity();
+        this.wireKeybindHint();
+    }
+
+    /** Show a one-shot hint on first play so users discover the shortcuts overlay. */
+    private wireKeybindHint(): void {
+        if (typeof sessionStorage === 'undefined') return;
+        if (sessionStorage.getItem('nmplayer-keybinds-hint-shown')) return;
+
+        this.once('play', () => {
+            this.player.emit('display-message', { text: this.t('plugin.desktop-ui.shortcuts.hintToast'), ms: 12000 });
+            sessionStorage.setItem('nmplayer-keybinds-hint-shown', '1');
+        });
     }
 
     // ── DOM construction ─────────────────────────────────────────────────
@@ -340,7 +352,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
             backToMain: () => this.openMainMenu(),
         });
 
-        this.shortcutsOverlay = this.buildShortcutsOverlay(root);
+        this.buildShortcutsOverlay(root);
     }
 
     private buildCenter(parent: HTMLElement): HTMLDivElement {
@@ -364,112 +376,284 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
     }
 
     // ── Keyboard shortcuts overlay ───────────────────────────────────────
-    private buildShortcutsOverlay(parent: HTMLElement): HTMLDivElement {
-        const overlay = this.player.createElement('div', 'shortcuts-overlay')
-            .addClasses(['shortcuts-overlay'])
-            .appendTo(parent).get();
+    private buildShortcutsOverlay(parent: HTMLElement): HTMLDialogElement {
+        const dialog = document.createElement('dialog');
+        dialog.id = 'nmplayer-keybinds-dialog';
 
-        const container = document.createElement('div');
-        container.className = 'shortcuts-container';
+        const backdropStyle = document.createElement('style');
+        backdropStyle.textContent = '#nmplayer-keybinds-dialog::backdrop { background: rgba(0, 0, 0, 0.85); }';
+        dialog.appendChild(backdropStyle);
 
-        const header = document.createElement('div');
-        header.className = 'shortcuts-header';
+        Object.assign(dialog.style, {
+            background: 'transparent',
+            border: 'none',
+            outline: 'none',
+            padding: '0',
+            maxWidth: '960px',
+            maxHeight: '90vh',
+            width: '85vw',
+            color: 'white',
+        });
 
-        const title = document.createElement('h2');
-        title.className = 'shortcuts-title';
-        title.textContent = this.t('plugin.desktop-ui.shortcuts.title');
+        const card = document.createElement('div');
+        Object.assign(card.style, {
+            background: 'rgba(25, 25, 25, 0.95)',
+            borderRadius: '14px',
+            padding: '24px 28px',
+            position: 'relative',
+            overflow: 'hidden',
+        });
 
-        const hint = document.createElement('span');
-        hint.className = 'shortcuts-hint';
-        hint.textContent = this.t('plugin.desktop-ui.shortcuts.hint');
+        const heading = document.createElement('h2');
+        heading.textContent = this.t('plugin.desktop-ui.shortcuts.title');
+        Object.assign(heading.style, {
+            margin: '0 0 14px 0',
+            fontSize: '19px',
+            fontWeight: '600',
+            textAlign: 'center',
+        });
+        card.appendChild(heading);
 
-        header.append(title, hint);
-        container.appendChild(header);
-
-        const categories: ReadonlyArray<[string, ReadonlyArray<{ key: string; label: string }>]> = [
-            ['Playback', [
-                { key: 'Space', label: 'Play / Pause' },
-                { key: 'e', label: 'Next frame (paused)' },
-                { key: ']', label: 'Speed up' },
-                { key: '[', label: 'Speed down' },
-                { key: '=', label: 'Normal speed' },
-                { key: 't', label: 'Show time' },
-            ]],
-            ['Volume', [
-                { key: '↑', label: 'Volume up' },
-                { key: '↓', label: 'Volume down' },
-                { key: 'm', label: 'Mute / Unmute' },
-            ]],
-            ['Seeking', [
-                { key: '← / →', label: 'Seek back / forward' },
-                { key: 'Shift + ← / →', label: 'Seek 3 seconds' },
-                { key: 'Alt + ← / →', label: 'Seek 10 seconds' },
-                { key: 'Ctrl + ← / →', label: 'Seek 1 minute' },
-            ]],
-            ['Quick Seek', [
-                { key: '3', label: 'Seek 30 seconds' },
-                { key: '6', label: 'Seek 60 seconds' },
-                { key: '9', label: 'Seek 90 seconds' },
-                { key: '1', label: 'Seek 120 seconds' },
-            ]],
-            ['Navigation', [
-                { key: 'n', label: 'Next item' },
-                { key: 'p', label: 'Previous item' },
-                { key: 'Shift + N', label: 'Next chapter' },
-                { key: 'Shift + P', label: 'Previous chapter' },
-            ]],
-            ['Tracks & Subtitles', [
-                { key: 'v / 5', label: 'Cycle subtitles' },
-                { key: 'b / 2', label: 'Cycle audio' },
-                { key: '+', label: 'Subtitle size up' },
-                { key: '-', label: 'Subtitle size down' },
-            ]],
-            ['Display', [
-                { key: 'f / F11', label: 'Toggle fullscreen' },
-                { key: 'Esc', label: 'Exit fullscreen' },
-                { key: 'a', label: 'Cycle aspect ratio' },
-            ]],
+        const sections: ReadonlyArray<ReadonlyArray<{
+            title: string;
+            entries: ReadonlyArray<{ keys: ReadonlyArray<string>; label: string }>;
+        }>> = [
+            [
+                {
+                    title: 'Playback',
+                    entries: [
+                        { keys: ['Space'], label: this.t('plugin.desktop-ui.shortcuts.playPause') },
+                        { keys: ['S'], label: this.t('plugin.desktop-ui.shortcuts.stop') },
+                        { keys: ['E'], label: this.t('plugin.desktop-ui.shortcuts.frameAdvance') },
+                    ],
+                },
+                {
+                    title: 'Speed',
+                    entries: [
+                        { keys: [']'], label: this.t('plugin.desktop-ui.shortcuts.speedUp') },
+                        { keys: ['['], label: this.t('plugin.desktop-ui.shortcuts.speedDown') },
+                        { keys: ['='], label: this.t('plugin.desktop-ui.shortcuts.normalSpeed') },
+                    ],
+                },
+                {
+                    title: 'Volume',
+                    entries: [
+                        { keys: ['↑'], label: this.t('plugin.desktop-ui.shortcuts.volumeUp') },
+                        { keys: ['↓'], label: this.t('plugin.desktop-ui.shortcuts.volumeDown') },
+                        { keys: ['M'], label: this.t('plugin.desktop-ui.shortcuts.mute') },
+                    ],
+                },
+            ],
+            [
+                {
+                    title: 'Seeking',
+                    entries: [
+                        { keys: ['←'], label: this.t('plugin.desktop-ui.shortcuts.seekBack5') },
+                        { keys: ['→'], label: this.t('plugin.desktop-ui.shortcuts.seekForward5') },
+                        { keys: ['Shift', '← / →'], label: this.t('plugin.desktop-ui.shortcuts.seek3s') },
+                        { keys: ['Alt', '← / →'], label: this.t('plugin.desktop-ui.shortcuts.seek10s') },
+                        { keys: ['Ctrl', '← / →'], label: this.t('plugin.desktop-ui.shortcuts.seek60s') },
+                    ],
+                },
+                {
+                    title: 'Quick Seek',
+                    entries: [
+                        { keys: ['3'], label: this.t('plugin.desktop-ui.shortcuts.seek30s') },
+                        { keys: ['6'], label: this.t('plugin.desktop-ui.shortcuts.seek60sKey') },
+                        { keys: ['9'], label: this.t('plugin.desktop-ui.shortcuts.seek90s') },
+                        { keys: ['1'], label: this.t('plugin.desktop-ui.shortcuts.seek120s') },
+                    ],
+                },
+                {
+                    title: 'Navigation',
+                    entries: [
+                        { keys: ['N'], label: this.t('plugin.desktop-ui.shortcuts.next') },
+                        { keys: ['P'], label: this.t('plugin.desktop-ui.shortcuts.previous') },
+                        { keys: ['Shift', 'N'], label: this.t('plugin.desktop-ui.shortcuts.nextChapter') },
+                        { keys: ['Shift', 'P'], label: this.t('plugin.desktop-ui.shortcuts.previousChapter') },
+                    ],
+                },
+            ],
+            [
+                {
+                    title: 'Tracks & Subtitles',
+                    entries: [
+                        { keys: ['V'], label: this.t('plugin.desktop-ui.shortcuts.cycleSubs') },
+                        { keys: ['B'], label: this.t('plugin.desktop-ui.shortcuts.cycleAudio') },
+                        { keys: ['A'], label: this.t('plugin.desktop-ui.shortcuts.cycleAspect') },
+                        { keys: ['+'], label: this.t('plugin.desktop-ui.shortcuts.subSizeUp') },
+                        { keys: ['–'], label: this.t('plugin.desktop-ui.shortcuts.subSizeDown') },
+                    ],
+                },
+                {
+                    title: 'Display',
+                    entries: [
+                        { keys: ['F'], label: this.t('plugin.desktop-ui.shortcuts.fullscreen') },
+                        { keys: ['F11'], label: this.t('plugin.desktop-ui.shortcuts.fullscreen') },
+                        { keys: ['Esc'], label: this.t('plugin.desktop-ui.shortcuts.exitFullscreen') },
+                        { keys: ['T'], label: this.t('plugin.desktop-ui.shortcuts.showTime') },
+                        { keys: ['?'], label: this.t('plugin.desktop-ui.shortcuts.help') },
+                    ],
+                },
+            ],
         ];
 
         const grid = document.createElement('div');
-        grid.className = 'shortcuts-grid';
-
-        for (const [category, shortcuts] of categories) {
-            const section = document.createElement('div');
-
-            const catTitle = document.createElement('h3');
-            catTitle.className = 'shortcuts-category-title';
-            catTitle.textContent = this.t(`plugin.desktop-ui.shortcuts.category.${category}`) || category;
-            section.appendChild(catTitle);
-
-            for (const shortcut of shortcuts) {
-                const row = document.createElement('div');
-                row.className = 'shortcuts-row';
-
-                const label = document.createElement('span');
-                label.className = 'shortcuts-label';
-                label.textContent = this.t(`plugin.desktop-ui.shortcuts.label.${shortcut.label}`) || shortcut.label;
-
-                const kbd = document.createElement('kbd');
-                kbd.className = 'shortcuts-kbd';
-                kbd.textContent = shortcut.key;
-
-                row.append(label, kbd);
-                section.appendChild(row);
-            }
-
-            grid.appendChild(section);
-        }
-
-        container.appendChild(grid);
-        overlay.appendChild(container);
-
-        // Close on click outside the container content.
-        this.listen(overlay, 'click', (e: Event) => {
-            if (e.target === overlay) this.hideShortcuts();
+        Object.assign(grid.style, {
+            display: 'grid',
+            gridTemplateColumns: 'repeat(3, 1fr)',
+            gap: '28px 60px',
         });
 
-        return overlay;
+        for (const column of sections) {
+            const cell = document.createElement('div');
+            Object.assign(cell.style, {
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '14px',
+            });
+
+            for (const group of column) {
+                const groupEl = document.createElement('div');
+
+                const groupTitle = document.createElement('h3');
+                groupTitle.textContent = group.title;
+                Object.assign(groupTitle.style, {
+                    margin: '0 0 3px 0',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    color: 'rgba(255, 255, 255, 0.5)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                });
+                groupEl.appendChild(groupTitle);
+
+                for (const entry of group.entries) {
+                    const row = document.createElement('div');
+                    Object.assign(row.style, {
+                        display: 'flex',
+                        flexDirection: 'row-reverse',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '3px 0',
+                        gap: '14px',
+                    });
+
+                    const keysContainer = document.createElement('span');
+                    Object.assign(keysContainer.style, {
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        whiteSpace: 'nowrap',
+                    });
+
+                    for (let ki = 0; ki < entry.keys.length; ki++) {
+                        if (ki > 0) {
+                            const plus = document.createElement('span');
+                            plus.textContent = '+';
+                            Object.assign(plus.style, {
+                                fontSize: '12px',
+                                color: 'rgba(255, 255, 255, 0.4)',
+                            });
+                            keysContainer.appendChild(plus);
+                        }
+
+                        const kbd = document.createElement('kbd');
+                        kbd.textContent = entry.keys[ki]!;
+                        Object.assign(kbd.style, {
+                            background: 'rgba(255, 255, 255, 0.12)',
+                            border: '1px solid rgba(255, 255, 255, 0.2)',
+                            borderRadius: '5px',
+                            padding: '2px 7px',
+                            fontSize: '13px',
+                            fontFamily: 'monospace',
+                            whiteSpace: 'nowrap',
+                        });
+                        keysContainer.appendChild(kbd);
+                    }
+
+                    const labelEl = document.createElement('span');
+                    labelEl.textContent = entry.label;
+                    Object.assign(labelEl.style, {
+                        fontSize: '14px',
+                        color: 'rgba(255, 255, 255, 0.85)',
+                        textAlign: 'left',
+                    });
+
+                    row.appendChild(keysContainer);
+                    row.appendChild(labelEl);
+                    groupEl.appendChild(row);
+                }
+
+                cell.appendChild(groupEl);
+            }
+
+            grid.appendChild(cell);
+        }
+
+        card.appendChild(grid);
+
+        // Background keyboard SVG decoration
+        const bgKeyboard = document.createElement('div');
+        Object.assign(bgKeyboard.style, {
+            position: 'absolute',
+            bottom: '48px',
+            right: '-114px',
+            pointerEvents: 'none',
+            transform: 'rotate(-8deg)',
+            opacity: '0.04',
+        });
+        const highlighted = new Set('NOMERCY'.split(''));
+        const keyRows = [
+            '1234567890-='.split(''),
+            'QWERTYUIOP'.split(''),
+            'ASDFGHJKL'.split(''),
+            'ZXCVBNM'.split(''),
+        ];
+        const rowOffsets = [0, 10, 22, 38];
+        let svgKeys = '';
+        for (let rowIdx = 0; rowIdx < keyRows.length; rowIdx++) {
+            const row = keyRows[rowIdx]!;
+            for (let keyIdx = 0; keyIdx < row.length; keyIdx++) {
+                const kx = keyIdx * 28 + rowOffsets[rowIdx]!;
+                const ky = rowIdx * 30;
+                const letter = row[keyIdx]!;
+                const isHighlit = highlighted.has(letter);
+                const opacity = isHighlit ? '1' : '0.35';
+                svgKeys += `<rect x="${kx}" y="${ky}" width="24" height="24" rx="4" fill="white" opacity="${opacity}"/>`;
+                if (isHighlit) {
+                    svgKeys += `<text x="${kx + 12}" y="${ky + 16}" text-anchor="middle" fill="black" font-size="11" font-family="monospace" font-weight="700" opacity="0.7">${letter}</text>`;
+                }
+            }
+        }
+        svgKeys += '<rect x="110" y="120" width="160" height="24" rx="4" fill="white" opacity="0.35"/>';
+        bgKeyboard.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-10 -10 412 164" width="450" height="180">${svgKeys}</svg>`;
+        card.appendChild(bgKeyboard);
+
+        const hintEl = document.createElement('p');
+        hintEl.textContent = this.t('plugin.desktop-ui.shortcuts.hint');
+        Object.assign(hintEl.style, {
+            margin: '12px 0 0 0',
+            fontSize: '13px',
+            color: 'rgba(255, 255, 255, 0.35)',
+            textAlign: 'center',
+        });
+        card.appendChild(hintEl);
+
+        dialog.appendChild(card);
+
+        this.listen(dialog, 'click', (e: Event) => {
+            if (e.target === dialog) this.hideShortcuts();
+        });
+
+        // Sync flag when browser natively closes the dialog (its own Escape handling).
+        this.listen(dialog, 'close', () => {
+            this._shortcutsVisible = false;
+        });
+
+        parent.appendChild(dialog);
+        this.shortcutsDialog = dialog;
+        return dialog;
     }
 
     private toggleShortcuts(): void {
@@ -483,12 +667,14 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
 
     private showShortcuts(): void {
         this._shortcutsVisible = true;
-        this.shortcutsOverlay?.classList.add('shortcuts-overlay-visible');
+        this.shortcutsDialog?.showModal();
     }
 
     private hideShortcuts(): void {
         this._shortcutsVisible = false;
-        this.shortcutsOverlay?.classList.remove('shortcuts-overlay-visible');
+        if (this.shortcutsDialog?.open) {
+            this.shortcutsDialog.close();
+        }
     }
 
     private buildBottomBar(parent: HTMLElement): HTMLDivElement {
