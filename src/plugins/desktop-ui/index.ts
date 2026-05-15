@@ -357,6 +357,8 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
     private volSlider!: HTMLInputElement;
     /** Vertical volume slider popup. Null until `buildBottomRow` creates it. */
     private volSliderVertical: HTMLDivElement | null = null;
+    /** Mute toggle inside the vertical volume popup. Null until `buildBottomRow` creates it. */
+    private volPopupMuteBtn: HTMLButtonElement | null = null;
     private _volSliderVerticalOpen = false;
     private currentTimeEl!: HTMLDivElement;
     private remainingTimeEl!: HTMLDivElement;
@@ -879,6 +881,11 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
         vertInput.value = '100';
         vertInput.setAttribute('aria-label', 'Volume');
         vertInput.setAttribute('orient', 'vertical');
+
+        const volPopupMuteBtn = this.iconBtn('vol-popup-mute', 'volumeHigh');
+        volPopupMuteBtn.classList.add('vol-popup-mute');
+        vertPop.appendChild(volPopupMuteBtn);
+        this.volPopupMuteBtn = volPopupMuteBtn;
         this.volSliderVertical = vertPop;
 
         this.wireVolumeSlider(volContainer, vertPop, vertInput);
@@ -1374,6 +1381,13 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
             vertInput.style.setProperty('--vol-pct', `${vertInput.value}%`);
             void this.player.volume?.(level);
         });
+
+        if (this.volPopupMuteBtn) {
+            this.listen(this.volPopupMuteBtn, 'click', (e: Event) => {
+                e.stopPropagation();
+                this.player.toggleMute?.();
+            });
+        }
 
         if (mode === 'vertical') {
             applyVertical(true);
@@ -1981,10 +1995,21 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
 
     private applyMuted(muted: boolean): void {
         applyMuted(this.volBtn, () => this.applyMutedIcon(), muted);
+        this.applyPopupMuteIcon(muted);
     }
 
     private applyMutedIcon(): void {
         applyMutedIcon(this.volBtn, this.player, this.t.bind(this));
+    }
+
+    private applyPopupMuteIcon(muted: boolean): void {
+        if (!this.volPopupMuteBtn) return;
+        const icon = muted ? fluentIcons.volumeMuted : fluentIcons.volumeHigh;
+        const iconHolder = this.volPopupMuteBtn.querySelector('.btn-icon');
+        if (iconHolder) {
+            iconHolder.innerHTML = svgFromIcon(icon);
+        }
+        this.volPopupMuteBtn.setAttribute('aria-label', this.t('tooltip.mute', {}));
     }
 
     private applyRate(): void {

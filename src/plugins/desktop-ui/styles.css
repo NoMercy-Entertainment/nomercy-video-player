@@ -546,6 +546,28 @@
 
     .volume-slider-vertical.volume-slider-vertical-open {
         display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .vol-popup-mute {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 44px;
+        min-height: 44px;
+        padding: 0;
+        background: transparent;
+        border: none;
+        color: rgba(255, 255, 255, 0.8);
+        border-radius: 6px;
+        cursor: pointer;
+    }
+
+    .vol-popup-mute:hover {
+        color: #fff;
+        background: rgba(255, 255, 255, 0.1);
     }
 
     .volume-slider-vertical-input {
