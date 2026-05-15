@@ -20,43 +20,43 @@ describe('NMVideoPlayer — volume', () => {
 
 	const setup = (cfg = {}): NMVideoPlayer => new NMVideoPlayer('test').setup(cfg);
 
-	it('volume() defaults to 1.0', () => {
-		expect(setup().volume()).toBe(1);
+	it('volume() defaults to 100', () => {
+		expect(setup().volume()).toBe(100);
 	});
 
 	it('volume(v) round-trips and clamps', () => {
 		const p = setup();
-		p.volume(0.5);
-		expect(p.volume()).toBe(0.5);
-		p.volume(2);
-		expect(p.volume()).toBe(1);
+		p.volume(50);
+		expect(p.volume()).toBe(50);
+		p.volume(200);
+		expect(p.volume()).toBe(100);
 		p.volume(-1);
 		expect(p.volume()).toBe(0);
 	});
 
 	it('mute() then volume() returns 0; unmute() restores', () => {
 		const p = setup();
-		p.volume(0.7);
+		p.volume(70);
 		p.mute();
 		expect(p.volume()).toBe(0);
 		p.unmute();
-		expect(p.volume()).toBe(0.7);
+		expect(p.volume()).toBe(70);
 	});
 
 	it('volumeUp / volumeDown with explicit step', () => {
 		const p = setup();
-		p.volume(0.5);
-		p.volumeUp(0.1);
-		expect(p.volume()).toBeCloseTo(0.6);
-		p.volumeDown(0.2);
-		expect(p.volume()).toBeCloseTo(0.4);
+		p.volume(50);
+		p.volumeUp(10);
+		expect(p.volume()).toBeCloseTo(60);
+		p.volumeDown(20);
+		expect(p.volume()).toBeCloseTo(40);
 	});
 
 	it('emits "volume" with the new level', () => {
 		const p = setup();
 		let level: number | undefined;
 		p.on('volume' as any, (data: any) => { level = data.level; });
-		p.volume(0.3);
-		expect(level).toBe(0.3);
+		p.volume(30);
+		expect(level).toBe(30);
 	});
 });
