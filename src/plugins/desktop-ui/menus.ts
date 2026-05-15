@@ -786,13 +786,9 @@ function buildPlaylistCard(
     title.className = 'playlist-menu-button-title';
     title.innerText = item.title ?? `Item ${index + 1}`;
     right.appendChild(title);
-    if (item.progress?.timestamp) {
-        const watchedLabel = document.createElement('span');
-        watchedLabel.className = 'playlist-menu-button-watched';
-        watchedLabel.dataset['timestamp'] = String(item.progress.timestamp);
-        watchedLabel.textContent = new Date(item.progress.timestamp).toISOString();
-        right.appendChild(watchedLabel);
-    }
+    // Watched-date label removed per design — progress bar in the thumbnail
+    // already conveys "in progress" / "watched" state; the ISO date string was
+    // redundant noise on a small card.
     if (item.description) {
         const overview = document.createElement('span');
         overview.className = 'playlist-menu-button-overview';

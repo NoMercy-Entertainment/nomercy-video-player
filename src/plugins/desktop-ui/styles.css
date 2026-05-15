@@ -979,23 +979,23 @@
             flex: 1;
             display: flex;
             flex-direction: column;
-            gap: 12px;
-            padding: 12px 8px;
+            gap: 6px;
+            padding: 8px 6px;
         }
 
         .playlist-menu-button {
-            min-height: 116px;
-            padding: 14px;
-            gap: 16px;
-            align-items: stretch;
+            padding: 8px;
+            gap: 10px;
+            align-items: flex-start;
         }
 
         .episode-menu-button-left {
-            width: 32%;
-            flex-basis: 32%;
+            width: 38%;
+            flex-basis: 38%;
             min-width: 0;
-            max-width: 160px;
-            align-self: stretch;
+            max-width: 180px;
+            align-self: flex-start;
+            aspect-ratio: 16 / 9;
         }
 
         .playlist-menu-button-overview {
