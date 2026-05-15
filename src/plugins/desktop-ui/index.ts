@@ -1338,7 +1338,10 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
         vertPop: HTMLDivElement,
         vertInput: HTMLInputElement,
     ): void {
-        const mode = this.opts?.volumeSlider ?? 'horizontal';
+        // Default to 'auto' so touch / narrow viewports get the vertical popup
+        // automatically. Horizontal hover-expand requires a real pointer, so it
+        // can't be the default any more.
+        const mode = this.opts?.volumeSlider ?? 'auto';
 
         const applyVertical = (on: boolean): void => {
             volContainer.classList.toggle('volume-container-vertical', on);
@@ -1385,10 +1388,17 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
             if (typeof ResizeObserver === 'undefined') return;
 
             const AUTO_VERTICAL_THRESHOLD = 520;
+            // Touch / no-hover devices ALWAYS get the vertical popup —
+            // hover-expand horizontal slider is unreachable without a pointer.
+            const evaluate = (width: number): boolean =>
+                this._isNoHover || width <= AUTO_VERTICAL_THRESHOLD;
+
+            applyVertical(evaluate(this.player.container.clientWidth ?? 0));
+
             const resizer = new ResizeObserver(entries => {
                 const entry = entries[0];
                 if (!entry) return;
-                const useVertical = entry.contentRect.width <= AUTO_VERTICAL_THRESHOLD;
+                const useVertical = evaluate(entry.contentRect.width);
                 applyVertical(useVertical);
                 if (!useVertical && this._volSliderVerticalOpen) closeVertPop();
             });
@@ -1601,7 +1611,16 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
         this.listen(this.chapBackBtn, 'click', () => this.previousChapter());
         this.listen(this.chapFwdBtn, 'click', () => this.nextChapter());
 
-        this.listen(this.volBtn, 'click', () => { this.player.toggleMute?.(); });
+        this.listen(this.volBtn, 'click', () => {
+            // In vertical-slider mode the click opens/closes the popup —
+            // skip mute toggle so a single tap on mobile doesn't both mute
+            // AND toggle the popup (which leaves mute flipped and slider closed).
+            const volContainer = this.volBtn.closest('.volume-container');
+            if (volContainer?.classList.contains('volume-container-vertical')) {
+                return;
+            }
+            this.player.toggleMute?.();
+        });
         this.listen(this.volSlider, 'input', () => {
             const v = Number(this.volSlider.value) / 100;
             this.player.volume?.(v);

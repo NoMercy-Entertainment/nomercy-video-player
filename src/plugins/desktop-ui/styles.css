@@ -984,16 +984,17 @@
         }
 
         .playlist-menu-button {
-            min-height: 88px;
-            padding: 12px;
-            gap: 14px;
+            min-height: 116px;
+            padding: 14px;
+            gap: 16px;
             align-items: stretch;
         }
 
         .episode-menu-button-left {
-            width: 42%;
-            flex-basis: 42%;
+            width: 32%;
+            flex-basis: 32%;
             min-width: 0;
+            max-width: 160px;
             align-self: stretch;
         }
 
