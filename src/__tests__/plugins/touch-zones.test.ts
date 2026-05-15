@@ -42,7 +42,7 @@ describe('TouchZonesPlugin', () => {
     // ── Center zone single-tap ────────────────────────────────────────────────
 
     describe('center zone single-tap', () => {
-        it('calls togglePlayback when controlsVisible is false (controls hidden)', async () => {
+        it('does NOT call togglePlayback when controls are hidden (container touchstart wakes overlay separately)', async () => {
             const player = setup();
             player.addPlugin(touchZonesPlugin, { doubleClickDelay: 300 });
             await player.ready();
@@ -50,19 +50,14 @@ describe('TouchZonesPlugin', () => {
             const toggleSpy = vi.fn().mockResolvedValue(undefined);
             (player as any).togglePlayback = toggleSpy;
 
-            // Ensure controlsVisible stays false — do NOT emit 'activity: { active: true }'.
-            // The plugin's default is false, so no setup needed.
-
-            // Find the center touch box. It sits in column 2 of the grid.
             const container = document.getElementById('test')!;
             const centerBox = findZoneBox(container, '2', '3');
             expect(centerBox).toBeDefined();
 
-            // Simulate a single tap: one click, then wait past the doubleTap delay.
             centerBox!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
             await new Promise(resolve => setTimeout(resolve, 350));
 
-            expect(toggleSpy).toHaveBeenCalledTimes(1);
+            expect(toggleSpy).not.toHaveBeenCalled();
         });
 
         it('calls togglePlayback when controlsVisible is true (controls visible)', async () => {
@@ -116,7 +111,7 @@ describe('TouchZonesPlugin', () => {
     // ── Left/right zone single-tap — show/hide controls toggle ───────────────
 
     describe('seek zone single-tap', () => {
-        it('emits activity { active: true } when controls are hidden (left zone)', async () => {
+        it('does NOT emit activity when controls are hidden (left zone) — container touchstart handles wake', async () => {
             const player = setup();
             player.addPlugin(touchZonesPlugin, { doubleClickDelay: 300 });
             await player.ready();
@@ -134,8 +129,7 @@ describe('TouchZonesPlugin', () => {
             const activityCalls = emitSpy.mock.calls.filter(
                 call => call[0] === 'activity',
             );
-            expect(activityCalls).toHaveLength(1);
-            expect((activityCalls[0]![1] as { active: boolean }).active).toBe(true);
+            expect(activityCalls).toHaveLength(0);
         });
 
         it('emits activity { active: false } when controls are visible (left zone)', async () => {
@@ -162,7 +156,7 @@ describe('TouchZonesPlugin', () => {
             expect((activityCalls[0]![1] as { active: boolean }).active).toBe(false);
         });
 
-        it('emits activity { active: true } when controls are hidden (right zone)', async () => {
+        it('does NOT emit activity when controls are hidden (right zone) — container touchstart handles wake', async () => {
             const player = setup();
             player.addPlugin(touchZonesPlugin, { doubleClickDelay: 300 });
             await player.ready();
@@ -179,8 +173,7 @@ describe('TouchZonesPlugin', () => {
             const activityCalls = emitSpy.mock.calls.filter(
                 call => call[0] === 'activity',
             );
-            expect(activityCalls).toHaveLength(1);
-            expect((activityCalls[0]![1] as { active: boolean }).active).toBe(true);
+            expect(activityCalls).toHaveLength(0);
         });
     });
 
@@ -253,7 +246,7 @@ describe('TouchZonesPlugin', () => {
             expect(rewindSpy).toHaveBeenCalledTimes(1);
         });
 
-        it('treats taps outside doubleTapThreshold as separate single-taps', async () => {
+        it('treats taps outside doubleTapThreshold as separate single-taps (controls visible)', async () => {
             const player = setup();
             // Very short threshold: 80ms.
             player.addPlugin(touchZonesPlugin, { doubleTapThreshold: 80 });
@@ -261,6 +254,9 @@ describe('TouchZonesPlugin', () => {
 
             const rewindSpy = vi.fn().mockResolvedValue(undefined);
             (player as any).rewind = rewindSpy;
+
+            // Make controls visible so single-taps fire activity-false (hide).
+            player.emit('activity' as any, { active: true });
 
             const emitSpy = vi.spyOn(player, 'emit');
 
@@ -277,9 +273,11 @@ describe('TouchZonesPlugin', () => {
             // No seek should have fired.
             expect(rewindSpy).not.toHaveBeenCalled();
 
-            // Two activity toggles should have fired (one per single-tap).
+            // First single-tap fires activity:false (hide). Second tap: controls
+            // are now hidden, so it fires nothing. Total: 1 activity emission.
             const activityCalls = emitSpy.mock.calls.filter(call => call[0] === 'activity');
-            expect(activityCalls).toHaveLength(2);
+            expect(activityCalls).toHaveLength(1);
+            expect((activityCalls[0]![1] as { active: boolean }).active).toBe(false);
         });
 
         it('doubleClickDelay takes precedence over doubleTapThreshold when both are set', async () => {

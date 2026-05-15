@@ -503,10 +503,11 @@ function ensureStyles(): void {
     padding: 0.5rem 0;
     position: absolute;
     height: fit-content;
-    /* 4cqi ≈ TV captioning baseline (4% of container inline-size).
-     * clamp enforces WCAG 1.4.4: readable at 16 px min, sane at 72 px max.
+    /* 2.5cqi ≈ web-player subtitle baseline (2.5% of container inline-size).
+     * 100% scale at 960px player ≈ 24px, at 1920px player ≈ 48px.
+     * clamp enforces WCAG 1.4.4: readable at 14px min, sane at 56px max.
      * --subtitle-scale is set inline per-area from subtitleStyle.fontSize. */
-    font-size: clamp(16px, calc(var(--subtitle-scale, 1) * 4cqi), 72px);
+    font-size: clamp(14px, calc(var(--subtitle-scale, 1) * 2.5cqi), 56px);
 }
 .subtitle-overlay .subtitle-area.aligned-start { text-align: left; }
 .subtitle-overlay .subtitle-area.aligned-center { text-align: center; }

@@ -977,19 +977,33 @@
         .episode-menu .scroll-container {
             max-height: none;
             flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 12px 8px;
         }
 
         .playlist-menu-button {
-            min-height: 44px;
+            min-height: 88px;
+            padding: 12px;
+            gap: 14px;
+            align-items: stretch;
         }
 
         .episode-menu-button-left {
-            width: 35%;
-            flex-basis: 35%;
+            width: 42%;
+            flex-basis: 42%;
+            min-width: 0;
+            align-self: stretch;
         }
 
         .playlist-menu-button-overview {
-            -webkit-line-clamp: 2;
+            -webkit-line-clamp: 3;
+        }
+
+        .playlist-menu-button-title {
+            font-size: 0.95rem;
+            margin-bottom: 4px;
         }
     }
 

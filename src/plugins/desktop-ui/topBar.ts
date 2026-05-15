@@ -28,43 +28,43 @@ export interface TopBarRefs {
 
 /** Build the top bar (back/close buttons + show info + title + TV current item) and return named refs. */
 export function buildTitleBar(player: NMVideoPlayer<any>, parent: HTMLElement): TopBarRefs {
-    const bar = player.createElement('div', 'nmplayer-top-bar')
-        .addClasses(['nm-top-bar'])
+    const bar = player.createElement('div', 'top-bar')
+        .addClasses(['top-bar'])
         .appendTo(parent).get();
 
-    const left = player.createElement('div', 'nmplayer-top-bar-left')
-        .addClasses(['nm-top-bar-left'])
+    const left = player.createElement('div', 'top-bar-left')
+        .addClasses(['top-bar-left'])
         .appendTo(bar).get();
 
-    const backBtn = player.createButton('nmplayer-back-btn', 'Back', () => {
+    const backBtn = player.createButton('back-btn', 'Back', () => {
         player.emit('back', undefined);
     });
-    player.addClasses(backBtn, ['nm-back-btn']);
+    player.addClasses(backBtn, ['back-btn']);
     backBtn.innerHTML = svgFromIcon(fluentIcons.back);
     backBtn.hidden = true;
     left.appendChild(backBtn);
 
-    const closeBtn = player.createButton('nmplayer-close-btn', 'Close', () => {
+    const closeBtn = player.createButton('close-btn', 'Close', () => {
         player.emit('close', undefined);
     });
-    player.addClasses(closeBtn, ['nm-close-btn']);
+    player.addClasses(closeBtn, ['close-btn']);
     closeBtn.innerHTML = svgFromIcon(fluentIcons.close);
     closeBtn.hidden = true;
     left.appendChild(closeBtn);
 
-    const right = player.createElement('div', 'nmplayer-top-bar-right')
-        .addClasses(['nm-top-bar-right'])
+    const right = player.createElement('div', 'top-bar-right')
+        .addClasses(['top-bar-right'])
         .appendTo(bar).get();
 
-    // Mirrors the Android MobileTopBar two-line layout: primary `nm-title`
-    // (show name or movie title) on top, secondary `nm-show-info` (season +
+    // Mirrors the Android MobileTopBar two-line layout: primary `title`
+    // (show name or movie title) on top, secondary `show-info` (season +
     // episode + episode title) below — only rendered when non-empty.
-    const titleText = player.createElement('span', 'nmplayer-title')
-        .addClasses(['nm-title'])
+    const titleText = player.createElement('span', 'title')
+        .addClasses(['title'])
         .appendTo(right).get();
 
-    const showInfoText = player.createElement('span', 'nmplayer-show-info')
-        .addClasses(['nm-show-info'])
+    const showInfoText = player.createElement('span', 'show-info')
+        .addClasses(['show-info'])
         .appendTo(right).get();
 
     return {

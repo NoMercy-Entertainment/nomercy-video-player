@@ -263,6 +263,19 @@ export class TouchZonesPlugin extends Plugin<NMVideoPlayer<any>, TouchZonesOptio
             state.hideTimer = null;
         }
 
+        // Position the indicator at the VIDEO's vertical centre, not the
+        // container's centre. The container may be taller than the video
+        // (letterboxing, bottom bar) so a CSS-only 50% sits off-centre on
+        // the actual frame.
+        const video = (this.player as { videoElement?: HTMLVideoElement }).videoElement;
+        const parent = state.el.parentElement;
+        if (video && parent) {
+            const videoRect = video.getBoundingClientRect();
+            const parentRect = parent.getBoundingClientRect();
+            const centreY = videoRect.top + videoRect.height / 2 - parentRect.top;
+            state.el.style.top = `${centreY}px`;
+        }
+
         state.accumulated += seconds;
 
         const label = direction === 'back'
@@ -287,6 +300,10 @@ export class TouchZonesPlugin extends Plugin<NMVideoPlayer<any>, TouchZonesOptio
         const el = this.makeBox(parent, pos);
         const seconds = this.opts?.seekSeconds ?? 10;
 
+        // Single-tap onSingle: only HIDE if controls already visible. When
+        // controls are inactive the container's touchstart bumpActivity is
+        // what wakes them — touch-zones never wake. Double-tap fires regardless
+        // of overlay state for direct seek.
         const handler = this.doubleTap(
             () => {
                 void this.player.rewind?.(seconds);
@@ -298,7 +315,9 @@ export class TouchZonesPlugin extends Plugin<NMVideoPlayer<any>, TouchZonesOptio
                 this.showSeekIndicator(this.leftIndicator, seconds, 'back');
             },
             () => {
-                this.player.emit('activity', { active: !this.controlsVisible });
+                if (this.controlsVisible) {
+                    this.player.emit('activity', { active: false });
+                }
             },
         );
         this.listen(el, 'click', handler);
@@ -319,7 +338,9 @@ export class TouchZonesPlugin extends Plugin<NMVideoPlayer<any>, TouchZonesOptio
                 this.showSeekIndicator(this.rightIndicator, seconds, 'forward');
             },
             () => {
-                this.player.emit('activity', { active: !this.controlsVisible });
+                if (this.controlsVisible) {
+                    this.player.emit('activity', { active: false });
+                }
             },
         );
         this.listen(el, 'click', handler);
@@ -331,9 +352,16 @@ export class TouchZonesPlugin extends Plugin<NMVideoPlayer<any>, TouchZonesOptio
         el.style.alignItems = 'center';
         el.style.justifyContent = 'center';
 
+        // Center: double-tap toggles fullscreen (works regardless of overlay state).
+        // Single-tap togglePlayback only when controls are visible — inactive
+        // single-tap does nothing here; the container touchstart wakes the overlay.
         const handler = this.doubleTap(
             () => { void this.player.toggleFullscreen?.(); },
-            () => { void this.player.togglePlayback?.(); },
+            () => {
+                if (this.controlsVisible) {
+                    void this.player.togglePlayback?.();
+                }
+            },
         );
         this.listen(el, 'click', handler);
     }
@@ -344,7 +372,9 @@ export class TouchZonesPlugin extends Plugin<NMVideoPlayer<any>, TouchZonesOptio
         const handler = this.doubleTap(
             () => { this.player.volumeUp?.(); },
             () => {
-                this.player.emit('activity', { active: !this.controlsVisible });
+                if (this.controlsVisible) {
+                    this.player.emit('activity', { active: false });
+                }
             },
         );
         this.listen(el, 'click', handler);
@@ -356,7 +386,9 @@ export class TouchZonesPlugin extends Plugin<NMVideoPlayer<any>, TouchZonesOptio
         const handler = this.doubleTap(
             () => { this.player.volumeDown?.(); },
             () => {
-                this.player.emit('activity', { active: !this.controlsVisible });
+                if (this.controlsVisible) {
+                    this.player.emit('activity', { active: false });
+                }
             },
         );
         this.listen(el, 'click', handler);

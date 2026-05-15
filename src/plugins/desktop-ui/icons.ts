@@ -15,8 +15,8 @@ export type IconName = keyof typeof fluentIcons;
 export type IconEntry = Icon[string];
 
 /** Render a Fluent icon to an inline <svg> string with BOTH variants stacked
- *  as `<path class="nm-icon-normal">` + `<path class="nm-icon-hover">`. CSS
- *  toggles which path is visible on `:hover` and on `.nm-btn-active` so every
+ *  as `<path class="icon-normal">` + `<path class="icon-hover">`. CSS
+ *  toggles which path is visible on `:hover` and on `.btn-active` so every
  *  button inverts its fill state on hover. Honors the icon's declared `classes`
  *  for stroke-only glyphs (e.g. `chapterBack`/`chapterForward`). */
 export function svgFromIcon(icon: IconEntry, size = 22): string {
@@ -24,7 +24,7 @@ export function svgFromIcon(icon: IconEntry, size = 22): string {
     const fillAttrs = isStroke
         ? 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"'
         : 'fill="currentColor"';
-    return `<svg viewBox="0 0 24 24" ${fillAttrs} width="${size}" height="${size}" aria-hidden="true"><path class="nm-icon-normal" d="${icon.normal}"/><path class="nm-icon-hover" d="${icon.hover}"/></svg>`;
+    return `<svg viewBox="0 0 24 24" ${fillAttrs} width="${size}" height="${size}" aria-hidden="true"><path class="icon-normal" d="${icon.normal}"/><path class="icon-hover" d="${icon.hover}"/></svg>`;
 }
 
 /** Convenience: render the icon at `name` from the official table. */
