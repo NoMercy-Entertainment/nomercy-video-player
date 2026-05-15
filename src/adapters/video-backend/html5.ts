@@ -293,6 +293,11 @@ export class Html5VideoBackend extends EventEmitter<BackendEventPayload> impleme
 				enableWorker: true,
 				lowLatencyMode: false,
 				enableCEA708Captions: true,
+				// Begin fetching the first segment during manifest parsing so the
+				// browser has data buffered by the time play() is called. Without
+				// this the segment fetch only starts after MANIFEST_PARSED, adding
+				// a full round-trip before the first frame can render.
+				startFragPrefetch: true,
 			});
 			this.hls = hlsInstance;
 			hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {

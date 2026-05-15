@@ -1,4 +1,6 @@
 // Video-specific plugins
+export { autoAdvancePlugin, AutoAdvancePlugin } from './auto-advance';
+export type { AutoAdvanceOptions } from './auto-advance';
 export { desktopUiPlugin, DesktopUiPlugin } from './desktop-ui/index';
 export type { DesktopUiOptions } from './desktop-ui/index';
 export { subtitleOverlayPlugin, SubtitleOverlayPlugin } from './subtitle-overlay/index';

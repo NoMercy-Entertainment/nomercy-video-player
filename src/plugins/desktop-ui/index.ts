@@ -1664,6 +1664,10 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
 
     /** v1 scrub behavior — see desktopUIPlugin.createProgressBar. */
     private wireSliderBar(): void {
+        // Prevent the browser from intercepting touchmove as a scroll gesture
+        // while the user drags over the slider bar.
+        this.sliderRefs.sliderBar.style.touchAction = 'none';
+
         const startScrub = () => {
             if (this.isMouseDown) return;
             this.isMouseDown = true;
@@ -1673,9 +1677,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
         this.listen(this.sliderRefs.sliderBar, 'mousedown', startScrub);
         this.listen(this.sliderRefs.sliderBar, 'touchstart', startScrub);
 
-        // Click on bottom bar finalizes the scrub (matches v1 behavior so
-        // dragging off the slider before releasing still seeks).
-        this.listen(this.bottomBar, 'click', (e: Event) => {
+        const finalizeScrub = (e: Event) => {
             if (!this.isMouseDown) return;
             this.isMouseDown = false;
             this.isScrubbing = false;
@@ -1685,7 +1687,16 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
             this.sliderRefs.sliderNipple.style.left = `${scrub.scrubTime}%`;
             void this.player.currentTime?.(scrub.scrubTimePlayer);
             this.bumpActivity();
-        });
+        };
+
+        // Mouse: click on the bottom bar finalizes the scrub so dragging off
+        // the slider before releasing still seeks (matches v1 behavior).
+        this.listen(this.bottomBar, 'click', finalizeScrub);
+
+        // Touch: touchend on the slider bar finalizes the seek. Without this,
+        // releasing a finger never commits the scrub position because the
+        // browser suppresses the synthetic click event after a touchmove.
+        this.listen(this.sliderRefs.sliderBar, 'touchend', finalizeScrub);
 
         const onMove = (e: Event) => {
             const scrub = this.getScrubTime(e);
@@ -1694,6 +1705,12 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
 
             const popOffsetPct = this.clampPopOffset(scrub.scrubTime);
             this.sliderRefs.sliderPop.style.left = `${popOffsetPct}%`;
+
+            // Show the sprite pop during touch scrub — mouseover does not fire
+            // on touch so the pop must become visible here.
+            if (this.isMouseDown) {
+                this.sliderRefs.sliderPop.style.setProperty('--visibility', '1');
+            }
 
             const chapters = this.player.chapters();
             if (chapters.length === 0) {
