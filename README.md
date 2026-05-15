@@ -1,196 +1,134 @@
-# NoMercy Video Player
+# nomercy-video-player
 
-A headless, plugin-based HTML5 video player engine built with TypeScript. No UI included — you build your own.
+Headless reference video player built on nomercy-player-core. Adapter-driven.
 
-[![NPM Version](https://img.shields.io/npm/v/@nomercy-entertainment/nomercy-video-player?style=flat&logo=npm&logoColor=white&color=cb3837)](https://www.npmjs.com/package/@nomercy-entertainment/nomercy-video-player)
-[![NPM Downloads](https://img.shields.io/npm/dm/@nomercy-entertainment/nomercy-video-player?style=flat&logo=npm&logoColor=white&color=cb3837)](https://www.npmjs.com/package/@nomercy-entertainment/nomercy-video-player)
-[![Build Status](https://img.shields.io/github/actions/workflow/status/NoMercy-Entertainment/nomercy-video-player/release.yml?style=flat&logo=github&logoColor=white)](https://github.com/NoMercy-Entertainment/nomercy-video-player/actions)
-[![Tests](https://img.shields.io/github/actions/workflow/status/NoMercy-Entertainment/nomercy-video-player/test-reports.yml?style=flat&logo=vitest&logoColor=white&label=tests)](https://nomercy-entertainment.github.io/nomercy-video-player/)
-[![License](https://img.shields.io/github/license/NoMercy-Entertainment/nomercy-video-player?style=flat&color=green)](./LICENSE)
-[![TypeScript](https://img.shields.io/badge/TypeScript-Ready-3178c6?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-
-## Why?
-
-Most video players force their UI on you. This one doesn't. NoMercy Video Player handles video playback, HLS streaming, subtitle rendering, playlists, and state management — then gets out of the way. You control every pixel of the interface through the plugin system.
-
-## Install
-
-```bash
+```
 npm install @nomercy-entertainment/nomercy-video-player
 ```
 
-## Quick Example
+---
 
-```typescript
-import nmplayer, { KeyHandlerPlugin } from '@nomercy-entertainment/nomercy-video-player';
-import type { PlayerConfig } from '@nomercy-entertainment/nomercy-video-player';
+## Quick start
 
-const config: PlayerConfig = {
-	basePath:      'https://raw.githubusercontent.com/NoMercy-Entertainment/media/master/Films/Films',
-	imageBasePath: 'https://image.tmdb.org/t/p',
-	playlist: [
-		{
-			id:          'sintel',
-			title:       'Sintel',
-			description: 'A short fantasy film by the Blender Foundation',
-			file:        '/Sintel.(2010)/Sintel.(2010).NoMercy.m3u8',
-			image:       '/w780/q2bVM5z90tCGbmXYtq2J38T5hSX.jpg',
-			duration:    '14:48',
-			tracks: [
-				{ id: 0, label: 'English', file: '/Sintel.(2010)/subtitles/Sintel.(2010).NoMercy.eng.full.vtt', language: 'eng', kind: 'subtitles' },
-				{ id: 1, file: '/Sintel.(2010)/chapters.vtt', kind: 'chapters' },
-			],
-		},
-	],
-};
+```ts
+import { nmplayer, Html5VideoBackend } from '@nomercy-entertainment/nomercy-video-player';
+import { browserPlatform, LocalStorageBackend } from '@nomercy-entertainment/nomercy-player-core';
+import { DesktopUiPlugin } from '@nomercy-entertainment/nomercy-video-player';
 
-const player = nmplayer('player').setup(config);
+const player = nmplayer('player-1').setup({
+  container: document.getElementById('player')!,
+  accessToken: () => myAuth.getToken(),
+  platform: browserPlatform,
+  storage: new LocalStorageBackend(),
+  queue: [
+    {
+      id: '1',
+      url: 'https://cdn.example.com/video.m3u8',
+      title: 'My Video',
+    },
+  ],
+});
 
-// Add keyboard shortcuts (Space, arrows, F, M, etc.)
-const keyHandler = new KeyHandlerPlugin();
-player.registerPlugin('keyHandler', keyHandler);
-player.usePlugin('keyHandler');
+player.addPlugin(DesktopUiPlugin);
 
-// React to player state
-player.on('play', () => console.log('Playing'));
-player.on('time', data => console.log(`${data.currentTimeHuman} / ${data.durationHuman}`));
+await player.ready();
+await player.play();
 ```
 
-The `'player'` argument is the ID of a `<div>` element — never use a `<video>` tag. The player creates its own video element internally.
+---
 
-## What You Get
+## Adapter catalog
 
-**Playback engine** — MP4, WebM, HLS adaptive streaming with automatic quality switching
+Four video-specific ports extend the 28 kit ports.
 
-**Subtitle engine** — VTT subtitles built-in, ASS/SSA via the included OctopusPlugin
+| Port | Interface | Default adapter | Description |
+|------|-----------|----------------|-------------|
+| video-backend | `IVideoBackend` | `Html5VideoBackend` (HLS.js-backed `<video>`) | Media element management, HLS manifest loading, track list reporting, HDR-aware ABR |
+| thumbnail-source | `IThumbnailSource` | `VttSpriteThumbnailSource` | Seeks to a frame thumbnail from a VTT sprite sheet |
+| chapter-source | `IChapterSource` | `VttChapterSource` | Parses chapter markers from a WebVTT file |
+| subtitle-style-store | `ISubtitleStyleStore` | `StorageBackedSubtitleStyleStore` | Persists user subtitle style preferences across sessions |
 
-**State management** — CSS classes on the container (`playing`, `paused`, `buffering`, `active`, `inactive`, `error`) so your UI can react with pure CSS or JavaScript
+---
 
-**Event system** — 50+ typed events for playback, tracks, playlists, volume, quality, and more
+## HDR-aware ABR
 
-**Plugin architecture** — Build your entire UI as a plugin with full access to the player API
+New in v2. The `Html5VideoBackend` detects display dynamic-range capability and constrains HLS.js ABR automatically.
 
-**Playlist & tracks** — Multi-item playlists, audio track switching, quality levels, chapters, thumbnail sprites
+On manifests that carry both SDR and HDR level variants (tagged `VIDEO-RANGE=SDR` or `VIDEO-RANGE=PQ`/`VIDEO-RANGE=HLG`), HLS.js ABR is oblivious to display capability and can select a PQ variant on an SDR display — washed-out colours, wrong colour space. The v2 backend fixes this in three ways:
 
-## Building Your UI
+**Constraint on load.** After `MANIFEST_PARSED`, the backend reads the display's dynamic-range capability via `window.matchMedia('(dynamic-range: high)')`. On SDR displays, `autoLevelCapping` is set to the highest SDR level index so ABR never promotes above it.
 
-The player adds CSS classes to the container div that reflect its state. Use these to drive your UI:
+**Live display flip.** A `matchMedia` change listener detects when the user moves the browser window between monitors with different display capabilities. On SDR→HDR, the cap is lifted. On HDR→SDR, the cap is applied and the currently-playing level is force-switched to its SDR peer at the same resolution — seamlessly, because same-resolution peers share the same audio group ID in well-formed HLS manifests.
 
-| Class           | When applied                                    |
-| --------------- | ----------------------------------------------- |
-| `nomercyplayer` | Always present                                  |
-| `playing`       | Video is playing                                |
-| `paused`        | Video is paused                                 |
-| `buffering`     | Video is buffering                              |
-| `active`        | User is interacting (mouse/keyboard activity)   |
-| `inactive`      | User stopped interacting (controls should hide) |
-| `error`         | Playback error occurred                         |
+**Interleaved manifest support.** When HDR and SDR levels are interleaved by index (HDR variant index < SDR variant index at the same resolution), `nextLevel` is used to force-switch the currently-playing level to its SDR peer rather than just capping by index.
 
-**With plain CSS** — target the state classes on the container:
+No configuration is required. The constraint is wired automatically in the backend constructor and torn down on `dispose()`.
 
-```css
-.nomercyplayer.paused .controls {
-	opacity: 1;
-}
-.nomercyplayer.playing .controls {
-	opacity: 0;
-}
-.nomercyplayer.active .controls {
-	opacity: 1;
-}
-.nomercyplayer.buffering .spinner {
-	display: flex;
-}
+---
 
+## Built-in plugins
+
+| Plugin | Class | Description |
+|--------|-------|-------------|
+| desktop-ui | `DesktopUiPlugin` | Full-featured keyboard and pointer controls for desktop browsers |
+| subtitle-overlay | `SubtitleOverlayPlugin` | DOM subtitle renderer — renders `subtitle:cue` events to an overlay element |
+| octopus | `OctopusPlugin` | ASS/SSA subtitle renderer via libass compiled to WebAssembly |
+| touch-zones | `TouchZonesPlugin` | Tap-zone controls for mobile and touch-screen devices |
+| key-handler | `KeyHandlerPlugin` | Keyboard shortcut routing (via kit) |
+| media-session | `MediaSessionPlugin` | Media Session API integration (via kit) |
+| tab-leader | `TabLeaderPlugin` | Single-tab playback leadership (via kit) |
+| message | `MessagePlugin` | Cross-window event bridge (via kit) |
+| embed | `EmbedPlugin` | postMessage bridge for iframe-embedded players (via kit) |
+| skipper | `SkipperPlugin` | Skip-range enforcement (intro, credits, ad markers) |
+| drm | `DrmPlugin` | EME key-system and license server orchestration |
+| cast-sender | `CastSenderPlugin` | Google Cast sender integration for Chromecast handoff |
+| live-transcoding | `LiveTranscodingPlugin` | Server-driven live transcode delivery |
+| audio-graph | `AudioGraphPlugin` | Web Audio routing graph (via kit) — opt-in for EQ on audio tracks |
+| equalizer | `EqualizerPlugin` | Parametric EQ with presets (via kit, requires `AudioGraphPlugin`) |
+| mixer | `MixerPlugin` | Per-track gain control (via kit, requires `AudioGraphPlugin`) |
+| spectrum | `SpectrumPlugin` | Frequency-domain analyser (via kit, requires `AudioGraphPlugin`) |
+| canvas | `CanvasPlugin` | Shared canvas surface for visualization (via kit) |
+| visualization | `VisualizationPlugin` | rAF-driven rendering callbacks (via kit) |
+
+---
+
+## Composing with the kit
+
+The video player inherits all 28 kit adapter ports and adds its own 4 on top. Kit adapters are injected through the same `setup()` call — there is no separate configuration layer.
+
+```ts
+import { nmplayer } from '@nomercy-entertainment/nomercy-video-player';
+import { browserPlatform, LocalStorageBackend } from '@nomercy-entertainment/nomercy-player-core';
+import { VttChapterSource } from '@nomercy-entertainment/nomercy-video-player';
+
+const player = nmplayer('player-1').setup({
+  // Kit adapters:
+  platform: browserPlatform,
+  storage: new LocalStorageBackend(),
+  accessToken: () => myAuth.getToken(),
+
+  // Video-specific adapters:
+  chapterSource: new VttChapterSource('https://cdn.example.com/chapters.vtt'),
+
+  queue: [{ id: '1', url: 'https://cdn.example.com/video.m3u8', title: 'My Video' }],
+});
 ```
 
-**With Tailwind CSS** — add `group` to the container (the player does this automatically) and use the `group-[&.class]` modifier:
+Platform sub-ports compose cleanly for native-shell environments:
 
-```html
-<!-- Show controls when paused or active -->
-<div class="opacity-0 group-[&.paused]:opacity-100 group-[&.active]:opacity-100 transition-opacity">
-	<!-- your controls -->
-</div>
+```ts
+import { browserPlatform } from '@nomercy-entertainment/nomercy-player-core';
 
-<!-- Show spinner only when buffering -->
-<div class="hidden group-[&.buffering]:flex">
-	<!-- spinner -->
-</div>
-
-<!-- Hide an element during playback -->
-<button class="flex group-[&.playing]:hidden">
-	<!-- big play button -->
-</button>
-
+// Swap only the wake-lock controller — keep everything else:
+player.setup({
+  platform: { ...browserPlatform, wakeLock: capacitorWakeLock },
+});
 ```
 
-You can chain multiple states: `group-[&.nomercyplayer:not(.buffering).paused]:bg-black/50` targets a paused, non-buffering player.
-
-Create a plugin to build your controls:
-
-```typescript
-import { Plugin } from '@nomercy-entertainment/nomercy-video-player';
-import type { NMPlayer } from '@nomercy-entertainment/nomercy-video-player';
-
-class MyUIPlugin extends Plugin {
-	declare player: NMPlayer;
-
-	initialize(player: NMPlayer) {
-		this.player = player;
-	}
-
-	use() {
-		// Build your UI using player.container, player.overlay, etc.
-		// Listen to events: this.player.on('time', ...)
-		// Call methods: this.player.play(), this.player.seek(30), etc.
-	}
-
-	dispose() {
-		// Clean up DOM elements and event listeners
-	}
-}
-```
-
-See the [Plugin Development Guide](https://github.com/NoMercy-Entertainment/nomercy-video-player/wiki/Plugin-Development) for complete examples.
-
-## Documentation
-
-| Guide                                                                                                               | Description                             |
-| ------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
-| [Getting Started](https://github.com/NoMercy-Entertainment/nomercy-video-player/wiki/Quick-Start-Guide)               | Installation, setup, and first plugin   |
-| [Configuration](https://github.com/NoMercy-Entertainment/nomercy-video-player/wiki/Configuration)                     | All PlayerConfig options                |
-| [Plugin Development](https://github.com/NoMercy-Entertainment/nomercy-video-player/wiki/Plugin-Development)           | Extending the player with plugins       |
-| [Building a Player UI](https://github.com/NoMercy-Entertainment/nomercy-video-player/wiki/Building-a-Video-Player-UI) | 10-step tutorial from scratch           |
-| [API Reference](https://github.com/NoMercy-Entertainment/nomercy-video-player/wiki/API-Reference)                     | Types and interfaces                    |
-| [Methods](https://github.com/NoMercy-Entertainment/nomercy-video-player/wiki/API-Reference-Methods)                   | All NMPlayer methods                    |
-| [Events](https://github.com/NoMercy-Entertainment/nomercy-video-player/wiki/Events)                                   | All events with data types              |
-| [Framework Integration](https://github.com/NoMercy-Entertainment/nomercy-video-player/wiki/Framework-Integration)     | Vue, React, Svelte, Angular, Vanilla JS |
-
-## Browser Support
-
-| Feature       | Chrome | Firefox | Safari | Edge |
-| ------------- | ------ | ------- | ------ | ---- |
-| Core Playback | Yes    | Yes     | Yes    | Yes  |
-| HLS Streaming | Yes    | Yes     | Native | Yes  |
-| ASS Subtitles | Yes    | Yes     | Yes    | Yes  |
-| Plugin System | Yes    | Yes     | Yes    | Yes  |
-
-## Contributing
-
-```bash
-git clone https://github.com/NoMercy-Entertainment/nomercy-video-player.git
-cd nomercy-video-player
-npm install
-npm run dev
-npm run build
-```
+---
 
 ## License
 
-[Apache-2.0](LICENSE)
+Apache-2.0
 
-## About
-
-Built by the [NoMercy Entertainment](https://github.com/NoMercy-Entertainment) team. Powers video playback in [NoMercyTV](https://nomercy.tv/).
-
-See also: [NoMercy MusicPlayer](https://github.com/NoMercy-Entertainment/nomercy-music-player) | [NoMercy MediaServer](https://github.com/NoMercy-Entertainment/nomercy-media-server)
+Repository: [github.com/NoMercy-Entertainment/nomercy-video-player](https://github.com/NoMercy-Entertainment/nomercy-video-player)
