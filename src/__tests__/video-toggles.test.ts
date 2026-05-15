@@ -220,4 +220,93 @@ describe('NMVideoPlayer — video toggles (theater / fullscreen / pip)', () => {
 			expect(events).toEqual([true, false]);
 		});
 	});
+
+	// ── aspectRatio ──
+
+	describe('aspectRatio', () => {
+		it('reads uniform by default', async () => {
+			const p = new NMVideoPlayer('test').setup({});
+			await p.ready();
+			expect(p.aspectRatio()).toBe('uniform');
+		});
+
+		it('setter updates _aspectRatio and emits aspectRatio event', async () => {
+			const p = new NMVideoPlayer('test').setup({});
+			await p.ready();
+
+			const events: string[] = [];
+			p.on('aspectRatio' as any, (data: any) => { events.push(data.value); });
+
+			p.aspectRatio('fill');
+			p.aspectRatio('exactfit');
+			p.aspectRatio('none');
+			p.aspectRatio('uniform');
+
+			expect(p.aspectRatio()).toBe('uniform');
+			expect(events).toEqual(['fill', 'exactfit', 'none', 'uniform']);
+		});
+
+		it('applies object-fit to the video element when backend exists', async () => {
+			const p = new NMVideoPlayer('test').setup({});
+			await p.ready();
+
+			p.backend();
+			const videoEl = document.querySelector<HTMLVideoElement>('#test video');
+			expect(videoEl).not.toBeNull();
+
+			p.aspectRatio('fill');
+			expect(videoEl!.style.objectFit).toBe('fill');
+
+			p.aspectRatio('exactfit');
+			expect(videoEl!.style.objectFit).toBe('cover');
+
+			p.aspectRatio('none');
+			expect(videoEl!.style.objectFit).toBe('none');
+
+			p.aspectRatio('uniform');
+			expect(videoEl!.style.objectFit).toBe('contain');
+		});
+
+		it('survives aspectRatio() call before backend exists, then applies on backend init', async () => {
+			const p = new NMVideoPlayer('test').setup({});
+			await p.ready();
+
+			// No backend yet — videoElement is undefined. Call must not throw.
+			p.aspectRatio('exactfit');
+			expect(p.aspectRatio()).toBe('exactfit');
+
+			// Allocating the backend now must pick up the pre-set value.
+			p.backend();
+			const videoEl = document.querySelector<HTMLVideoElement>('#test video');
+			expect(videoEl).not.toBeNull();
+			expect(videoEl!.style.objectFit).toBe('cover');
+		});
+
+		it('options.stretching seeds the initial value when no user call preceded backend init', async () => {
+			(NMVideoPlayer as unknown as { _resetRegistry: () => void })._resetRegistry();
+			document.body.innerHTML = '<div id="test2"></div>';
+			const p = new NMVideoPlayer('test2').setup({ stretching: 'none' } as any);
+			await p.ready();
+
+			p.backend();
+			const videoEl = document.querySelector<HTMLVideoElement>('#test2 video');
+			expect(videoEl).not.toBeNull();
+			expect(videoEl!.style.objectFit).toBe('none');
+		});
+
+		it('user aspectRatio() call beats options.stretching when set before backend init', async () => {
+			(NMVideoPlayer as unknown as { _resetRegistry: () => void })._resetRegistry();
+			document.body.innerHTML = '<div id="test3"></div>';
+			const p = new NMVideoPlayer('test3').setup({ stretching: 'none' } as any);
+			await p.ready();
+
+			p.aspectRatio('fill');
+
+			p.backend();
+			const videoEl = document.querySelector<HTMLVideoElement>('#test3 video');
+			expect(videoEl).not.toBeNull();
+			// User's choice must win over options.stretching.
+			expect(videoEl!.style.objectFit).toBe('fill');
+		});
+	});
 });

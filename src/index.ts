@@ -347,15 +347,16 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 		}
 
 		this._applyPoster();
-		// Apply the initial stretching config to the video element.
-		const initialStretching = this.options?.stretching;
-		if (initialStretching) {
-			this._aspectRatio = initialStretching;
-			this._applyObjectFit(initialStretching);
+
+		// Seed _aspectRatio from options.stretching when no explicit aspectRatio()
+		// call has overridden it yet (i.e. still at the 'uniform' default).
+		// This preserves any value the consumer set via player.aspectRatio(x)
+		// before the first load — such calls store the value in _aspectRatio but
+		// bail early because videoElement is not yet set.
+		if (this.options?.stretching && this._aspectRatio === 'uniform') {
+			this._aspectRatio = this.options.stretching;
 		}
-		else {
-			this._applyObjectFit('uniform');
-		}
+		this._applyObjectFit(this._aspectRatio);
 		// Bridge backend element events to player-level phase transitions and
 		// the `firstFrame` / `ended` events the player surface promises.
 		let firstFrameEmitted = false;
