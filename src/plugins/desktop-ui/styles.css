@@ -930,12 +930,13 @@
     &[data-orientation="portrait"] {
         /* Portrait full-viewport ONLY applies when the PLAYLIST sub-menu is
          * the active one (.is-open). Subtitle / audio / quality / speed / aspect
-         * sub-menus keep their default popover sizing — they were fine. */
+         * sub-menus keep their default popover sizing — they were fine.
+         * Menu overlays the bottom bar too (no 56px reserve) for full real estate. */
         .menu-frame:has(.playlist-menu.is-open) {
             top: 0;
             right: 0;
             left: 0;
-            bottom: 56px;
+            bottom: 0;
             max-width: 100%;
             width: 100%;
             border-radius: 0;
