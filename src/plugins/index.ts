@@ -28,6 +28,10 @@ export type {
 	VisualizationFrame, VisualizationOptions,
 } from '@nomercy-entertainment/nomercy-player-core';
 
+// TV remote control plugin — subclasses KeyHandlerPlugin with TV-specific bindings
+export { tvUiPlugin, TvUiPlugin } from './tv-ui';
+export type { TvUiOptions } from './tv-ui';
+
 // Cross-library plugins (from the kit, with video-specific defaults where applicable)
 export { keyHandlerPlugin, KeyHandlerPlugin } from './key-handler';
 export { mediaSessionPlugin, MediaSessionPlugin } from './media-session';
