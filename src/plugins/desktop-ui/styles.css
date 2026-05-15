@@ -928,7 +928,10 @@
      * menu fills that frame vertically. Seasons and episodes stack into a
      * single scroll column. Touch targets on each card stay ≥ 44px. */
     &[data-orientation="portrait"] {
-        .menu-frame {
+        /* Portrait full-viewport ONLY applies when the PLAYLIST sub-menu is
+         * the active one (.is-open). Subtitle / audio / quality / speed / aspect
+         * sub-menus keep their default popover sizing — they were fine. */
+        .menu-frame:has(.playlist-menu.is-open) {
             top: 0;
             right: 0;
             left: 0;
@@ -938,7 +941,7 @@
             border-radius: 0;
         }
 
-        .sub-menu {
+        .playlist-menu.is-open {
             width: 100%;
             max-height: 100%;
             border-radius: 0;
