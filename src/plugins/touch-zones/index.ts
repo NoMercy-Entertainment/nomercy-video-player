@@ -323,7 +323,6 @@ export class TouchZonesPlugin extends Plugin<NMVideoPlayer<any>, TouchZonesOptio
             },
         );
         this.listen(el, 'click', handler);
-        this.listen(el, 'touchend', handler);
     }
 
     private buildPlayback(parent: HTMLElement, pos: ZonePos): void {
