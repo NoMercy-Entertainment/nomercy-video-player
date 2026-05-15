@@ -74,6 +74,27 @@ export interface NMPlayerCore {
 	hdrSupported(): boolean;
 
 	/**
+	 * Returns the cached HEVC decode support result. Synchronous; safe to call
+	 * before {@link probeHevcSupport} resolves — falls back to a trust of
+	 * `MediaSource.isTypeSupported` until the asynchronous MediaCapabilities
+	 * probe lands.
+	 * @returns `true` when HEVC can be decoded smoothly + power-efficiently.
+	 */
+	hevcSupported(): boolean;
+
+	/**
+	 * Runs the MediaCapabilities `decodingInfo` probe for HEVC Main10 and caches
+	 * the result for subsequent {@link hevcSupported} calls. Distinguishes
+	 * "browser advertises HEVC support" (`MediaSource.isTypeSupported` returns
+	 * true) from "browser can actually decode it" (`smooth` + `powerEfficient`).
+	 * Desktop Chrome on machines without an HEVC hardware decoder lies on the
+	 * former but tells the truth on the latter.
+	 * @returns `true` when HEVC decode is supported AND the decode is reported
+	 *          smooth + power-efficient.
+	 */
+	probeHevcSupport(): Promise<boolean>;
+
+	/**
 	 * Loads a video source URL, setting up HLS.js for `.m3u8` streams or native playback otherwise.
 	 * @param url - The video source URL.
 	 */

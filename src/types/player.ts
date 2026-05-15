@@ -121,6 +121,8 @@ export interface NMPlayer<T extends Record<string, any> = Record<string, any>> e
 	_boundFloatClass: ((enabled: boolean) => void) | null;
 	_hlsRecoveryAttempts: number;
 	_hlsRecoveryTimer: ReturnType<typeof setTimeout> | null;
+	_hevcSupportedCache: boolean | undefined;
+	_hevcProbeInFlight: Promise<boolean> | undefined;
 	_pipEnterHandler: (() => void) | undefined;
 	_pipLeaveHandler: (() => void) | undefined;
 	_theaterMode: boolean;

@@ -432,6 +432,99 @@ export const coreMethods = {
 		return screen.colorDepth > 24 && window.matchMedia('(color-gamut: p3)').matches;
 	},
 
+	hevcSupported(this: NMPlayer): boolean {
+		// Definitive result from the MediaCapabilities probe (see probeHevcSupport).
+		if (typeof this._hevcSupportedCache === 'boolean')
+			return this._hevcSupportedCache;
+		// Synchronous fallback used until the async probe lands. Trusts
+		// MediaSource.isTypeSupported, which over-reports on desktop Chrome
+		// without an HEVC hardware decoder — that's why probeHevcSupport
+		// exists and should be kicked off at setup().
+		if (typeof MediaSource === 'undefined')
+			return false;
+		return MediaSource.isTypeSupported('video/mp4; codecs="hvc1.2.4.L120.B0"');
+	},
+
+	async probeHevcSupport(this: NMPlayer): Promise<boolean> {
+		if (typeof this._hevcSupportedCache === 'boolean')
+			return this._hevcSupportedCache;
+		if (this._hevcProbeInFlight)
+			return this._hevcProbeInFlight;
+
+		this._hevcProbeInFlight = (async (): Promise<boolean> => {
+			// Step 1 — hard "no": MediaSource doesn't exist or refuses HEVC at
+			// the codec string level. Nothing else to check.
+			if (
+				typeof MediaSource === 'undefined'
+				|| !MediaSource.isTypeSupported('video/mp4; codecs="hvc1.2.4.L120.B0"')
+			) {
+				this._hevcSupportedCache = false;
+				return false;
+			}
+
+			// Step 2 — MediaCapabilities tells us whether the decode will be
+			// `smooth` AND `powerEfficient` (≈ hardware-accelerated). On
+			// desktop Chrome / Edge without an HEVC HW decoder, the codec
+			// string check above returns true but `smooth` reports false — and
+			// the actual MSE appendBuffer silently fails to produce frames,
+			// stalling playback with no error event. Only trust HEVC when
+			// MediaCapabilities reports a real, efficient decode path.
+			const mc = (navigator as Navigator & {
+				mediaCapabilities?: {
+					decodingInfo: (config: unknown) => Promise<{
+						supported: boolean;
+						smooth: boolean;
+						powerEfficient: boolean;
+					}>;
+				};
+			}).mediaCapabilities;
+			if (!mc?.decodingInfo) {
+				// Browser is too old to give us a definitive answer; trust the
+				// codec-string check we already passed.
+				this._hevcSupportedCache = true;
+				return true;
+			}
+
+			try {
+				const info = await mc.decodingInfo({
+					type: 'media-source',
+					video: {
+						contentType: 'video/mp4; codecs="hvc1.2.4.L120.B0"',
+						width: 1920,
+						height: 1080,
+						bitrate: 5_000_000,
+						framerate: 30,
+					},
+				});
+
+				const usable = !!(info.supported && info.smooth && info.powerEfficient);
+				if (!usable) {
+					this.logger.info(
+						'HEVC reported supported but decode is not smooth + power-efficient; '
+						+ 'skipping HEVC variants to avoid silent MSE stalls',
+						{
+							supported: info.supported,
+							smooth: info.smooth,
+							powerEfficient: info.powerEfficient,
+						},
+					);
+				}
+				this._hevcSupportedCache = usable;
+				return usable;
+			}
+			catch (e) {
+				this.logger.warn('HEVC probe threw; treating as unsupported', { reason: String(e) });
+				this._hevcSupportedCache = false;
+				return false;
+			}
+			finally {
+				this._hevcProbeInFlight = undefined;
+			}
+		})();
+
+		return this._hevcProbeInFlight;
+	},
+
 	loadSource(this: NMPlayer, url: string): void {
 		this.pause();
 		this.videoElement.removeAttribute('src');
@@ -474,6 +567,47 @@ export const coreMethods = {
 					}
 				},
 			});
+
+			// Strip HEVC levels from the ABR ladder when this browser can't
+			// actually decode HEVC efficiently. HLS.js's videoPreference has
+			// no exclusion list, so we filter at MANIFEST_PARSED instead:
+			// removeLevel() rewires the ABR controller around dropped levels.
+			// Skipping the filter is harmless when the probe says HEVC works
+			// or hasn't resolved yet (sync fallback trusts isTypeSupported).
+			if (!this.hevcSupported()) {
+				this.hls.on(HLS.Events.MANIFEST_PARSED, () => {
+					if (!this.hls)
+						return;
+					const hevcCodecPattern = /\bhvc1\b|\bhev1\b|\bdvh[1e]\b/i;
+					const hevcLevelIndexes: number[] = [];
+					this.hls.levels.forEach((level, index) => {
+						if (level.videoCodec && hevcCodecPattern.test(level.videoCodec))
+							hevcLevelIndexes.push(index);
+					});
+					if (hevcLevelIndexes.length === 0)
+						return;
+					if (hevcLevelIndexes.length === this.hls.levels.length) {
+						// Every level is HEVC — refusing to play silently would
+						// strand the user with a black screen. Log loudly and
+						// let HLS try anyway; a downstream error event is more
+						// useful than a quiet stall.
+						this.logger.warn(
+							'Every manifest level is HEVC but HEVC decode is unsupported; '
+							+ 'letting HLS try anyway. The encode needs an H.264 variant.',
+							{ levelCount: this.hls.levels.length },
+						);
+						return;
+					}
+					this.logger.info('Removing HEVC levels (decode probe negative)', {
+						removed: hevcLevelIndexes.length,
+						total: this.hls.levels.length,
+					});
+					// Iterate high→low so the indexes we hold stay valid as
+					// HLS.js compacts the levels array.
+					for (let i = hevcLevelIndexes.length - 1; i >= 0; i--)
+						this.hls.removeLevel(hevcLevelIndexes[i]);
+				});
+			}
 
 			this.emit('hls');
 
@@ -542,9 +676,9 @@ export const coreMethods = {
 			artwork: this.resolveImageUrl(data.image),
 			chapters: chapters.length > 0
 				? chapters.map(ch => ({
-					title: ch.title,
-					startTime: ch.startTime,
-				}))
+						title: ch.title,
+						startTime: ch.startTime,
+					}))
 				: undefined,
 		});
 	},

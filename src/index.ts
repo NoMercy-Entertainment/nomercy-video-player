@@ -65,6 +65,8 @@ class NMPlayer<T = Record<string, any>> extends Base<T> {
 	declare _initTheater: () => void;
 	declare _destroyTheater: () => void;
 	declare _initDeprecatedEventForwarders: () => void;
+	declare hevcSupported: () => boolean;
+	declare probeHevcSupport: () => Promise<boolean>;
 
 	// Setup
 	hls: import('hls.js').default | undefined;
@@ -139,6 +141,12 @@ class NMPlayer<T = Record<string, any>> extends Base<T> {
 	// HLS recovery state
 	_hlsRecoveryAttempts = 0;
 	_hlsRecoveryTimer: ReturnType<typeof setTimeout> | null = null;
+
+	// HEVC capability probe cache. `undefined` means the async probe hasn't
+	// completed yet (or hasn't been kicked off); `hevcSupported()` falls back
+	// to MediaSource.isTypeSupported in that window.
+	_hevcSupportedCache: boolean | undefined = undefined;
+	_hevcProbeInFlight: Promise<boolean> | undefined = undefined;
 
 	// PIP listener references (for cleanup)
 	_pipEnterHandler: (() => void) | undefined;
@@ -271,6 +279,13 @@ class NMPlayer<T = Record<string, any>> extends Base<T> {
 
 		queueMicrotask(() => {
 			this.fetchTranslationsFile();
+		});
+		// Kick off the HEVC decode probe so the result is cached before
+		// loadSource configures HLS. The probe is fire-and-forget: any later
+		// loadSource call will either see the cached result or fall back to
+		// the synchronous MediaSource.isTypeSupported check.
+		queueMicrotask(() => {
+			this.probeHevcSupport().catch(() => {});
 		});
 		this.loadPlaylist();
 
