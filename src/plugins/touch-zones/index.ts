@@ -139,6 +139,7 @@ export class TouchZonesPlugin extends Plugin<NMVideoPlayer<any>, TouchZonesOptio
 
     private root!: HTMLDivElement;
     private controlsVisible = false;
+    private _activityDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
     private leftIndicator: SeekIndicatorState | null = null;
     private rightIndicator: SeekIndicatorState | null = null;
@@ -148,8 +149,23 @@ export class TouchZonesPlugin extends Plugin<NMVideoPlayer<any>, TouchZonesOptio
         this.root = this.mount('root');
         this.player.addClasses(this.root, ['nm-touch-zones-root']);
 
+        // Debounce the controlsVisible flag past the double-tap window so that
+        // single-tap from a HIDDEN state doesn't immediately re-hide:
+        //   1. touchstart on container -> bumpActivity -> activity:true
+        //   2. click on zone -> onSingle reads controlsVisible
+        // Without debounce, step 2 sees controlsVisible=true (just emitted) and
+        // hides. With debounce, step 2 sees the pre-tap value (false) and
+        // correctly does nothing. v1 baseUIPlugin uses the same trick.
         this.on('activity', d => {
-            this.controlsVisible = d.active;
+            if (this._activityDebounceTimer !== null) {
+                clearTimeout(this._activityDebounceTimer);
+                this._activityDebounceTimer = null;
+            }
+            const delay = this.opts?.doubleClickDelay ?? this.opts?.doubleTapThreshold ?? 300;
+            this._activityDebounceTimer = setTimeout(() => {
+                this.controlsVisible = d.active;
+                this._activityDebounceTimer = null;
+            }, delay + 10);
         });
 
         const isMobile = this.detectMobile();
