@@ -214,10 +214,10 @@ export interface DesktopUiOptions {
      *
      * @example
      * breakpoints: [
-     *   { name: 'xs', maxWidth: 360, hideAfterRank: 0 },
-     *   { name: 'sm', maxWidth: 480, hideAfterRank: 2 },
-     *   { name: 'md', maxWidth: 720, hideAfterRank: 4 },
-     *   { name: 'lg', maxWidth: 1024, hideAfterRank: 6 },
+     *   { name: 'xs', maxWidth: 320,      hideAfterRank: 1 },
+     *   { name: 'sm', maxWidth: 480,      hideAfterRank: 4 },
+     *   { name: 'md', maxWidth: 720,      hideAfterRank: 8 },
+     *   { name: 'lg', maxWidth: 1024,     hideAfterRank: 13 },
      *   { name: 'xl', maxWidth: Infinity, hideAfterRank: Infinity },
      * ]
      */
@@ -225,7 +225,7 @@ export interface DesktopUiOptions {
 
     /**
      * Shorthand alternative to `breakpoints`. Provide an array of `hideAfterRank`
-     * values for the sm / md / lg tiers (xs is always rank 0, xl always shows all).
+     * values for the sm / md / lg tiers (xs is always rank 1, xl always shows all).
      * Ignored when `breakpoints` is provided.
      *
      * @example
@@ -1047,17 +1047,21 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
 
     /**
      * Default breakpoint progression:
-     * - xs (≤ 360): only rank-0 button visible (play)
-     * - sm (≤ 480): ranks 0–2 visible
-     * - md (≤ 720): ranks 0–4 visible
-     * - lg (≤ 1024): ranks 0–6 visible
+     * - xs (≤ 320): play + mute only (rank 0–1)
+     * - sm (≤ 480): play / mute / fullscreen / settings (rank 0–4)
+     * - md (≤ 720): + seek + nav buttons (rank 0–8)
+     * - lg (≤ 1024): + theater / pip / speed (rank 0–13)
      * - xl (> 1024): all buttons visible
+     *
+     * Over-hiding is worse than under-hiding. A 360 px phone portrait should
+     * show at least the transport controls — xs only kicks in below 320 px
+     * (think embedded widgets, not real phones).
      */
     private static readonly DEFAULT_BREAKPOINTS: ReadonlyArray<Breakpoint> = [
-        { name: 'xs', maxWidth: 360, hideAfterRank: 0 },
-        { name: 'sm', maxWidth: 480, hideAfterRank: 2 },
-        { name: 'md', maxWidth: 720, hideAfterRank: 4 },
-        { name: 'lg', maxWidth: 1024, hideAfterRank: 6 },
+        { name: 'xs', maxWidth: 320, hideAfterRank: 1 },
+        { name: 'sm', maxWidth: 480, hideAfterRank: 4 },
+        { name: 'md', maxWidth: 720, hideAfterRank: 8 },
+        { name: 'lg', maxWidth: 1024, hideAfterRank: 13 },
         { name: 'xl', maxWidth: Infinity, hideAfterRank: Infinity },
     ];
 
@@ -1070,7 +1074,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
         const stages = this.opts?.collapseStages;
         if (stages) {
             return [
-                { name: 'xs', maxWidth: 360, hideAfterRank: 0 },
+                { name: 'xs', maxWidth: 320, hideAfterRank: 1 },
                 { name: 'sm', maxWidth: 480, hideAfterRank: stages[0] },
                 { name: 'md', maxWidth: 720, hideAfterRank: stages[1] },
                 { name: 'lg', maxWidth: 1024, hideAfterRank: stages[2] },

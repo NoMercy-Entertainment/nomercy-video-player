@@ -665,6 +665,7 @@
         gap: 4px;
         height: auto;
         max-height: 60vh;
+        max-height: 60dvh;
         min-width: 16rem;
         margin-top: auto;
         overflow: hidden;
@@ -826,6 +827,7 @@
         display: none;
         flex-direction: column;
         max-height: 60vh;
+        max-height: 60dvh;
         width: 100%;
         overflow-y: auto;
         overflow-x: hidden;
@@ -845,6 +847,7 @@
         transition: all 0.3s ease;
         width: 100%;
         max-height: 50vh;
+        max-height: 50dvh;
         scrollbar-width: thin;
         scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
         scrollbar-gutter: stable;
@@ -874,6 +877,7 @@
         gap: 0;
         width: 100%;
         max-height: 60vh;
+        max-height: 60dvh;
     }
 
     #playlist-menu.playlist-menu.is-open {

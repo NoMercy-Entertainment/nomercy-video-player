@@ -103,19 +103,20 @@ describe('DesktopUiPlugin — progressive breakpoint system', () => {
             const events: Array<LayoutBreakpointPayload> = [];
             onBreakpoint(player, (data) => events.push(data));
 
-            simulateWidth(400);    // sm (≤ 480, hideAfterRank: 2)
+            simulateWidth(400);    // sm (≤ 480, hideAfterRank: 4)
 
             const smEvent = events.find(e => e.to === 'sm');
             expect(smEvent).toBeDefined();
 
             // Default priority: play(rank 0) mute(1) volume(2) fullscreen(3) settings(4) …
-            // At sm, hideAfterRank: 2 → ranks 0,1,2 survive.
+            // At sm, hideAfterRank: 4 → ranks 0–4 survive.
             // volume has no DOM button (null in buttonMap) — skipped entirely.
-            // Visible: play, mute.  Hidden: fullscreen, settings, and beyond.
+            // Visible: play, mute, fullscreen, settings.  Hidden: next(5) and beyond.
             expect(smEvent!.visibleButtons).toContain('play');
             expect(smEvent!.visibleButtons).toContain('mute');
-            expect(smEvent!.hiddenButtons).toContain('fullscreen');
-            expect(smEvent!.hiddenButtons).toContain('settings');
+            expect(smEvent!.visibleButtons).toContain('fullscreen');
+            expect(smEvent!.visibleButtons).toContain('settings');
+            expect(smEvent!.hiddenButtons).toContain('next');
         });
 
         it('does NOT emit when the same breakpoint fires twice consecutively', async () => {
@@ -210,18 +211,19 @@ describe('DesktopUiPlugin — progressive breakpoint system', () => {
             const events: Array<LayoutBreakpointPayload> = [];
             onBreakpoint(player, (data) => events.push(data));
 
-            simulateWidth(400);    // sm (hideAfterRank: 2)
+            simulateWidth(400);    // sm (hideAfterRank: 4)
 
             const smEvent = events.find(e => e.to === 'sm');
             expect(smEvent).toBeDefined();
 
-            // With custom priority, fullscreen(0) play(1) settings(2) survive at sm.
+            // With custom priority: fullscreen(0) play(1) settings(2) mute(3) seekBack(4) survive at sm.
             expect(smEvent!.visibleButtons).toContain('fullscreen');
             expect(smEvent!.visibleButtons).toContain('play');
             expect(smEvent!.visibleButtons).toContain('settings');
+            expect(smEvent!.visibleButtons).toContain('mute');
 
-            // mute is now rank 3 — it is hidden at sm.
-            expect(smEvent!.hiddenButtons).toContain('mute');
+            // seekForward is now rank 5 — it is hidden at sm.
+            expect(smEvent!.hiddenButtons).toContain('seekForward');
         });
     });
 
