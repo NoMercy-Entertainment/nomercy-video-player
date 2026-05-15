@@ -1337,3 +1337,38 @@
 @keyframes nm-spin {
     to { transform: rotate(360deg); }
 }
+
+/* ── Touch-device hover suppression ──────────────────────────────────────
+ * On (hover: none) devices the :hover state sticks AFTER a tap until the
+ * user touches elsewhere. Override every hover-affecting selector so taps
+ * don't leave buttons looking "permanently hovered". Active menu-open
+ * markers (.is-open / .is-active) are explicitly preserved. */
+@media (hover: none) {
+    .nomercyplayer .back-btn:hover,
+    .nomercyplayer .close-btn:hover,
+    .nomercyplayer .center-btn:hover,
+    .nomercyplayer .menu-header-back:hover,
+    .nomercyplayer .menu-header-close:hover,
+    .nomercyplayer .btn:hover,
+    .nomercyplayer .remaining-time:hover {
+        background: transparent !important;
+    }
+
+    .nomercyplayer .language-button:hover:not(.is-active) {
+        background: transparent !important;
+    }
+
+    .nomercyplayer .playlist-menu-button:hover:not(.is-active) {
+        background: transparent !important;
+    }
+
+    /* Bottom-bar icon swap (.icon-normal / .icon-hover) — keep the normal
+     * variant visible on touch even after tap. The hover variant is the
+     * "active feedback" only meant for real hover. */
+    .nomercyplayer .btn:hover .icon-normal {
+        display: inline-flex !important;
+    }
+    .nomercyplayer .btn:hover .icon-hover {
+        display: none !important;
+    }
+}
