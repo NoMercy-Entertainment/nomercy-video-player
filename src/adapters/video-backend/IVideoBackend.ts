@@ -100,7 +100,7 @@ export interface IVideoBackend {
 	readonly kind: VideoBackendKind;
 
 	// Lifecycle
-	load(url: string, opts: { preload: 'auto' | 'metadata' | 'none' }): Promise<void>;
+	load(url: string, opts?: { preload: 'auto' | 'metadata' | 'none' }): Promise<void>;
 	unload(): void;
 	dispose(): void;
 

@@ -1177,13 +1177,34 @@ export class Html5VideoBackend extends EventEmitter<BackendEventPayload> impleme
 		if (this.element.readyState >= 1 /* HAVE_METADATA */) return Promise.resolve();
 		return new Promise<void>((resolve, reject) => {
 			const onLoad = (): void => { cleanup(); resolve(); };
-			const onError = (): void => { cleanup(); reject(this.element.error ?? new Error('media element error')); };
+
+			const onElementError = (): void => {
+				cleanup();
+				reject(this.element.error ?? new Error('media element error'));
+			};
+
+			// HLS.js fatal errors (e.g. MANIFEST_INCOMPATIBLE_CODECS, network
+			// exhaustion) are emitted on the backend's EventEmitter — they never
+			// reach the DOM element's `error` event because they originate in the
+			// HLS.js pipeline before any media element interaction. Without this
+			// listener the waitForLoadedMetadata promise would hang indefinitely,
+			// leaving load() suspended and the error invisible to the consumer.
+			const onStreamError = (data?: BackendEventPayload['stream:error']): void => {
+				if (data?.fatal) {
+					cleanup();
+					reject(new Error(`HLS fatal: ${data.details}`));
+				}
+			};
+
 			const cleanup = (): void => {
 				this.element.removeEventListener('loadedmetadata', onLoad);
-				this.element.removeEventListener('error', onError);
+				this.element.removeEventListener('error', onElementError);
+				this.off('stream:error', onStreamError);
 			};
+
 			this.element.addEventListener('loadedmetadata', onLoad, { once: true });
-			this.element.addEventListener('error', onError, { once: true });
+			this.element.addEventListener('error', onElementError, { once: true });
+			this.on('stream:error', onStreamError);
 		});
 	}
 }
