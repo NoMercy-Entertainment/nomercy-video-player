@@ -328,9 +328,7 @@ export class TouchZonesPlugin extends Plugin<NMVideoPlayer<any>, TouchZonesOptio
 
         const handler = this.doubleTap(
             () => { void this.player.toggleFullscreen?.(); },
-            () => {
-                if (this.controlsVisible) void this.player.togglePlayback?.();
-            },
+            () => { void this.player.togglePlayback?.(); },
         );
         this.listen(el, 'click', handler);
     }
