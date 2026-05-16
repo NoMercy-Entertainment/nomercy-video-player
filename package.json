@@ -12,7 +12,7 @@
 		"Stoney Eagle <stoney@nomercy.tv>"
 	],
 	"license": "Apache-2.0",
-	"homepage": "https://nomercy.tv/player",
+	"homepage": "https://docs.nomercy.tv/player/video/",
 	"bugs": {
 		"url": "https://github.com/NoMercy-Entertainment/nomercy-video-player/issues"
 	},
@@ -121,8 +121,11 @@
 	"types": "./dist/index.d.ts",
 	"files": [
 		"dist",
-		"public",
-		"src"
+		"CHANGELOG.md",
+		"MIGRATION.md",
+		"CODE_OF_CONDUCT.md",
+		"CONTRIBUTING.md",
+		"SECURITY.md"
 	],
 	"scripts": {
 		"build": "tsc -p tsconfig.build.json",
@@ -137,7 +140,7 @@
 		"prepublishOnly": "npm run build"
 	},
 	"dependencies": {
-		"@nomercy-entertainment/nomercy-player-core": "^2.0.0"
+		"@nomercy-entertainment/nomercy-player-core": "2.0.0-beta.0"
 	},
 	"peerDependencies": {
 		"hls.js": ">=1.6.0"
@@ -173,6 +176,7 @@
 		"fast-uri": "^3.1.2"
 	},
 	"publishConfig": {
-		"access": "public"
+		"access": "public",
+		"tag": "beta"
 	}
 }

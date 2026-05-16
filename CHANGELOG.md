@@ -1,6 +1,6 @@
 # Changelog — @nomercy-entertainment/nomercy-video-player
 
-## [2.0.0] — 2026-05-16
+## [2.0.0-beta.0] — 2026-05-16
 
 Rebuilt on `@nomercy-entertainment/nomercy-player-core` 2.0.0. The shared player
 infrastructure (transport, queue, plugin runtime, auth, i18n, lifecycle) has moved into
