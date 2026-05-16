@@ -1,7 +1,6 @@
 import { mergeConfig, Plugin } from '@nomercy-entertainment/nomercy-player-core';
-import type { ResolvedUrl } from '@nomercy-entertainment/nomercy-player-core';
-import { NMSubtitleOctopus } from '@nomercy-entertainment/nomercy-subtitle-octopus';
 import type { OctopusOptions as NMOctopusOptions } from '@nomercy-entertainment/nomercy-subtitle-octopus';
+import type { ResolvedUrl } from '@nomercy-entertainment/nomercy-player-core';
 import type { NMVideoPlayer } from '../../index';
 
 
@@ -18,6 +17,32 @@ function isFontEntry(value: unknown): value is FontManifestEntry {
 		&& typeof (value as Record<string, unknown>)['file'] === 'string'
 	);
 }
+
+/** Minimal interface describing the subset of NMSubtitleOctopus we call. */
+interface SubtitleOctopusInstance {
+	on(event: string, fn: (...args: unknown[]) => void): void;
+	dispose(): void;
+}
+
+/** Minimal shape of the NMSubtitleOctopus constructor options we pass. */
+interface SubtitleOctopusCtorOptions {
+	video: HTMLVideoElement;
+	trackContent: unknown;
+	availableFonts: Record<string, string>;
+	targetFps?: number;
+	renderMode?: NMOctopusOptions['renderMode'];
+	lazyFileLoading?: boolean;
+	prescaleFactor?: number;
+	renderAhead?: number;
+	debug?: boolean;
+	workerUrl?: string;
+	legacyWorkerUrl?: string;
+	fallbackFont?: string;
+	geometrySource?: HTMLElement;
+}
+
+/** Minimal constructor signature resolved from the dynamic import. */
+type SubtitleOctopusCtor = new (opts: SubtitleOctopusCtorOptions) => SubtitleOctopusInstance;
 
 
 /** Options for {@link OctopusPlugin}. */
@@ -69,14 +94,20 @@ export interface OctopusOptions {
  * TODO(security): strip the auth XHR paths from the worker binaries
  * (`public/subtitles-octopus-worker*.js`) in a follow-up to close the
  * remaining surface in the vendored WASM bundle.
+ *
+ * Optional peer dependency: `@nomercy-entertainment/nomercy-subtitle-octopus`.
+ * When the package is absent, the plugin logs a warning and marks itself as
+ * degraded — ASS/SSA subtitles will not render, but playback continues normally.
  */
 export class OctopusPlugin extends Plugin<NMVideoPlayer<any>, OctopusOptions> {
 	static override readonly id: string = 'octopus';
 	static override readonly version: string = '2.0.0';
 	static override readonly description: string = 'libass / SubtitleOctopus integration for ASS/SSA subtitle rendering';
 
-	private instance: NMSubtitleOctopus | null = null;
+	private instance: SubtitleOctopusInstance | null = null;
 	private currentLoadedUrl: string | null = null;
+	/** Cached constructor from the dynamic import. `null` = import failed (degraded). `undefined` = not yet attempted. */
+	private _ctor: SubtitleOctopusCtor | null | undefined = undefined;
 	/** Memoised font name→blobUrl map for the active playlist item. Null = not yet fetched. */
 	private _availableFontsForCurrent: Record<string, string> | null = null;
 	/** Blob URLs created during load — revoked in destroy() to avoid memory leaks. */
@@ -147,7 +178,7 @@ export class OctopusPlugin extends Plugin<NMVideoPlayer<any>, OctopusOptions> {
 	}
 
 	/** Raw renderer handle for advanced consumers. Plugin retains lifecycle ownership. */
-	renderer(): NMSubtitleOctopus | null {
+	renderer(): SubtitleOctopusInstance | null {
 		return this.instance;
 	}
 
@@ -181,6 +212,36 @@ export class OctopusPlugin extends Plugin<NMVideoPlayer<any>, OctopusOptions> {
 
 		const match = list.find(t => t.id === track);
 		return match?.url ?? null;
+	}
+
+	/**
+	 * Lazily import `@nomercy-entertainment/nomercy-subtitle-octopus`. On
+	 * first call the import result is cached; subsequent calls return the
+	 * cached value without re-importing. When the peer is absent the import
+	 * rejects, the error is logged, and `_ctor` is set to `null` so the
+	 * plugin degrades gracefully on every future call.
+	 */
+	private async loadCtor(): Promise<SubtitleOctopusCtor | null> {
+		if (this._ctor !== undefined) return this._ctor;
+
+		try {
+			const mod = await import('@nomercy-entertainment/nomercy-subtitle-octopus');
+			const ctor = (mod.NMSubtitleOctopus) as SubtitleOctopusCtor | undefined;
+			if (typeof ctor !== 'function') {
+				throw new TypeError('nomercy-subtitle-octopus did not export NMSubtitleOctopus');
+			}
+			this._ctor = ctor;
+		}
+		catch (error) {
+			this._ctor = null;
+			this.logger.warn(
+				'[octopus] optional peer @nomercy-entertainment/nomercy-subtitle-octopus not available — '
+				+ 'ASS/SSA subtitle rendering is disabled.',
+				error,
+			);
+		}
+
+		return this._ctor;
 	}
 
 	/**
@@ -269,6 +330,13 @@ export class OctopusPlugin extends Plugin<NMVideoPlayer<any>, OctopusOptions> {
 		this.destroy();
 		this.currentLoadedUrl = url;
 
+		const OctopusCtor = await this.loadCtor();
+		if (!OctopusCtor) {
+			// Peer absent — plugin degraded. Silently no-op; logger already warned in loadCtor().
+			this.currentLoadedUrl = null;
+			return;
+		}
+
 		try {
 			if (this.currentLoadedUrl !== url) return;
 
@@ -279,7 +347,7 @@ export class OctopusPlugin extends Plugin<NMVideoPlayer<any>, OctopusOptions> {
 			const videoEl = this.player.videoElement;
 			if (!videoEl) return;
 
-			const opts: NMOctopusOptions = {
+			const opts: SubtitleOctopusCtorOptions = {
 				video: videoEl,
 				trackContent: subContent,
 				availableFonts,
@@ -295,11 +363,11 @@ export class OctopusPlugin extends Plugin<NMVideoPlayer<any>, OctopusOptions> {
 				geometrySource: this.player.container,
 			};
 
-			this.instance = new NMSubtitleOctopus(opts);
+			this.instance = new OctopusCtor(opts);
 			this.instance.on('rendererReady', () => {
 				this.emit('renderer:ready', { url });
 			});
-			this.instance.on('error', (err: Error) => {
+			this.instance.on('error', (err: unknown) => {
 				this.report({
 					code: 'plugin:octopus/render-error',
 					severity: 'warning',

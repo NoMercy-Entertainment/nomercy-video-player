@@ -11,10 +11,25 @@
 		"esModuleInterop": true,
 		"forceConsistentCasingInFileNames": true,
 		"skipLibCheck": true,
-		"types": ["vitest/globals", "vite/client"],
+		"types": ["vitest/globals", "vite/client", "node"],
 		"paths": {
 			"@nomercy-entertainment/nomercy-video-player": ["./src/index.ts"],
-			"@nomercy-entertainment/nomercy-player-core": ["./node_modules/@nomercy-entertainment/nomercy-player-core/dist/index.d.ts"]
+			"@nomercy-entertainment/nomercy-player-core": ["../nomercy-player-kit/dist/index.d.ts"],
+			"@nomercy-entertainment/nomercy-player-core/testing": ["../nomercy-player-kit/dist/testing/index.d.ts"],
+			"@nomercy-entertainment/nomercy-player-core/plugins/key-handler": ["../nomercy-player-kit/dist/plugins/key-handler/index.d.ts"],
+			"@nomercy-entertainment/nomercy-player-core/plugins/media-session": ["../nomercy-player-kit/dist/plugins/media-session/index.d.ts"],
+			"@nomercy-entertainment/nomercy-player-core/plugins/embed": ["../nomercy-player-kit/dist/plugins/embed/index.d.ts"],
+			"@nomercy-entertainment/nomercy-player-core/plugins/message": ["../nomercy-player-kit/dist/plugins/message/index.d.ts"],
+			"@nomercy-entertainment/nomercy-player-core/plugins/tab-leader": ["../nomercy-player-kit/dist/plugins/tab-leader/index.d.ts"],
+			"@nomercy-entertainment/nomercy-player-core/plugins/audio-graph": ["../nomercy-player-kit/dist/plugins/audio-graph/index.d.ts"],
+			"@nomercy-entertainment/nomercy-player-core/plugins/canvas": ["../nomercy-player-kit/dist/plugins/canvas/index.d.ts"],
+			"@nomercy-entertainment/nomercy-player-core/plugins/mixer": ["../nomercy-player-kit/dist/plugins/mixer/index.d.ts"],
+			"@nomercy-entertainment/nomercy-player-core/plugins/equalizer": ["../nomercy-player-kit/dist/plugins/equalizer/index.d.ts"],
+			"@nomercy-entertainment/nomercy-player-core/plugins/spectrum": ["../nomercy-player-kit/dist/plugins/spectrum/index.d.ts"],
+			"@nomercy-entertainment/nomercy-player-core/plugins/visualization": ["../nomercy-player-kit/dist/plugins/visualization/index.d.ts"],
+			"@nomercy-entertainment/nomercy-player-core/streams/hls": ["../nomercy-player-kit/dist/streams/hls.d.ts"],
+			"@nomercy-entertainment/nomercy-player-core/streams/native": ["../nomercy-player-kit/dist/streams/native.d.ts"],
+			"@nomercy-entertainment/nomercy-subtitle-octopus": ["../nomercy-subtitle-octopus/dist/index.d.ts"]
 		}
 	},
 	"include": [

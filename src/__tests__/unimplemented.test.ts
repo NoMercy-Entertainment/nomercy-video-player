@@ -405,12 +405,15 @@ describe('NMVideoPlayer — still-unimplemented method inventory', () => {
 			const p = player();
 			await p.ready();
 			const m = p.metrics();
-			expect(typeof m.ttfb).toBe('number');
+			// ttfb / avgBitrate / decoderStalls — null until a backend wires them
+			expect(m.ttfb).toBeNull();
+			expect(m.avgBitrate).toBeNull();
+			expect(m.decoderStalls).toBeNull();
+			// droppedFrames — null until the video element reports via getVideoPlaybackQuality
+			expect(m.droppedFrames).toBeNull();
+			// always-number counters
 			expect(typeof m.ttff).toBe('number');
 			expect(typeof m.rebufferRatio).toBe('number');
-			expect(typeof m.avgBitrate).toBe('number');
-			expect(typeof m.droppedFrames).toBe('number');
-			expect(typeof m.decoderStalls).toBe('number');
 			expect(typeof m.joinTime).toBe('number');
 			expect(typeof m.sessionDurationMs).toBe('number');
 			expect(m.sessionDurationMs).toBeGreaterThanOrEqual(0);

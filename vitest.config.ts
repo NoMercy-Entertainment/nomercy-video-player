@@ -4,6 +4,7 @@ import { nomercyTranslationsPlugin } from '../nomercy-player-kit/src/vite-plugin
 
 const kitRoot = fileURLToPath(new URL('../nomercy-player-kit/src', import.meta.url));
 const selfRoot = fileURLToPath(new URL('./src', import.meta.url));
+const octopusSrc = fileURLToPath(new URL('../nomercy-subtitle-octopus/src', import.meta.url));
 
 export default defineConfig({
 	plugins: [nomercyTranslationsPlugin()],
@@ -13,6 +14,7 @@ export default defineConfig({
 			// from `@nomercy-entertainment/nomercy-video-player` resolve to src
 			// rather than a built dist (which may not exist in a clean checkout).
 			{ find: '@nomercy-entertainment/nomercy-video-player', replacement: `${selfRoot}/index.ts` },
+			{ find: '@nomercy-entertainment/nomercy-subtitle-octopus', replacement: `${octopusSrc}/index.ts` },
 			{ find: '@nomercy-entertainment/nomercy-player-core/testing', replacement: `${kitRoot}/testing/index.ts` },
 			{ find: '@nomercy-entertainment/nomercy-player-core/vite-plugin', replacement: `${kitRoot}/vite-plugin.ts` },
 			// Directory-based plugins whose entry is index.ts, not a bare file.

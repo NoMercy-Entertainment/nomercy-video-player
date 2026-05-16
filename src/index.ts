@@ -8,6 +8,8 @@ import {
 	playerCoreMethods,
 	resolvePlayerConstructor,
 } from '@nomercy-entertainment/nomercy-player-core';
+
+export { NotImplementedError } from '@nomercy-entertainment/nomercy-player-core';
 import type {
 	ActionOptions,
 	AudioTrack,
@@ -470,6 +472,17 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 
 		instance.on('timeupdate', () => {
 			this.emit('time', { time: instance.currentTime() });
+
+			// Poll dropped-frame counter from the media element on every timeupdate.
+			// `getVideoPlaybackQuality()` is only available on HTMLVideoElement and
+			// only when the element has an active source — guard defensively.
+			const videoEl = instance.mediaElement();
+			const quality = typeof videoEl.getVideoPlaybackQuality === 'function'
+				? videoEl.getVideoPlaybackQuality()
+				: undefined;
+			if (quality !== undefined) {
+				this.recordMetric('droppedFrames', quality.droppedVideoFrames);
+			}
 		});
 		instance.on('loadedmetadata', (data?: { duration: number }) => {
 			if (!data) return;

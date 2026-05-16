@@ -1,7 +1,7 @@
 {
 	"name": "@nomercy-entertainment/nomercy-video-player",
 	"type": "module",
-	"version": "1.2.7",
+	"version": "2.0.0",
 	"description": "Headless, event-driven HTML5 video player with HLS streaming, subtitle rendering (VTT/ASS/SSA), and a plugin system. No UI — you build your own.",
 	"author": {
 		"name": "NoMercy Entertainment",
@@ -12,10 +12,16 @@
 		"Stoney Eagle <stoney@nomercy.tv>"
 	],
 	"license": "Apache-2.0",
-	"homepage": "https://github.com/NoMercy-Entertainment/nomercy-video-player",
+	"homepage": "https://nomercy.tv/player",
+	"bugs": {
+		"url": "https://github.com/NoMercy-Entertainment/nomercy-video-player/issues"
+	},
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/NoMercy-Entertainment/nomercy-video-player.git"
+	},
+	"engines": {
+		"node": ">=18.0.0"
 	},
 	"keywords": [
 		"video",
@@ -38,30 +44,80 @@
 		"no-ui",
 		"event-driven"
 	],
+	"sideEffects": false,
 	"exports": {
 		".": {
-			"import": {
-				"types": "./dist/index.d.ts",
-				"default": "./dist/nomercy-video-player.js"
-			},
-			"require": {
-				"types": "./dist/index.d.ts",
-				"default": "./dist/nomercy-video-player.cjs"
-			}
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
 		},
-		"./src/types": "./src/types.ts",
-		"./src/types.ts": "./src/types.ts",
-		"./src": "./src/index.ts",
-		"./src/index": "./src/index.ts",
-		"./src/player/utils": "./src/player/utils.ts",
-		"./src/plugin": "./src/plugins/plugin.ts",
-		"./src/plugins/octopusPlugin": "./src/plugins/octopusPlugin.ts",
-		"./src/plugins/keyHandlerPlugin": "./src/plugins/keyHandlerPlugin.ts",
-		"./src/plugins/*": "./src/plugins/*",
-		"./dist/*": "./dist/*"
+		"./plugins": {
+			"types": "./dist/plugins/index.d.ts",
+			"import": "./dist/plugins/index.js"
+		},
+		"./plugins/cast-sender": {
+			"types": "./dist/plugins/cast-sender/index.d.ts",
+			"import": "./dist/plugins/cast-sender/index.js"
+		},
+		"./plugins/desktop-ui": {
+			"types": "./dist/plugins/desktop-ui/index.d.ts",
+			"import": "./dist/plugins/desktop-ui/index.js"
+		},
+		"./plugins/drm": {
+			"types": "./dist/plugins/drm.d.ts",
+			"import": "./dist/plugins/drm.js"
+		},
+		"./plugins/embed": {
+			"types": "./dist/plugins/embed.d.ts",
+			"import": "./dist/plugins/embed.js"
+		},
+		"./plugins/key-handler": {
+			"types": "./dist/plugins/key-handler.d.ts",
+			"import": "./dist/plugins/key-handler.js"
+		},
+		"./plugins/live-transcoding": {
+			"types": "./dist/plugins/live-transcoding.d.ts",
+			"import": "./dist/plugins/live-transcoding.js"
+		},
+		"./plugins/media-session": {
+			"types": "./dist/plugins/media-session.d.ts",
+			"import": "./dist/plugins/media-session.js"
+		},
+		"./plugins/message": {
+			"types": "./dist/plugins/message.d.ts",
+			"import": "./dist/plugins/message.js"
+		},
+		"./plugins/octopus": {
+			"types": "./dist/plugins/octopus.d.ts",
+			"import": "./dist/plugins/octopus.js"
+		},
+		"./plugins/skipper": {
+			"types": "./dist/plugins/skipper.d.ts",
+			"import": "./dist/plugins/skipper.js"
+		},
+		"./plugins/subtitle-overlay": {
+			"types": "./dist/plugins/subtitle-overlay/index.d.ts",
+			"import": "./dist/plugins/subtitle-overlay/index.js"
+		},
+		"./plugins/tab-leader": {
+			"types": "./dist/plugins/tab-leader.d.ts",
+			"import": "./dist/plugins/tab-leader.js"
+		},
+		"./plugins/touch-zones": {
+			"types": "./dist/plugins/touch-zones.d.ts",
+			"import": "./dist/plugins/touch-zones.js"
+		},
+		"./streams/native": {
+			"types": "./dist/streams/native.d.ts",
+			"import": "./dist/streams/native.js"
+		},
+		"./streams/hls": {
+			"types": "./dist/streams/hls.d.ts",
+			"import": "./dist/streams/hls.js"
+		},
+		"./package.json": "./package.json"
 	},
-	"main": "./dist/nomercy-video-player.cjs",
-	"module": "./dist/nomercy-video-player.js",
+	"main": "./dist/index.js",
+	"module": "./dist/index.js",
 	"types": "./dist/index.d.ts",
 	"files": [
 		"dist",
@@ -69,8 +125,8 @@
 		"src"
 	],
 	"scripts": {
-		"build": "vite build && vite build --config vite.config.iife.ts",
-		"dev": "vite --port 5502 --host",
+		"build": "tsc -p tsconfig.build.json",
+		"dev": "tsc -p tsconfig.build.json --watch",
 		"lint": "eslint --fix .",
 		"test": "vitest run",
 		"test:watch": "vitest",
@@ -81,44 +137,33 @@
 		"prepublishOnly": "npm run build"
 	},
 	"dependencies": {
-		"@nomercy-entertainment/media-session": "^1.1.2",
-		"hls.js": "1.6.15",
-		"webvtt-parser": "2.2.0"
+		"@nomercy-entertainment/nomercy-player-core": "^2.0.0"
+	},
+	"peerDependencies": {
+		"hls.js": ">=1.6.0"
+	},
+	"peerDependenciesMeta": {
+		"hls.js": {
+			"optional": true
+		}
 	},
 	"devDependencies": {
 		"@antfu/eslint-config": "5.3.0",
 		"@playwright/test": "^1.59.1",
-		"@tailwindcss/line-clamp": "0.4.4",
-		"@types/webvtt-parser": "2.2.0",
+		"@types/node": "^22.0.0",
 		"@vitest/coverage-v8": "^4.1.2",
 		"@vitest/ui": "^4.1.2",
-		"autoprefixer": "10.4.27",
-		"copyfiles": "2.4.1",
-		"css-loader": "6.8.1",
 		"eslint": "^9.0.0",
 		"eslint-plugin-format": "1.0.1",
 		"happy-dom": "^20.8.9",
+		"hls.js": "1.6.15",
 		"playwright": "^1.59.1",
-		"postcss": "8.5.13",
-		"postcss-loader": "7.3.3",
-		"postcss-nested": "7.0.2",
-		"postcss-preset-env": "9.2.0",
 		"prettier": "3.3.3",
 		"prettier-eslint": "^16.4.2",
-		"sass": "1.85.0",
-		"sass-loader": "13.3.2",
-		"shx": "0.4.0",
-		"tailwindcss": "3.2.7",
-		"tailwindcss-children": "2.1.0",
-		"ts-loader": "9.4.4",
-		"ts-node": "10.9.2",
 		"typescript": "5.8.3",
 		"vite": "7.3.2",
 		"vite-plugin-dts": "4.5.4",
-		"vitest": "^4.1.2",
-		"webpack": "^5.105.4",
-		"webpack-cli": "5.1.4",
-		"webpack-dev-server": "5.2.3"
+		"vitest": "^4.1.2"
 	},
 	"overrides": {
 		"minimatch": "10.2.4",
