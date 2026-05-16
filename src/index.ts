@@ -407,6 +407,7 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 		instance.on('canplay', () => {
 			if (firstFrameEmitted) return;
 			firstFrameEmitted = true;
+			performance.mark('nm:player:firstFrame');
 			if (this._phase === 'starting') {
 				const from = this._phase;
 				this._phase = 'playing';

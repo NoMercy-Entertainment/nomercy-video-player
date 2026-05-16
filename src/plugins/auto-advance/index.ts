@@ -34,6 +34,7 @@ export class AutoAdvancePlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, 
     override use(): void {
         this.on('ended', () => {
             if (this.opts?.enabled === false) return;
+            performance.mark('nm:auto-advance:ended');
             void this.onEnded();
         });
     }
@@ -46,6 +47,7 @@ export class AutoAdvancePlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, 
     private async onEnded(): Promise<void> {
         try {
             await this.player.next({ source: 'auto-advance' });
+            performance.mark('nm:auto-advance:next-complete');
         }
         catch (err) {
             this.logger.warn('next() failed on ended', err);

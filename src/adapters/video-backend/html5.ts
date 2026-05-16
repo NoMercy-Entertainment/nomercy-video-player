@@ -262,17 +262,25 @@ export class Html5VideoBackend extends EventEmitter<BackendEventPayload> impleme
 			}
 		}
 
-		// Match v1's source-swap shape (packages/nomercy-video-player core.ts
-		// loadSource): pause the element, drop its src attribute, but DO NOT
-		// call element.load() — calling load() forces the element through a
-		// fresh load cycle that emits the harsh black-frame gap users were
-		// seeing on auto-advance. Bare removeAttribute is enough to invalidate
-		// the previous source; the new attachMedia/loadSource pair below
-		// rewires the element without ever putting it through NETWORK_EMPTY.
+		// Pause and drop the src so the element resets to HAVE_NOTHING before
+		// the new MSE pipeline is wired. `element.load()` on a srcless element
+		// forces the browser to synchronously reset its internal state machine
+		// (clearing the `ended` flag, draining any queued "load" tasks from the
+		// previous detachMedia + removeAttribute pair) without causing the
+		// black-frame gap — that gap only occurs when load() is called while
+		// the element still holds the previous src. Here the src is already
+		// gone, so `load()` is a clean reset with no visible side-effect.
+		// Without this reset, Chrome defers `sourceopen` on the new MediaSource
+		// until its internal "ended" cleanup task runs — that deferred task is
+		// what produces the ~8 s stall on auto-advance.
 		try { this.element.pause(); }
 		catch { /* defensive */ }
 		try { this.element.removeAttribute('src'); }
 		catch { /* defensive */ }
+		try { this.element.load(); }
+		catch { /* defensive */ }
+
+		performance.mark('nm:backend:load:start');
 
 		if (isHls && !nativeHls) {
 			// Dynamic import keeps hls.js out of the initial bundle when not needed.
@@ -313,6 +321,7 @@ export class Html5VideoBackend extends EventEmitter<BackendEventPayload> impleme
 			});
 			this.hls = hlsInstance;
 			hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
+				performance.mark('nm:backend:manifest-parsed');
 				this._emitHlsTrackLists();
 			});
 			// loadSource BEFORE attachMedia — matches v1's order. attaching first
@@ -323,7 +332,9 @@ export class Html5VideoBackend extends EventEmitter<BackendEventPayload> impleme
 			// first fragment in parallel with the attach handshake, so the
 			// element transitions from previous-frame → new-first-frame without
 			// a visible black hop.
+			performance.mark('nm:backend:loadSource');
 			hlsInstance.loadSource(url);
+			performance.mark('nm:backend:attachMedia');
 			hlsInstance.attachMedia(this.element);
 			this._attachHlsErrorHandler(Hls, url);
 			this._attachHlsLevelSwitchedHandler(Hls);
@@ -336,7 +347,9 @@ export class Html5VideoBackend extends EventEmitter<BackendEventPayload> impleme
 			catch { /* defensive */ }
 		}
 
+		performance.mark('nm:backend:waitForLoadedMetadata:start');
 		await this.waitForLoadedMetadata();
+		performance.mark('nm:backend:waitForLoadedMetadata:end');
 		this._state = 'ready';
 		this.emit('loadedmetadata', { url, kind: this.kind, duration: this.element.duration });
 	}
