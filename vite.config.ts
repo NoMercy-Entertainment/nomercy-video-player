@@ -2,11 +2,12 @@
 import { resolve } from 'node:path';
 import { defineConfig } from 'vite';
 import dts from 'vite-plugin-dts';
+import { nomercyTranslationsPlugin } from '@nomercy-entertainment/nomercy-player-core/vite-plugin';
 
 export default defineConfig({
 	base: '/',
 	publicDir: resolve(__dirname, 'public'),
-	plugins: [dts()],
+	plugins: [dts(), nomercyTranslationsPlugin()],
 	build: {
 		sourcemap: false,
 		minify: 'terser',

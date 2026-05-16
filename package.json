@@ -140,7 +140,7 @@
 		"prepublishOnly": "npm run build"
 	},
 	"dependencies": {
-		"@nomercy-entertainment/nomercy-player-core": "2.0.0-beta.1",
+		"@nomercy-entertainment/nomercy-player-core": "file:../nomercy-player-kit",
 		"hls.js": ">=1.6.0"
 	},
 	"devDependencies": {
