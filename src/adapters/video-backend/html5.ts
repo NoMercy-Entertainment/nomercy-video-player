@@ -262,14 +262,16 @@ export class Html5VideoBackend extends EventEmitter<BackendEventPayload> impleme
 			}
 		}
 
-		// Reset the video element BEFORE attaching the new source. Without this
-		// the previous video's last frame (or end-of-stream black frame) holds
-		// on screen while the new source attaches + parses + buffers. That gap
-		// can be 1-3s for HLS and also masks the poster — browsers won't
-		// re-show <video poster> when the element already had a source.
-		// `removeAttribute('src') + load()` puts the element back into NETWORK_EMPTY
-		// where poster CAN render, then the new source attaches on top.
-		try { this.element.removeAttribute('src'); this.element.load(); }
+		// Match v1's source-swap shape (packages/nomercy-video-player core.ts
+		// loadSource): pause the element, drop its src attribute, but DO NOT
+		// call element.load() — calling load() forces the element through a
+		// fresh load cycle that emits the harsh black-frame gap users were
+		// seeing on auto-advance. Bare removeAttribute is enough to invalidate
+		// the previous source; the new attachMedia/loadSource pair below
+		// rewires the element without ever putting it through NETWORK_EMPTY.
+		try { this.element.pause(); }
+		catch { /* defensive */ }
+		try { this.element.removeAttribute('src'); }
 		catch { /* defensive */ }
 
 		if (isHls && !nativeHls) {
@@ -313,8 +315,16 @@ export class Html5VideoBackend extends EventEmitter<BackendEventPayload> impleme
 			hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
 				this._emitHlsTrackLists();
 			});
-			hlsInstance.attachMedia(this.element);
+			// loadSource BEFORE attachMedia — matches v1's order. attaching first
+			// makes hls.js bind to the element while it still holds the previous
+			// source's last frame, which the browser then has to clear before
+			// rendering the new manifest's first frame (the gap users see as
+			// black). Loading the manifest first lets hls.js parse + queue the
+			// first fragment in parallel with the attach handshake, so the
+			// element transitions from previous-frame → new-first-frame without
+			// a visible black hop.
 			hlsInstance.loadSource(url);
+			hlsInstance.attachMedia(this.element);
 			this._attachHlsErrorHandler(Hls, url);
 			this._attachHlsLevelSwitchedHandler(Hls);
 		}
