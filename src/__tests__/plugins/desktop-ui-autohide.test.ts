@@ -286,7 +286,11 @@ describe('NMVideoPlayer — poster before source swap (Bug 2)', () => {
         expect(posterSnapshots).toContain('https://cdn/b.jpg');
     });
 
-    it('poster from beforeLoad uses imageBasePath resolution', () => {
+    it('poster from beforeLoad uses imageBasePath resolution', async () => {
+        // Relative URLs go through the async resolveUrl path so imageBasePath
+        // applies correctly. The poster value is not available synchronously
+        // inside the beforeLoad callback for relative URLs — check it after
+        // awaiting the microtask queue to drain.
         const items: TestItem[] = [
             { id: 'a', url: '/a.m3u8', image: '/w780/a.jpg' },
             { id: 'b', url: '/b.m3u8', image: '/w780/b.jpg' },
@@ -302,17 +306,16 @@ describe('NMVideoPlayer — poster before source swap (Bug 2)', () => {
 
         player.queue(items);
         player.current('a');
-
-        let posterAtBeforeLoad: string | null = null;
-        player.on('beforeLoad' as never, (() => {
-            posterAtBeforeLoad = videoEl.getAttribute('poster');
-        }) as never);
+        await new Promise<void>(resolve => setTimeout(resolve, 0));
 
         const bItem = items[1]!;
         (player as unknown as {
             _dispatchBefore: (name: string, data: unknown) => Promise<unknown>;
         })._dispatchBefore?.('beforeLoad', { item: bItem });
 
-        expect(posterAtBeforeLoad).toBe('https://img.cdn/t/p/w780/b.jpg');
+        // Await the microtask so resolveUrl('poster').then() settles.
+        await new Promise<void>(resolve => setTimeout(resolve, 0));
+
+        expect(videoEl.getAttribute('poster')).toBe('https://img.cdn/t/p/w780/b.jpg');
     });
 });

@@ -287,8 +287,7 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 		this.on('current', data => {
 			const item = data?.item;
 			const raw: string | undefined = item?.image ?? item?.poster ?? item?.thumbnail;
-			this._wantedPoster = raw ? this._resolveImageUrl(raw) : null;
-			this._applyPoster();
+			this._applyPosterForRaw(raw);
 		});
 
 		// Apply the incoming item's poster BEFORE backend.load() clears the
@@ -297,25 +296,45 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 		// first frame of the new source painting.
 		this.on('beforeLoad', event => {
 			const item: unknown = event?.data?.item;
-			if (!item) return;
-			const raw = _readImageField(item);
-			this._wantedPoster = raw ? this._resolveImageUrl(raw) : null;
-			this._applyPoster();
+			const raw = item ? _readImageField(item) : undefined;
+			this._applyPosterForRaw(raw);
 		});
 	}
 
 	private _wantedPoster: string | null = null;
 
-	private _resolveImageUrl(url: string): string {
-		if (/^[a-z][a-z\d+\-.]*:/iu.test(url)) return url;
-		const base = this.options?.imageBasePath ?? '';
-		return base ? base + url : url;
+	/**
+	 * Resolve a raw image URL to an absolute poster string and apply it.
+	 *
+	 * Fast path: absolute URLs (have a scheme) are handled synchronously so
+	 * `beforeLoad` listeners attached after the constructor see the updated
+	 * poster value immediately on the same tick. Relative URLs go through
+	 * the async `resolveUrl` path so `imageBasePath` / `urlResolver` apply.
+	 */
+	private _applyPosterForRaw(raw: string | undefined): void {
+		if (!raw) {
+			this._wantedPoster = null;
+			this._applyPoster();
+			return;
+		}
+
+		const isAbsolute = /^[a-z][a-z\d+\-.]*:/iu.test(raw);
+		if (isAbsolute) {
+			this._wantedPoster = raw;
+			this._applyPoster();
+			return;
+		}
+
+		void this.resolveUrl(raw, 'poster').then(resolved => {
+			this._wantedPoster = resolved.href;
+			this._applyPoster();
+		});
 	}
 
-	private _posterFromCurrentItem(): string | null {
+	private _applyPosterFromCurrentItem(): void {
 		const item: unknown = this.current();
 		const raw = _readImageField(item);
-		return raw ? this._resolveImageUrl(raw) : null;
+		this._applyPosterForRaw(raw);
 	}
 
 	private _applyPoster(): void {
@@ -355,7 +374,7 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 		// the cursor without emitting 'current', so _wantedPoster can be null even
 		// when a valid current item exists. Read the item directly here.
 		if (this._wantedPoster === null) {
-			this._wantedPoster = this._posterFromCurrentItem();
+			this._applyPosterFromCurrentItem();
 		}
 
 		this._applyPoster();
