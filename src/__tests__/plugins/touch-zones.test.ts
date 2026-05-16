@@ -42,7 +42,8 @@ describe('TouchZonesPlugin', () => {
     // ── Center zone single-tap ────────────────────────────────────────────────
 
     describe('center zone single-tap', () => {
-        it('does NOT call togglePlayback when controls are hidden (container touchstart wakes overlay separately)', async () => {
+        it('on desktop calls togglePlayback even when controls are hidden (mouse single-click is unconditional)', async () => {
+            // JSDOM has no ontouchstart and maxTouchPoints=0, so detectMobile() returns false (= desktop).
             const player = setup();
             player.addPlugin(touchZonesPlugin, { doubleClickDelay: 300 });
             await player.ready();
@@ -57,7 +58,34 @@ describe('TouchZonesPlugin', () => {
             centerBox!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
             await new Promise(resolve => setTimeout(resolve, 350));
 
-            expect(toggleSpy).not.toHaveBeenCalled();
+            expect(toggleSpy).toHaveBeenCalledTimes(1);
+        });
+
+        it('on mobile does NOT call togglePlayback when controls are hidden (container touchstart wakes overlay separately)', async () => {
+            // Force mobile detection by patching maxTouchPoints before plugin init.
+            const originalMax = navigator.maxTouchPoints;
+            Object.defineProperty(navigator, 'maxTouchPoints', { value: 1, configurable: true });
+
+            try {
+                const player = setup();
+                player.addPlugin(touchZonesPlugin, { doubleClickDelay: 300 });
+                await player.ready();
+
+                const toggleSpy = vi.fn().mockResolvedValue(undefined);
+                (player as any).togglePlayback = toggleSpy;
+
+                const container = document.getElementById('test')!;
+                const centerBox = findZoneBox(container, '2', '3');
+                expect(centerBox).toBeDefined();
+
+                centerBox!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+                await new Promise(resolve => setTimeout(resolve, 350));
+
+                expect(toggleSpy).not.toHaveBeenCalled();
+            }
+            finally {
+                Object.defineProperty(navigator, 'maxTouchPoints', { value: originalMax, configurable: true });
+            }
         });
 
         it('calls togglePlayback when controlsVisible is true (controls visible)', async () => {

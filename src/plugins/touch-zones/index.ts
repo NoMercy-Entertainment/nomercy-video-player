@@ -140,6 +140,7 @@ export class TouchZonesPlugin extends Plugin<NMVideoPlayer<any>, TouchZonesOptio
     private root!: HTMLDivElement;
     private controlsVisible = false;
     private _activityDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+    private _isMobile = false;
 
     private leftIndicator: SeekIndicatorState | null = null;
     private rightIndicator: SeekIndicatorState | null = null;
@@ -168,9 +169,9 @@ export class TouchZonesPlugin extends Plugin<NMVideoPlayer<any>, TouchZonesOptio
             }, delay + 10);
         });
 
-        const isMobile = this.detectMobile();
+        this._isMobile = this.detectMobile();
 
-        if (isMobile) {
+        if (this._isMobile) {
             this.buildSeekBack(this.root, { x: { start: 1, end: 2 }, y: { start: 2, end: 7 } });
             this.buildPlayback(this.root, { x: { start: 2, end: 3 }, y: { start: 3, end: 6 } });
             this.buildSeekForward(this.root, { x: { start: 3, end: 4 }, y: { start: 2, end: 7 } });
@@ -369,12 +370,14 @@ export class TouchZonesPlugin extends Plugin<NMVideoPlayer<any>, TouchZonesOptio
         el.style.justifyContent = 'center';
 
         // Center: double-tap toggles fullscreen (works regardless of overlay state).
-        // Single-tap togglePlayback only when controls are visible — inactive
+        // Touch single-tap: togglePlayback only when controls are visible — inactive
         // single-tap does nothing here; the container touchstart wakes the overlay.
+        // Mouse single-click: always togglePlayback. Desktop users don't need a
+        // wake-up tap before play/pause works.
         const handler = this.doubleTap(
             () => { void this.player.toggleFullscreen?.(); },
             () => {
-                if (this.controlsVisible) {
+                if (!this._isMobile || this.controlsVisible) {
                     void this.player.togglePlayback?.();
                 }
             },
