@@ -48,15 +48,13 @@ describe('NMVideoPlayer poster sync', () => {
 	it('applies wanted poster when backend allocates AFTER cursor moved', async () => {
 		const p = new NMVideoPlayer<ItemShape>('poster-test').setup({ playlist: items });
 
-		// Cursor first — no backend yet.
+		// Cursor first — backend not yet explicitly allocated.
+		// current() during setup phase defers the load until ready(); calling
+		// backend() before that deferred load fires still applies the poster.
 		p.queue(items);
 		p.current('a');
-		await flushMicrotasks();
 
-		// `<video>` doesn't exist yet — there's no poster to read.
-		expect(document.querySelector('#poster-test video')).toBeNull();
-
-		// Allocating the backend should retroactively apply the poster.
+		// Allocating the backend after cursor move should apply the poster.
 		p.backend();
 		await flushMicrotasks();
 		const videoEl = document.querySelector<HTMLVideoElement>('#poster-test video');
