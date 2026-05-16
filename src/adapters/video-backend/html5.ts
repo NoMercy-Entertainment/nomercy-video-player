@@ -262,6 +262,16 @@ export class Html5VideoBackend extends EventEmitter<BackendEventPayload> impleme
 			}
 		}
 
+		// Reset the video element BEFORE attaching the new source. Without this
+		// the previous video's last frame (or end-of-stream black frame) holds
+		// on screen while the new source attaches + parses + buffers. That gap
+		// can be 1-3s for HLS and also masks the poster — browsers won't
+		// re-show <video poster> when the element already had a source.
+		// `removeAttribute('src') + load()` puts the element back into NETWORK_EMPTY
+		// where poster CAN render, then the new source attaches on top.
+		try { this.element.removeAttribute('src'); this.element.load(); }
+		catch { /* defensive */ }
+
 		if (isHls && !nativeHls) {
 			// Dynamic import keeps hls.js out of the initial bundle when not needed.
 			// Indirect specifier sidesteps TS module resolution — hls.js is a
@@ -309,11 +319,8 @@ export class Html5VideoBackend extends EventEmitter<BackendEventPayload> impleme
 			this._attachHlsLevelSwitchedHandler(Hls);
 		}
 		else {
-			// Clear any previous src before assigning a new one — without this
-			// browsers can briefly play the previous source while loading the
-			// new one, and `load()` becomes a no-op when src didn't change.
-			try { this.element.removeAttribute('src'); this.element.load(); }
-			catch { /* defensive */ }
+			// Previous src was already cleared at the top of load() — just
+			// assign + reload for the new source.
 			this.element.src = url;
 			try { this.element.load(); }
 			catch { /* defensive */ }
