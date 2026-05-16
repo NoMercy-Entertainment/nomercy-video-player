@@ -1205,6 +1205,9 @@ export class Html5VideoBackend extends EventEmitter<BackendEventPayload> impleme
 
 	private waitForLoadedMetadata(): Promise<void> {
 		if (this.element.readyState >= 1 /* HAVE_METADATA */) return Promise.resolve();
+
+		const METADATA_TIMEOUT_MS = 10_000;
+
 		return new Promise<void>((resolve, reject) => {
 			const onLoad = (): void => { cleanup(); resolve(); };
 
@@ -1226,7 +1229,18 @@ export class Html5VideoBackend extends EventEmitter<BackendEventPayload> impleme
 				}
 			};
 
+			// Hard backstop: if neither loadedmetadata nor a fatal error arrives
+			// within METADATA_TIMEOUT_MS, reject so load() never parks indefinitely.
+			// This catches the case where HLS.js retries exhaust slowly (the default
+			// three-retry back-off takes 7 s on manifest 404s) or where a non-fatal
+			// error loop never escalates to fatal at all.
+			const timer = setTimeout(() => {
+				cleanup();
+				reject(new Error(`waitForLoadedMetadata timed out after ${METADATA_TIMEOUT_MS} ms`));
+			}, METADATA_TIMEOUT_MS);
+
 			const cleanup = (): void => {
+				clearTimeout(timer);
 				this.element.removeEventListener('loadedmetadata', onLoad);
 				this.element.removeEventListener('error', onElementError);
 				this.off('stream:error', onStreamError);
