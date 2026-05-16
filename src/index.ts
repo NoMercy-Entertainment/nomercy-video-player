@@ -306,10 +306,13 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 	/**
 	 * Resolve a raw image URL to an absolute poster string and apply it.
 	 *
-	 * Fast path: absolute URLs (have a scheme) are handled synchronously so
-	 * `beforeLoad` listeners attached after the constructor see the updated
-	 * poster value immediately on the same tick. Relative URLs go through
-	 * the async `resolveUrl` path so `imageBasePath` / `urlResolver` apply.
+	 * Sync first — the poster MUST be on the `<video>` element before the
+	 * backend starts loading the new source, otherwise the user sees a black
+	 * frame between source-clear and first-frame-paint. We prepend
+	 * `imageBasePath` (when set) for relative URLs immediately, then kick off
+	 * `resolveUrl(raw, 'poster')` to upgrade to whatever a custom resolver
+	 * returns — only writing the async result if it actually differs from
+	 * the sync guess (avoids a redundant attribute set + repaint flash).
 	 */
 	private _applyPosterForRaw(raw: string | undefined): void {
 		if (!raw) {
@@ -325,7 +328,17 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 			return;
 		}
 
+		// Sync best-effort against imageBasePath so the poster is on the element
+		// the same tick beforeLoad fires.
+		const base = this.options?.imageBasePath ?? '';
+		const syncGuess = base ? base + raw : raw;
+		this._wantedPoster = syncGuess;
+		this._applyPoster();
+
+		// Then upgrade async — only commit if a custom urlResolver returned
+		// something different from the basePath concat.
 		void this.resolveUrl(raw, 'poster').then(resolved => {
+			if (resolved.href === syncGuess) return;
 			this._wantedPoster = resolved.href;
 			this._applyPoster();
 		});
