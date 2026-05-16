@@ -453,8 +453,6 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
         const root = this.mount('overlay');
         this.player.addClasses(root, ['overlay']);
 
-        this.player.container.classList.add('nomercyplayer');
-
         if (!this.opts?.hideTitle) {
             this.topBarRefs = buildTitleBar(this.player, root);
         }

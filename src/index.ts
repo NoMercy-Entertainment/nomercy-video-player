@@ -20,6 +20,9 @@ import type {
 	CastState,
 	Chapter,
 	CueParser,
+	CurrentAudioTrackSelection,
+	CurrentQualitySelection,
+	CurrentSubtitleSelection,
 	DeviceCapabilities,
 	IPlatform,
 	IPlayer,
@@ -164,7 +167,10 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 	declare audioContext: () => AudioContext | undefined;
 	declare experimental: PlayerExperimental;
 
-	declare t: (key: string, vars?: Record<string, string>) => string;
+	declare t: {
+		(key: string, vars?: Record<string, string>): string;
+		(PluginClass: PluginCtorWithId, key: string, vars?: Record<string, string>): string;
+	};
 	declare language: {
 		(): string;
 		(lang: string): Promise<void>;
@@ -702,7 +708,7 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 	// ── Tracks / chapters / quality ── composed in via `mediaTracksMethods` mixin.
 	declare subtitles: () => SubtitleTrack[];
 	declare currentSubtitle: {
-		(): number | null;
+		(): CurrentSubtitleSelection | null;
 		(idx: number | null): void;
 	};
 	/**
@@ -718,7 +724,7 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 	};
 	declare audioTracks: () => AudioTrack[];
 	declare currentAudioTrack: {
-		(): number | null;
+		(): CurrentAudioTrackSelection | null;
 		(idx: number): void;
 	};
 	declare qualityLevels: {
@@ -726,7 +732,7 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 		(opts: { includeUnsupported: true }): QualityLevel[];
 	};
 	declare currentQuality: {
-		(): number | 'auto';
+		(): CurrentQualitySelection | 'auto';
 		(idx: number | 'auto'): void;
 	};
 	declare chapters: () => Chapter[];
