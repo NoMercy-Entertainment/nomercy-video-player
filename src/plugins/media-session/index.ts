@@ -1,14 +1,15 @@
-
-
 import { MediaSessionPlugin as BaseMediaSession } from '@nomercy-entertainment/nomercy-player-core/plugins/media-session';
 import type { MediaSessionMetadata } from '@nomercy-entertainment/nomercy-player-core/plugins/media-session';
 import type { NMVideoPlayer } from '../../index';
 import type { VideoPlaylistItem } from '../../types';
 
 /**
- * Video-specific MediaSession integration. Pulls show / season / poster off
- * the playlist item so OS "Now Playing" surfaces TV-style metadata. Falls
- * back to title / year when the show fields aren't present.
+ * Video-specific MediaSession integration. Overrides text metadata only —
+ * artwork resolution lives in the kit base class and flows through
+ * `resolveUrl(url, 'poster')`, which consults `imageBasePath`.
+ *
+ * Fills `artist` with the show name (or year as fallback) and `album` with
+ * the season label so OS "Now Playing" surfaces TV-style metadata for series.
  */
 export class MediaSessionPlugin extends BaseMediaSession<NMVideoPlayer<any>, VideoPlaylistItem> {
 	static override readonly id: string = 'media-session';
@@ -20,10 +21,6 @@ export class MediaSessionPlugin extends BaseMediaSession<NMVideoPlayer<any>, Vid
 			season?: number | string;
 			year?: number | string;
 		};
-		const base = this.opts?.artworkBaseUrl ?? '';
-		const posterSrc = item.poster
-			? (base ? `${base}${item.poster}` : item.poster)
-			: undefined;
 		const seasonText = x.season !== undefined && x.season !== null && String(x.season) !== ''
 			? `Season ${x.season}`
 			: '';
@@ -31,7 +28,6 @@ export class MediaSessionPlugin extends BaseMediaSession<NMVideoPlayer<any>, Vid
 			title: item.title ?? x.name ?? '',
 			artist: x.show ?? (x.year !== undefined ? String(x.year) : ''),
 			album: seasonText,
-			artwork: posterSrc ? [{ src: posterSrc, sizes: '512x512' }] : undefined,
 		};
 	}
 }

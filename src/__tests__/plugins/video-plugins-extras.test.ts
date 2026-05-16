@@ -32,7 +32,7 @@ describe('video-plugins (extras)', () => {
 	const setup = () => new NMVideoPlayer('test').setup({});
 
 	describe('MediaSessionPlugin (video)', () => {
-		it('getMetadata reads video-specific fields (title/show/season/poster)', async () => {
+		it('getMetadata reads video-specific text fields (title/show/season)', async () => {
 			const p = setup();
 			p.addPlugin(mediaSessionPlugin);
 			await p.ready();
@@ -51,7 +51,9 @@ describe('video-plugins (extras)', () => {
 			expect(meta.title).toBe('Pilot');
 			expect(meta.artist).toBe('Test Show');
 			expect(meta.album).toBe('Season 1');
-			expect(meta.artwork).toEqual([{ src: 'https://example.com/poster.jpg', sizes: '512x512' }]);
+			// Artwork is resolved by the kit base class via resolveUrl(url, 'poster')
+			// and applied asynchronously by _pushMetadata — covered in kit tests.
+			expect(meta.artwork).toBeUndefined();
 		});
 
 		it('getMetadata falls back to year when show is absent', async () => {
