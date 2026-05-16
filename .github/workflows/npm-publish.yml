@@ -24,19 +24,23 @@ jobs:
         uses: actions/setup-node@v5
         with:
           node-version: 24
-          cache: npm
+          cache: yarn
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install dependencies
-        run: rm -rf node_modules package-lock.json && npm install
+        run: yarn install --frozen-lockfile
 
       - name: Build package
-        run: npm run build
+        run: yarn build
 
       - name: Get version
         id: get_version
         run: echo "VERSION=$(node -p "require('./package.json').version")" >> $GITHUB_ENV
 
+      # npm publish talks to the registry only — the package.json + tarball
+      # built by `yarn build` are the same artifact either way. Keeping the
+      # publish step on npm preserves --provenance support, which yarn 1's
+      # publish doesn't implement.
       - name: Publish package
         run: |
           if [[ "$VERSION" == *-* ]]; then

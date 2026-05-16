@@ -25,18 +25,18 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
+          cache: yarn
 
-      - run: npm ci
+      - run: yarn install --frozen-lockfile
 
       - name: Run unit & integration tests
-        run: npx vitest run --reporter=default --reporter=html --outputFile=reports/vitest/index.html
+        run: yarn vitest run --reporter=default --reporter=html --outputFile=reports/vitest/index.html
 
       - name: Install Playwright browsers
-        run: npx playwright install chromium
+        run: yarn playwright install chromium
 
       - name: Run E2E tests
-        run: npx playwright test
+        run: yarn playwright test
 
       - name: Generate landing page
         run: |
