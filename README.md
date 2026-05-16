@@ -1,3 +1,10 @@
+[![npm](https://img.shields.io/npm/v/@nomercy-entertainment/nomercy-video-player)](https://www.npmjs.com/package/@nomercy-entertainment/nomercy-video-player)
+[![license](https://img.shields.io/npm/l/@nomercy-entertainment/nomercy-video-player)](./LICENSE)
+[![types](https://img.shields.io/npm/types/@nomercy-entertainment/nomercy-video-player)](https://www.npmjs.com/package/@nomercy-entertainment/nomercy-video-player)
+[![bundlephobia](https://img.shields.io/bundlephobia/minzip/@nomercy-entertainment/nomercy-video-player)](https://bundlephobia.com/package/@nomercy-entertainment/nomercy-video-player)
+
+Live demo: https://nomercy.tv/player
+
 # nomercy-video-player
 
 Headless reference video player built on nomercy-player-core. Adapter-driven.
@@ -5,6 +12,8 @@ Headless reference video player built on nomercy-player-core. Adapter-driven.
 ```
 npm install @nomercy-entertainment/nomercy-video-player
 ```
+
+> **Upgrading from v1?** See [MIGRATION.md](./MIGRATION.md) for the full breaking-change list — renamed methods, changed event payloads, and the `item.file` → `item.url` field rename that breaks silently if missed.
 
 ---
 
