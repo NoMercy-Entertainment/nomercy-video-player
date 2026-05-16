@@ -111,8 +111,8 @@ const policy = (code: string, message: string): BrowserPolicyError => new Browse
  * Default video backend. Wraps an `<HTMLVideoElement>` for transport.
  *
  * HLS support: native pass-through when `canPlayType` reports support
- * (Safari / iOS), otherwise dynamically imports `hls.js` (already a kit
- * dep) and attaches it. MSE / WebCodecs backends ship later.
+ * (Safari / iOS), otherwise dynamically imports `hls.js` (bundled as a
+ * regular dep) and attaches it. MSE / WebCodecs backends ship later.
  */
 export class Html5VideoBackend extends EventEmitter<BackendEventPayload> implements IVideoBackend {
 	readonly kind = 'html5' as const;
