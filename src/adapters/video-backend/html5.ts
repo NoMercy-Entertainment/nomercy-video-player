@@ -870,6 +870,7 @@ export class Html5VideoBackend extends EventEmitter<BackendEventPayload> impleme
 		this.addElementListener('canplay', e => this.emit('canplay', e));
 		this.addElementListener('emptied', e => this.emit('emptied', e));
 		this.addElementListener('play', e => this.emit('play', e));
+		this.addElementListener('playing', e => this.emit('playing', e));
 		this.addElementListener('pause', e => this.emit('pause', e));
 		this.addElementListener('timeupdate', e => this.emit('timeupdate', e));
 		this.addElementListener('waiting', e => this.emit('waiting', e));

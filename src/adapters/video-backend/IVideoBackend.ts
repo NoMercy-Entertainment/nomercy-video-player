@@ -17,6 +17,11 @@ export interface BackendEventPayload {
 	loadeddata: Event;
 	canplay: Event;
 	play: Event;
+	/**
+	 * Fires when media is actually rendering — after buffering resolves, not
+	 * just on element.play(). Use this to hide buffering spinners.
+	 */
+	playing: Event;
 	pause: Event;
 	ended: Event;
 	timeupdate: Event;

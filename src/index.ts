@@ -535,6 +535,9 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 				this.emit('play', undefined);
 			}
 		});
+		instance.on('playing', () => {
+			this.emit('playing', undefined);
+		});
 		instance.on('pause', () => {
 			if (this._playState === 'playing' && !instance.mediaElement().ended) {
 				this._playState = 'paused';
