@@ -5,21 +5,20 @@ Svelte's `onMount` and `onDestroy` map directly to the player lifecycle.
 ```svelte
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import nmplayer, { KeyHandlerPlugin } from '@nomercy-entertainment/nomercy-video-player';
-  import type { NMPlayer, PlayerConfig, PlaylistItem, TimeData } from '@nomercy-entertainment/nomercy-video-player';
+  import nmplayer from '@nomercy-entertainment/nomercy-video-player';
+  import { KeyHandlerPlugin } from '@nomercy-entertainment/nomercy-video-player/plugins';
+  import type { NMVideoPlayer, VideoPlaylistItem, VideoPlayerConfig } from '@nomercy-entertainment/nomercy-video-player';
 
   const basePath = 'https://raw.githubusercontent.com/NoMercy-Entertainment/media/master/Films/Films';
   const imageBasePath = 'https://image.tmdb.org/t/p';
 
-  const playlist: PlaylistItem[] = [
+  const playlist: VideoPlaylistItem[] = [
     {
       id: 'sintel',
       title: 'Sintel',
-      description: 'A girl named Sintel searches for a baby dragon she calls Scales.',
-      file: '/Sintel.(2010)/Sintel.(2010).NoMercy.m3u8',
+      url: '/Sintel.(2010)/Sintel.(2010).NoMercy.m3u8',
       image: '/w780/q2bVM5z90tCGbmXYtq2J38T5hSX.jpg',
-      duration: '14:48',
-      year: 2010,
+      duration: 888,
       tracks: [
         { id: 0, label: 'English', file: '/Sintel.(2010)/subtitles/Sintel.(2010).NoMercy.eng.full.vtt', language: 'eng', kind: 'subtitles' },
         { id: 1, file: '/Sintel.(2010)/chapters.vtt', kind: 'chapters' },
@@ -28,24 +27,24 @@ Svelte's `onMount` and `onDestroy` map directly to the player lifecycle.
   ];
 
   const containerId = 'nomercy-player';
-  const config: PlayerConfig = { playlist, basePath, imageBasePath, autoPlay: false };
+  const config: VideoPlayerConfig = { playlist, basePath, imageBasePath };
 
-  let player: NMPlayer | null = null;
+  let player: NMVideoPlayer | null = null;
   let currentTime = 0;
   let duration = 0;
   let isPlaying = false;
 
   onMount(() => {
-    player = nmplayer(containerId).setup(config);
+    player = nmplayer(containerId)
+      .addPlugin(KeyHandlerPlugin)
+      .setup(config);
 
-    player.registerPlugin('keyHandler', new KeyHandlerPlugin());
-    player.usePlugin('keyHandler');
-
-    player.on('time', (data: TimeData) => {
-      currentTime = data.currentTime;
-      duration = data.duration;
+    player.on('ready', () => {
+      player!.current(0, { autoplay: true });
     });
 
+    player.on('time', (data) => { currentTime = data.time; });
+    player.on('duration', (data) => { duration = data.duration; });
     player.on('play', () => { isPlaying = true; });
     player.on('pause', () => { isPlaying = false; });
   });
@@ -70,47 +69,46 @@ Svelte's `onMount` and `onDestroy` map directly to the player lifecycle.
 
 ## Svelte 5 (Runes)
 
-With Svelte 5 runes, you can use `$state` and `$effect`:
+With Svelte 5 runes, use `$state` and `$effect`:
 
 ```svelte
 <script lang="ts">
-  import nmplayer, { KeyHandlerPlugin } from '@nomercy-entertainment/nomercy-video-player';
-  import type { NMPlayer, PlayerConfig, PlaylistItem, TimeData } from '@nomercy-entertainment/nomercy-video-player';
+  import nmplayer from '@nomercy-entertainment/nomercy-video-player';
+  import { KeyHandlerPlugin } from '@nomercy-entertainment/nomercy-video-player/plugins';
+  import type { NMVideoPlayer, VideoPlaylistItem, VideoPlayerConfig } from '@nomercy-entertainment/nomercy-video-player';
 
   const basePath = 'https://raw.githubusercontent.com/NoMercy-Entertainment/media/master/Films/Films';
   const imageBasePath = 'https://image.tmdb.org/t/p';
 
-  const playlist: PlaylistItem[] = [
+  const playlist: VideoPlaylistItem[] = [
     {
       id: 'sintel',
       title: 'Sintel',
-      description: 'A girl named Sintel searches for a baby dragon she calls Scales.',
-      file: '/Sintel.(2010)/Sintel.(2010).NoMercy.m3u8',
+      url: '/Sintel.(2010)/Sintel.(2010).NoMercy.m3u8',
       image: '/w780/q2bVM5z90tCGbmXYtq2J38T5hSX.jpg',
-      duration: '14:48',
-      year: 2010,
+      duration: 888,
     },
   ];
 
   const containerId = 'nomercy-player';
-  const config: PlayerConfig = { playlist, basePath, imageBasePath };
+  const config: VideoPlayerConfig = { playlist, basePath, imageBasePath };
 
-  let player = $state<NMPlayer | null>(null);
+  let player = $state<NMVideoPlayer | null>(null);
   let currentTime = $state(0);
   let duration = $state(0);
   let isPlaying = $state(false);
 
   $effect(() => {
-    const instance = nmplayer(containerId).setup(config);
+    const instance = nmplayer(containerId)
+      .addPlugin(KeyHandlerPlugin)
+      .setup(config);
 
-    instance.registerPlugin('keyHandler', new KeyHandlerPlugin());
-    instance.usePlugin('keyHandler');
-
-    instance.on('time', (data: TimeData) => {
-      currentTime = data.currentTime;
-      duration = data.duration;
+    instance.on('ready', () => {
+      instance.current(0, { autoplay: true });
     });
 
+    instance.on('time', (data) => { currentTime = data.time; });
+    instance.on('duration', (data) => { duration = data.duration; });
     instance.on('play', () => { isPlaying = true; });
     instance.on('pause', () => { isPlaying = false; });
 

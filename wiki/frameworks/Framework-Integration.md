@@ -9,11 +9,12 @@ NoMercy Video Player is framework-agnostic. The integration pattern is the same 
 npm install @nomercy-entertainment/nomercy-video-player
 ```
 
-All imports come from the package root:
+Player and type imports come from the package root. Plugin imports come from the `/plugins` subpath:
 
 ```typescript
-import nmplayer, { KeyHandlerPlugin, Plugin } from '@nomercy-entertainment/nomercy-video-player';
-import type { NMPlayer, PlayerConfig, PlaylistItem, TimeData } from '@nomercy-entertainment/nomercy-video-player';
+import nmplayer from '@nomercy-entertainment/nomercy-video-player';
+import { KeyHandlerPlugin, OctopusPlugin } from '@nomercy-entertainment/nomercy-video-player/plugins';
+import type { NMVideoPlayer, VideoPlayerConfig, VideoPlaylistItem } from '@nomercy-entertainment/nomercy-video-player';
 ```
 
 ## Choose Your Framework
@@ -28,23 +29,21 @@ import type { NMPlayer, PlayerConfig, PlaylistItem, TimeData } from '@nomercy-en
 
 ## Shared Playlist Data
 
-Every framework example uses the same playlist:
+Every framework example uses the same playlist shape:
 
 ```typescript
-import type { PlaylistItem } from '@nomercy-entertainment/nomercy-video-player';
+import type { VideoPlaylistItem } from '@nomercy-entertainment/nomercy-video-player';
 
 const basePath = 'https://raw.githubusercontent.com/NoMercy-Entertainment/media/master/Films/Films';
 const imageBasePath = 'https://image.tmdb.org/t/p';
 
-const playlist: PlaylistItem[] = [
+const playlist: VideoPlaylistItem[] = [
 	{
 		id: 'sintel',
 		title: 'Sintel',
-		description: 'A girl named Sintel searches for a baby dragon she calls Scales.',
-		file: '/Sintel.(2010)/Sintel.(2010).NoMercy.m3u8',
+		url: '/Sintel.(2010)/Sintel.(2010).NoMercy.m3u8',
 		image: '/w780/q2bVM5z90tCGbmXYtq2J38T5hSX.jpg',
-		duration: '14:48',
-		year: 2010,
+		duration: 888,
 		tracks: [
 			{ id: 0, label: 'English', file: '/Sintel.(2010)/subtitles/Sintel.(2010).NoMercy.eng.full.vtt', language: 'eng', kind: 'subtitles' },
 			{ id: 1, file: '/Sintel.(2010)/chapters.vtt', kind: 'chapters' },
@@ -53,11 +52,9 @@ const playlist: PlaylistItem[] = [
 	{
 		id: 'cosmos-laundromat',
 		title: 'Cosmos Laundromat',
-		description: 'On a desolate island, a suicidal sheep meets a mysterious stranger.',
-		file: '/Cosmos.Laundromat.(2015)/Cosmos.Laundromat.(2015).NoMercy.m3u8',
+		url: '/Cosmos.Laundromat.(2015)/Cosmos.Laundromat.(2015).NoMercy.m3u8',
 		image: '/w780/f2wABsgj2lIR2dkDEfBZX8p4Iyk.jpg',
-		duration: '12:04',
-		year: 2015,
+		duration: 724,
 		tracks: [
 			{ id: 0, label: 'English', file: '/Cosmos.Laundromat.(2015)/subtitles/Cosmos.Laundromat.(2015).NoMercy.eng.full.vtt', language: 'eng', kind: 'subtitles' },
 			{ id: 1, file: '/Cosmos.Laundromat.(2015)/chapters.vtt', kind: 'chapters' },

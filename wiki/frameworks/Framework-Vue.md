@@ -4,48 +4,34 @@ Vue is the primary framework used by the project maintainers. The recommended pa
 
 ```typescript
 // composables/useNMPlayer.ts
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { onBeforeUnmount, onMounted } from 'vue';
 import type { Ref } from 'vue';
-import nmplayer, { KeyHandlerPlugin } from '@nomercy-entertainment/nomercy-video-player';
-import type { NMPlayer, PlayerConfig, TimeData } from '@nomercy-entertainment/nomercy-video-player';
+import nmplayer from '@nomercy-entertainment/nomercy-video-player';
+import { KeyHandlerPlugin } from '@nomercy-entertainment/nomercy-video-player/plugins';
+import type { NMVideoPlayer, VideoPlayerConfig } from '@nomercy-entertainment/nomercy-video-player';
 
-export function useNMPlayer(containerId: string, config: Ref<PlayerConfig>) {
-	const player = ref<NMPlayer | null>(null);
-	const currentTime = ref(0);
-	const duration = ref(0);
-	const isPlaying = ref(false);
+export function useNMPlayer(containerId: string, config: Ref<VideoPlayerConfig>) {
+	let player: NMVideoPlayer | null = null;
 
-	function init() {
-		const instance = nmplayer(containerId).setup(config.value);
+	onMounted(() => {
+		player = nmplayer(containerId)
+			.addPlugin(KeyHandlerPlugin)
+			.setup(config.value);
 
-		instance.registerPlugin('keyHandler', new KeyHandlerPlugin());
-		instance.usePlugin('keyHandler');
-
-		instance.on('time', (data: TimeData) => {
-			currentTime.value = data.currentTime;
-			duration.value = data.duration;
+		player.on('ready', () => {
+			player!.current(0, { autoplay: true });
 		});
-
-		instance.on('play', () => { isPlaying.value = true; });
-		instance.on('pause', () => { isPlaying.value = false; });
-
-		player.value = instance;
-	}
-
-	onMounted(() => init());
+	});
 
 	onBeforeUnmount(() => {
-		player.value?.dispose();
-		player.value = null;
+		player?.dispose();
+		player = null;
 	});
 
-	watch(config, (newConfig) => {
-		if (player.value) {
-			player.value.load(newConfig.playlist);
-		}
-	});
-
-	return { player, currentTime, duration, isPlaying };
+	return {
+		togglePlayback: () => player?.togglePlayback(),
+		seek: (seconds: number) => player?.currentTime(seconds),
+	};
 }
 ```
 
@@ -55,20 +41,18 @@ export function useNMPlayer(containerId: string, config: Ref<PlayerConfig>) {
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useNMPlayer } from '@/composables/useNMPlayer';
-import type { PlayerConfig, PlaylistItem } from '@nomercy-entertainment/nomercy-video-player';
+import type { VideoPlayerConfig, VideoPlaylistItem } from '@nomercy-entertainment/nomercy-video-player';
 
 const basePath = 'https://raw.githubusercontent.com/NoMercy-Entertainment/media/master/Films/Films';
 const imageBasePath = 'https://image.tmdb.org/t/p';
 
-const playlist: PlaylistItem[] = [
+const playlist: VideoPlaylistItem[] = [
   {
     id: 'sintel',
     title: 'Sintel',
-    description: 'A girl named Sintel searches for a baby dragon she calls Scales.',
-    file: '/Sintel.(2010)/Sintel.(2010).NoMercy.m3u8',
+    url: '/Sintel.(2010)/Sintel.(2010).NoMercy.m3u8',
     image: '/w780/q2bVM5z90tCGbmXYtq2J38T5hSX.jpg',
-    duration: '14:48',
-    year: 2010,
+    duration: 888,
     tracks: [
       { id: 0, label: 'English', file: '/Sintel.(2010)/subtitles/Sintel.(2010).NoMercy.eng.full.vtt', language: 'eng', kind: 'subtitles' },
       { id: 1, file: '/Sintel.(2010)/chapters.vtt', kind: 'chapters' },
@@ -76,15 +60,14 @@ const playlist: PlaylistItem[] = [
   },
 ];
 
-const config = ref<PlayerConfig>({
+const config = ref<VideoPlayerConfig>({
   playlist,
   basePath,
   imageBasePath,
-  autoPlay: false,
 });
 
 const containerId = 'nomercy-player';
-const { player, currentTime, duration, isPlaying } = useNMPlayer(containerId, config);
+const { togglePlayback } = useNMPlayer(containerId, config);
 </script>
 
 <template>
@@ -92,10 +75,7 @@ const { player, currentTime, duration, isPlaying } = useNMPlayer(containerId, co
     <div :id="containerId" style="width: 100%; aspect-ratio: 16/9;" />
 
     <div class="controls">
-      <button @click="player?.togglePlayback()">
-        {{ isPlaying ? 'Pause' : 'Play' }}
-      </button>
-      <span>{{ Math.floor(currentTime) }}s / {{ Math.floor(duration) }}s</span>
+      <button @click="togglePlayback()">Play / Pause</button>
     </div>
   </div>
 </template>
@@ -103,11 +83,12 @@ const { player, currentTime, duration, isPlaying } = useNMPlayer(containerId, co
 
 ## Reactive Playlist Updates
 
-The composable watches the config ref. To switch playlists dynamically:
+To switch the queue while the player is running, call `player.queue(newItems)` followed by `player.current(0, { autoplay: true })`:
 
 ```typescript
-function loadNewPlaylist(items: PlaylistItem[]) {
-	config.value = { ...config.value, playlist: items };
+function loadNewPlaylist(items: VideoPlaylistItem[]) {
+	player?.queue(items);
+	player?.current(0, { autoplay: true });
 }
 ```
 

@@ -5,23 +5,30 @@ The recommended pattern is a custom hook that manages the player lifecycle insid
 ```typescript
 // hooks/useNMPlayer.ts
 import { useCallback, useEffect, useRef, useState } from 'react';
-import nmplayer, { KeyHandlerPlugin } from '@nomercy-entertainment/nomercy-video-player';
-import type { NMPlayer, PlayerConfig, TimeData } from '@nomercy-entertainment/nomercy-video-player';
+import nmplayer from '@nomercy-entertainment/nomercy-video-player';
+import { KeyHandlerPlugin } from '@nomercy-entertainment/nomercy-video-player/plugins';
+import type { NMVideoPlayer, VideoPlayerConfig } from '@nomercy-entertainment/nomercy-video-player';
 
-export function useNMPlayer(containerId: string, config: PlayerConfig) {
-	const playerRef = useRef<NMPlayer | null>(null);
+export function useNMPlayer(containerId: string, config: VideoPlayerConfig) {
+	const playerRef = useRef<NMVideoPlayer | null>(null);
 	const [currentTime, setCurrentTime] = useState(0);
 	const [duration, setDuration] = useState(0);
 	const [isPlaying, setIsPlaying] = useState(false);
 
 	useEffect(() => {
-		const instance = nmplayer(containerId).setup(config);
+		const instance = nmplayer(containerId)
+			.addPlugin(KeyHandlerPlugin)
+			.setup(config);
 
-		instance.registerPlugin('keyHandler', new KeyHandlerPlugin());
-		instance.usePlugin('keyHandler');
+		instance.on('ready', () => {
+			instance.current(0, { autoplay: true });
+		});
 
-		instance.on('time', (data: TimeData) => {
-			setCurrentTime(data.currentTime);
+		instance.on('time', (data) => {
+			setCurrentTime(data.time);
+		});
+
+		instance.on('duration', (data) => {
 			setDuration(data.duration);
 		});
 
@@ -48,20 +55,18 @@ export function useNMPlayer(containerId: string, config: PlayerConfig) {
 
 ```tsx
 import { useNMPlayer } from './hooks/useNMPlayer';
-import type { PlayerConfig, PlaylistItem } from '@nomercy-entertainment/nomercy-video-player';
+import type { VideoPlayerConfig, VideoPlaylistItem } from '@nomercy-entertainment/nomercy-video-player';
 
 const basePath = 'https://raw.githubusercontent.com/NoMercy-Entertainment/media/master/Films/Films';
 const imageBasePath = 'https://image.tmdb.org/t/p';
 
-const playlist: PlaylistItem[] = [
+const playlist: VideoPlaylistItem[] = [
 	{
 		id: 'sintel',
 		title: 'Sintel',
-		description: 'A girl named Sintel searches for a baby dragon she calls Scales.',
-		file: '/Sintel.(2010)/Sintel.(2010).NoMercy.m3u8',
+		url: '/Sintel.(2010)/Sintel.(2010).NoMercy.m3u8',
 		image: '/w780/q2bVM5z90tCGbmXYtq2J38T5hSX.jpg',
-		duration: '14:48',
-		year: 2010,
+		duration: 888,
 		tracks: [
 			{ id: 0, label: 'English', file: '/Sintel.(2010)/subtitles/Sintel.(2010).NoMercy.eng.full.vtt', language: 'eng', kind: 'subtitles' },
 			{ id: 1, file: '/Sintel.(2010)/chapters.vtt', kind: 'chapters' },
@@ -69,7 +74,7 @@ const playlist: PlaylistItem[] = [
 	},
 ];
 
-const config: PlayerConfig = { playlist, basePath, imageBasePath, autoPlay: false };
+const config: VideoPlayerConfig = { playlist, basePath, imageBasePath };
 
 export default function NMPlayerView({ containerId = 'nomercy-player' }: { containerId?: string }) {
 	const { currentTime, duration, isPlaying, togglePlayback } = useNMPlayer(containerId, config);
@@ -83,11 +88,7 @@ export default function NMPlayerView({ containerId = 'nomercy-player' }: { conta
 					{isPlaying ? 'Pause' : 'Play'}
 				</button>
 				<span>
-					{Math.floor(currentTime)}
-					s /
-					{' '}
-					{Math.floor(duration)}
-					s
+					{Math.floor(currentTime)}s / {Math.floor(duration)}s
 				</span>
 			</div>
 		</div>
