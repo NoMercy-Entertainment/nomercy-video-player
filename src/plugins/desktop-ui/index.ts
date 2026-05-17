@@ -2266,7 +2266,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
             this._userPickedQuality = false;
         }
         else {
-            this.activeQualityIdx = qualityChoice;
+            this.activeQualityIdx = qualityChoice.index;
             this._userPickedQuality = true;
         }
     }
