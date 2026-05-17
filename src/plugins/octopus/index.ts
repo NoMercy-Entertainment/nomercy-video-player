@@ -2,6 +2,7 @@ import { mergeConfig, Plugin } from '@nomercy-entertainment/nomercy-player-core'
 import type { OctopusOptions as NMOctopusOptions } from '@nomercy-entertainment/nomercy-subtitle-octopus';
 import type { ResolvedUrl } from '@nomercy-entertainment/nomercy-player-core';
 import type { NMVideoPlayer } from '../../index';
+import type { VideoPlaylistItem } from '../../types';
 
 
 interface FontManifestEntry {
@@ -255,10 +256,16 @@ export class OctopusPlugin extends Plugin<NMVideoPlayer<any>, OctopusOptions> {
 	private async resolveFontsForCurrent(): Promise<Record<string, string>> {
 		if (this._availableFontsForCurrent) return this._availableFontsForCurrent;
 
-		const item = this.player.current?.();
-		const tracks = Array.isArray(item?.tracks) ? item!.tracks! : [];
-		const fontsTrack = tracks.find((t: { kind?: string; file?: string }) => t?.kind === 'fonts');
-		const manifestUrl = fontsTrack?.file;
+		const item = this.player.current?.() as VideoPlaylistItem | undefined;
+
+		// Prefer the typed `fonts` field; fall back to the deprecated
+		// generic `tracks[].kind === 'fonts'` path for items that have not
+		// yet migrated.
+		const typedFonts = Array.isArray(item?.fonts) ? item!.fonts : null;
+		const legacyFontsTrack = typedFonts === null && Array.isArray(item?.tracks)
+			? (item!.tracks as Array<{ kind?: string; file?: string }>).find(t => t?.kind === 'fonts')
+			: null;
+		const manifestUrl = typedFonts?.[0]?.file ?? legacyFontsTrack?.file;
 
 		if (!manifestUrl) {
 			const fallbackMap = await this.buildFontMap(this.opts?.fonts ?? []);

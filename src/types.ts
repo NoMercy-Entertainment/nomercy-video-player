@@ -2,12 +2,19 @@
 
 import type { IVideoBackend, VideoBackendKind } from './adapters/video-backend/IVideoBackend';
 import type {
+	ActionOptions,
 	AudioTrack as KitAudioTrack,
+	AudioTrackState,
 	BaseEventMap,
 	BasePlayerConfig,
 	BasePlaylistItem,
 	Chapter as KitChapter,
+	CurrentAudioTrackSelection,
+	CurrentQualitySelection,
+	CurrentSubtitleSelection,
+	IPlayer,
 	QualityLevel,
+	SubtitleStyle,
 	SubtitleTrack as KitSubtitleTrack,
 } from '@nomercy-entertainment/nomercy-player-core';
 
@@ -17,6 +24,19 @@ export type { QualityLevel };
 export type SubtitleTrackRef = KitSubtitleTrack;
 export type AudioTrackRef = KitAudioTrack;
 export type ChapterRef = KitChapter;
+
+/**
+ * A single font manifest entry for the `fonts` sidecar field on
+ * `VideoPlaylistItem`. Each entry points to a fonts.json manifest URL or a
+ * direct font file URL that the `OctopusPlugin` should pre-fetch for ASS
+ * subtitle rendering.
+ */
+export interface FontTrackRef {
+	/** URL of a `fonts.json` manifest or a direct font file URL. */
+	file: string;
+	/** Human-readable label (optional, for debugging). */
+	label?: string;
+}
 
 export interface SkipperRange {
 	start: number;
@@ -55,11 +75,24 @@ export interface VideoPlaylistItem extends BasePlaylistItem {
 	thumbnail?: string;
 	duration?: number;
 	subtitles?: SubtitleTrackRef[];
-	audioTracks?: AudioTrackRef[];
 	chapters?: ChapterRef[];
 	previewSpriteUrl?: string;
 	skippers?: SkipperData;
-	/** Generic sidecar track list — subtitles, chapters, thumbnails, sprites, fonts, etc. */
+	/**
+	 * Font manifests for ASS/SSA subtitle rendering via `OctopusPlugin`.
+	 * Each entry is a `fonts.json` manifest URL or a direct font file URL.
+	 * Canonical alternative to `tracks[].kind === 'fonts'`.
+	 */
+	fonts?: FontTrackRef[];
+	/**
+	 * Generic sidecar track list — escape hatch for track kinds without a
+	 * typed field (`subtitles`, `chapters`, `previewSpriteUrl`, `fonts`
+	 * cover all built-in cases).
+	 *
+	 * @deprecated Use the typed fields (`subtitles`, `chapters`,
+	 * `previewSpriteUrl`, `fonts`) instead. `tracks` will be removed in a
+	 * future major release.
+	 */
 	tracks?: Array<{ id?: number | string; kind?: string; file?: string; label?: string; language?: string }>;
 	/** Series / show title displayed in the top-bar when season/episode are present. */
 	show?: string;
@@ -136,13 +169,11 @@ export interface VideoEventMap extends BaseEventMap {
 	// video plugins receive a typed item without casts.
 	'current': { item: VideoPlaylistItem | undefined; index: number };
 
-	quality: { level: number; label: string };
 	'quality:requested': { level: number | 'auto' };
 	chapter: { index: number; title: string };
 	pip: { active: boolean };
 	theater: { active: boolean };
 	fullscreen: { active: boolean };
-	float: { active: boolean };
 	mute: { muted: boolean };
 	volume: { level: number };
 	repeat: { state: RepeatState };
@@ -223,3 +254,96 @@ export interface VideoPlayerConfig<T extends BasePlaylistItem = VideoPlaylistIte
 }
 
 export type Stretching = NonNullable<VideoPlayerConfig['stretching']>;
+
+
+/**
+ * Typed contract for the video player's video-specific surface. Extends the
+ * shared `IPlayer<VideoEventMap>` with every method that exists only on
+ * `NMVideoPlayer`.
+ *
+ * Prefer typing plugin parameters and consumer functions against `IVideoPlayer`
+ * rather than `NMVideoPlayer<any>` — the interface is stable across patch
+ * versions; the concrete class is an implementation detail.
+ */
+export interface IVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
+	extends IPlayer<VideoEventMap> {
+
+	// ── Video element ──
+
+	/** Raw `<video>` element. `undefined` until the first `backend()` call. */
+	readonly videoElement: HTMLVideoElement | undefined;
+
+	// ── Backend ──
+
+	/** Returns the active `IVideoBackend` instance, constructing it on first call. */
+	backend(): IVideoBackend;
+
+	// ── Fullscreen / PiP / Theater ──
+
+	fullscreenState(): FullscreenState;
+	fullscreenState(state: FullscreenState | boolean): void;
+
+	pipState(): PipState;
+	pipState(state: PipState | boolean): void;
+
+	theaterState(): TheaterState;
+	theaterState(state: TheaterState | boolean): void;
+
+	/** Whether any subtitle track is currently active. */
+	subtitleState(): SubtitleState;
+
+	toggleFullscreen(): void;
+	togglePip(): void;
+	toggleTheater(): void;
+
+	/** Walk the subtitle track list: `off → 0 → … → N-1 → off`. */
+	cycleSubtitles(): void;
+
+	/** Walk the audio track list, wrapping around. */
+	cycleAudioTracks(): void;
+
+	// ── Aspect ratio ──
+
+	aspectRatio(): 'uniform' | 'fill' | 'exactfit' | 'none';
+	aspectRatio(value: 'uniform' | 'fill' | 'exactfit' | 'none'): void;
+
+	/** Step through `['uniform', 'fill', 'exactfit', 'none']` in order. */
+	cycleAspectRatio(): void;
+
+	// ── Track selection ──
+
+	subtitles(): KitSubtitleTrack[];
+
+	currentSubtitle(): CurrentSubtitleSelection | null;
+	currentSubtitle(idx: number | null): void;
+
+	subtitleStyle(): SubtitleStyle;
+	subtitleStyle(patch: Partial<SubtitleStyle>): void;
+
+	audioTracks(): KitAudioTrack[];
+
+	currentAudioTrack(): CurrentAudioTrackSelection | null;
+	currentAudioTrack(idx: number): void;
+
+	audioTrackState(): AudioTrackState;
+	audioTrackState(idx: number): void;
+
+	qualityLevels(): QualityLevel[];
+	qualityLevels(opts: { includeUnsupported: true }): QualityLevel[];
+
+	currentQuality(): CurrentQualitySelection | 'auto';
+	currentQuality(idx: number | 'auto'): void;
+
+	// ── Transport ──
+
+	play(opts?: ActionOptions): Promise<void>;
+	pause(opts?: ActionOptions): Promise<void>;
+	stop(opts?: ActionOptions): Promise<void>;
+	next(opts?: ActionOptions): Promise<void>;
+	previous(opts?: ActionOptions): Promise<void>;
+
+	// ── Queue ──
+
+	current(): T | undefined;
+	current(target: T | string | number, opts?: ActionOptions): void;
+}

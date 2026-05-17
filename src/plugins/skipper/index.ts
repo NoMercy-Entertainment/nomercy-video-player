@@ -48,16 +48,25 @@ export class SkipperPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, Skip
 	static override readonly description: string = 'Skip-intro / skip-recap / skip-credits with auto-skip + UI prompts';
 
 	private active: SkipperKind | null = null;
+	private _revealTimer: ReturnType<typeof setTimeout> | null = null;
 
 	/** Attaches `current` and `time` listeners to track which skipper range is active. */
 	override use(): void {
 		this.on('current', () => {
 			this.active = null;
+			this._cancelRevealTimer();
 		});
 
 		this.on('time', (data) => {
 			this.onTimeUpdate(data?.time ?? 0);
 		});
+	}
+
+	private _cancelRevealTimer(): void {
+		if (this._revealTimer !== null) {
+			clearTimeout(this._revealTimer);
+			this._revealTimer = null;
+		}
 	}
 
 	/** Returns the current item's skipper list. */
@@ -110,12 +119,13 @@ export class SkipperPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, Skip
 
 	private onTimeUpdate(time: number): void {
 		const list = this.skippers();
-		const matching = list.find(e => time >= e.range.start && time <= e.range.end);
+		const matching = list.find(entry => time >= entry.range.start && time <= entry.range.end);
 
 		if (!matching) {
 			if (this.active) {
 				const prev = this.active;
 				this.active = null;
+				this._cancelRevealTimer();
 				this.emit('skipper:hidden', { kind: prev });
 			}
 			return;
@@ -133,7 +143,21 @@ export class SkipperPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, Skip
 			return;
 		}
 
-		this.emit('skipper:available', { kind: matching.kind, range: matching.range });
+		const delayMs = this.opts?.revealAfterMs ?? 0;
+		if (delayMs > 0) {
+			this._cancelRevealTimer();
+			const kind = matching.kind;
+			const range = matching.range;
+			this._revealTimer = setTimeout(() => {
+				this._revealTimer = null;
+				if (this.active === kind) {
+					this.emit('skipper:available', { kind, range });
+				}
+			}, delayMs);
+		}
+		else {
+			this.emit('skipper:available', { kind: matching.kind, range: matching.range });
+		}
 	}
 }
 

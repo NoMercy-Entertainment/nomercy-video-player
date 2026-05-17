@@ -619,6 +619,8 @@ interface PlaylistItemLite {
     title?: string;
     description?: string;
     image?: string;
+    poster?: string;
+    thumbnail?: string;
     duration?: number | string;
     season?: number;
     episode?: number;
@@ -733,13 +735,14 @@ function buildPlaylistCard(
     left.className = 'episode-menu-button-left';
     btn.appendChild(left);
 
-    if (item.image) {
+    const thumbUrl = item.image ?? item.poster ?? item.thumbnail;
+    if (thumbUrl) {
         const img = document.createElement('img');
         img.className = 'episode-menu-button-image';
         img.loading = 'lazy';
         img.alt = '';
-        const isAbs = /^https?:\/\//i.test(item.image);
-        img.src = isAbs ? item.image : `${opts.imageBaseUrl ?? ''}${item.image}`;
+        const isAbs = /^https?:\/\//i.test(thumbUrl);
+        img.src = isAbs ? thumbUrl : `${opts.imageBaseUrl ?? ''}${thumbUrl}`;
         // Hide on load failure rather than showing a broken-image icon.
         img.addEventListener('error', () => { img.style.display = 'none'; });
         left.appendChild(img);

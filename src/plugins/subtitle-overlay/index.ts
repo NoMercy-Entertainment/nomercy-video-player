@@ -25,11 +25,10 @@ import {
 import type { SubtitleCueChange, SubtitleStyle } from '@nomercy-entertainment/nomercy-player-core';
 import type { NMVideoPlayer } from '@nomercy-entertainment/nomercy-video-player';
 
-export interface SubtitleOverlayOptions {
-    /** Inactivity timeout before clearing stale text. Pure safety —
-     *  doesn't usually trigger when cues meet end-to-end. */
-    cueTtlMs?: number;
-}
+// SubtitleOverlayPlugin has no configurable options. The interface is kept
+// as an empty stub so the Plugin<…, SubtitleOverlayOptions> generic still
+// resolves cleanly for consumers who pass `{}` as the options argument.
+export interface SubtitleOverlayOptions {}
 
 // `SubtitleCueChange` and `SubtitleStyle` are imported above from the
 // kit so the overlay's listener parameter types and style cache come

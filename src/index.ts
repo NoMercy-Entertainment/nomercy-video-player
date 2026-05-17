@@ -48,7 +48,7 @@ import type {
 } from '@nomercy-entertainment/nomercy-player-core';
 import type { IVideoBackend } from './adapters/video-backend/IVideoBackend';
 import { Html5VideoBackend } from './adapters/video-backend/html5';
-import type { VideoEventMap, VideoPlayerConfig, VideoPlaylistItem } from './types';
+import type { IVideoPlayer, VideoEventMap, VideoPlayerConfig, VideoPlaylistItem } from './types';
 import type { PreloadStrategy, TransitionStrategy } from '@nomercy-entertainment/nomercy-player-core';
 import { GaplessTransitionStrategy } from '@nomercy-entertainment/nomercy-player-core';
 import { VideoPreloadStrategy } from './player/preload';
@@ -65,7 +65,15 @@ import {
 	VolumeState,
 } from './types';
 
-export type { Stretching, VideoEventMap, VideoPlayerConfig, VideoPlaylistItem, WatchProgress } from './types';
+export type {
+	FontTrackRef,
+	IVideoPlayer,
+	Stretching,
+	VideoEventMap,
+	VideoPlayerConfig,
+	VideoPlaylistItem,
+	WatchProgress,
+} from './types';
 export { VideoPreloadStrategy } from './player/preload';
 export {
 	AudioTrackState,
@@ -105,6 +113,26 @@ export { StorageBackedSubtitleStyleStore } from './adapters/subtitle-style-store
 const _instances: Map<string, NMVideoPlayer<BasePlaylistItem>> = new Map();
 
 
+/**
+ * Match a target language tag against a list of candidate tags.
+ * Returns the index of the first exact match; falls back to the first
+ * prefix match (e.g. `'en'` matches `'en-US'`, or vice-versa).
+ * Returns `-1` when no match is found.
+ */
+function _matchLanguage(candidates: Array<string | undefined>, target: string): number {
+	const lower = target.toLowerCase();
+	let prefixMatch = -1;
+	for (let i = 0; i < candidates.length; i++) {
+		const lang = candidates[i]?.toLowerCase();
+		if (!lang) continue;
+		if (lang === lower) return i;
+		if (prefixMatch < 0 && (lang.startsWith(lower + '-') || lower.startsWith(lang + '-'))) {
+			prefixMatch = i;
+		}
+	}
+	return prefixMatch;
+}
+
 function _readImageField(item: unknown): string | undefined {
 	if (!item || typeof item !== 'object') return undefined;
 	for (const key of ['image', 'poster', 'thumbnail'] as const) {
@@ -132,7 +160,7 @@ function _readImageField(item: unknown): string | undefined {
  */
 export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 	extends EventEmitter<VideoEventMap>
-	implements IPlayer<VideoEventMap> {
+	implements IPlayer<VideoEventMap>, IVideoPlayer<T> {
 	playerId: string = '';
 	container: HTMLElement = <HTMLElement>{};
 	videoElement: HTMLVideoElement | undefined;
@@ -307,9 +335,29 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 			const raw = item ? _readImageField(item) : undefined;
 			this._applyPosterForRaw(raw);
 		});
+
+		// Auto-select default subtitle / audio language tracks once the
+		// backend has populated its track lists (signalled by mediaReady).
+		this.on('mediaReady', () => {
+			this._applyDefaultTracks();
+		});
+
+		// Apply defaultQuality once after the first manifest parse. Guarded
+		// so that interactive quality changes persist across item transitions.
+		this.on('levels', () => {
+			if (this._defaultQualityApplied) return;
+			const quality = this.options?.defaultQuality;
+			if (quality === undefined) return;
+			this._defaultQualityApplied = true;
+			try {
+				this.currentQuality(quality);
+			}
+			catch { /* backend may not be ready yet — ignore */ }
+		});
 	}
 
 	private _wantedPoster: string | null = null;
+	private _defaultQualityApplied = false;
 
 	/**
 	 * Resolve a raw image URL to an absolute poster string and apply it.
@@ -369,6 +417,36 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 			el.removeAttribute('poster');
 	}
 
+	/**
+	 * Auto-select the default subtitle and audio tracks from config options
+	 * `defaultSubtitleLanguage` / `defaultAudioLanguage`. Called once after
+	 * `mediaReady` fires so the backend's track lists are populated.
+	 *
+	 * Language matching: exact tag first, then prefix (e.g. `'en'` matches
+	 * `'en-US'`). No match → leave selection at off; no warning emitted.
+	 */
+	private _applyDefaultTracks(): void {
+		const subtitleLang = this.options?.defaultSubtitleLanguage;
+		if (subtitleLang) {
+			let tracks: SubtitleTrack[] = [];
+			try { tracks = this.subtitles(); } catch { /* not yet available */ }
+			const matchIdx = _matchLanguage(tracks.map(t => t.language), subtitleLang);
+			if (matchIdx >= 0) {
+				this.currentSubtitle(matchIdx);
+			}
+		}
+
+		const audioLang = this.options?.defaultAudioLanguage;
+		if (audioLang) {
+			let tracks: AudioTrack[] = [];
+			try { tracks = this.audioTracks(); } catch { /* not yet available */ }
+			const matchIdx = _matchLanguage(tracks.map(t => t.language), audioLang);
+			if (matchIdx >= 0) {
+				this.currentAudioTrack(matchIdx);
+			}
+		}
+	}
+
 	/** Test-only: clear the registry. Not part of the public API. */
 	static _resetRegistry(): void {
 		_instances.clear();
@@ -390,6 +468,20 @@ export class NMVideoPlayer<T extends BasePlaylistItem = VideoPlaylistItem>
 			: new Html5VideoBackend(this.container);
 		this._backend = instance;
 		this.videoElement = instance.mediaElement();
+
+		// Seed muted state from config before any play() call to satisfy
+		// the browser's autoplay-with-sound policy. The consumer can
+		// always call unmute() after the first user gesture.
+		if (this.options?.muted) {
+			instance.mute();
+		}
+
+		// Native <video controls> — useful when no UI plugin is loaded.
+		// Note: loading DesktopUiPlugin or TvUiPlugin alongside controls:true
+		// results in doubled UI; disable one or the other.
+		if (this.options?.controls) {
+			instance.mediaElement().controls = true;
+		}
 
 		// Ensure _wantedPoster is resolved before applying. queue() pre-positions
 		// the cursor without emitting 'current', so _wantedPoster can be null even
@@ -876,6 +968,24 @@ export const nmplayer = <T extends BasePlaylistItem = VideoPlaylistItem>(id?: st
 		};
 
 		const result = originalSetup(enrichedConfig);
+
+		// Seed theater mode from config default. Done after setup() so the
+		// player is in the 'ready' phase before emitting the theater event.
+		if (enrichedConfig.theaterDefault) {
+			result.theaterState(true);
+		}
+
+		// Auto-play on the first mediaReady event only. AutoAdvancePlugin
+		// handles subsequent item transitions — this only fires the opening shot.
+		if (enrichedConfig.autoPlay) {
+			let autoPlayFired = false;
+			const onFirstReady = () => {
+				if (autoPlayFired) return;
+				autoPlayFired = true;
+				void result.play({ source: 'auto-play' });
+			};
+			result.on('mediaReady', onFirstReady);
+		}
 
 		if (config.expose === true && typeof window !== 'undefined') {
 			Object.assign(window, { nmplayer });

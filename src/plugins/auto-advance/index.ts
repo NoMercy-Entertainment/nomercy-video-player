@@ -7,11 +7,6 @@ import type { VideoPlaylistItem } from '../../types';
 export interface AutoAdvanceOptions {
     /** Master toggle. Default `true`. */
     enabled?: boolean;
-    /**
-     * Seconds before natural end at which the player should begin loading the
-     * next item in the background. `0` disables preload. Default `0`.
-     */
-    preloadLeadSeconds?: number;
 }
 
 /**
