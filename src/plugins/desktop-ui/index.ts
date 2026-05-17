@@ -1353,7 +1353,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
         };
 
         const syncVertInput = (): void => {
-            const pct = Math.round((this.player.volume?.() ?? 1) * 100);
+            const pct = Math.round(this.player.volume?.() ?? 100);
             vertInput.value = String(pct);
             vertInput.style.setProperty('--vol-pct', `${pct}%`);
         };
@@ -1375,7 +1375,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
         };
 
         this.listen(vertInput, 'input', () => {
-            const level = Number(vertInput.value) / 100;
+            const level = Number(vertInput.value);
             vertInput.style.setProperty('--vol-pct', `${vertInput.value}%`);
             void this.player.volume?.(level);
         });
@@ -1546,7 +1546,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
         this.on('time', (d) => this.applyTime(d.time));
 
         this.on('volume', (d) => {
-            const level = typeof d?.level === 'number' ? d.level : this.player.volume?.() ?? 1;
+            const level = typeof d?.level === 'number' ? d.level : this.player.volume?.() ?? 100;
             this.applyVolume(level);
         });
         this.on('mute', (d) => this.applyMuted(d?.muted ?? this.player.volumeState?.() === 'muted'));
@@ -1643,7 +1643,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
             this.player.toggleMute?.();
         });
         this.listen(this.volSlider, 'input', () => {
-            const v = Number(this.volSlider.value) / 100;
+            const v = Number(this.volSlider.value);
             this.player.volume?.(v);
         });
 
@@ -1785,7 +1785,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
 
     // ── Initial state, capability gating, helpers ────────────────────
     private applyInitialState(): void {
-        this.applyVolume(this.player.volume?.() ?? 1);
+        this.applyVolume(this.player.volume?.() ?? 100);
         this.applyMuted(this.player.volumeState() === VolumeState.MUTED);
         this.applyRate();
         this.applySubsIcon();
@@ -1984,7 +1984,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
         if (this.volSliderVertical) {
             const vertInput = this.volSliderVertical.querySelector<HTMLInputElement>('.volume-slider-vertical-input');
             if (vertInput) {
-                const pct = Math.round(v * 100);
+                const pct = Math.round(Math.max(0, Math.min(100, v)));
                 vertInput.value = String(pct);
                 vertInput.style.setProperty('--vol-pct', `${pct}%`);
             }
