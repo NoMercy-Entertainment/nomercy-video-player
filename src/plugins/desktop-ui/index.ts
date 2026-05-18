@@ -443,7 +443,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
         if (sessionStorage.getItem('nmplayer-keybinds-hint-shown')) return;
 
         this.once('play', () => {
-            this.player.emit('display-message', { text: this.t('plugin.desktop-ui.shortcuts.hintToast'), ms: 12000 });
+            this.player.emit('display-message', { text: this.t('shortcuts.hintToast'), ms: 12000 });
             sessionStorage.setItem('nmplayer-keybinds-hint-shown', '1');
         });
     }
@@ -518,7 +518,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
         });
 
         const heading = document.createElement('h2');
-        heading.textContent = this.t('plugin.desktop-ui.shortcuts.title');
+        heading.textContent = this.t('shortcuts.title');
         Object.assign(heading.style, {
             margin: '0 0 14px 0',
             fontSize: '19px',
@@ -535,25 +535,25 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
                 {
                     title: 'Playback',
                     entries: [
-                        { keys: ['Space'], label: this.t('plugin.desktop-ui.shortcuts.playPause') },
-                        { keys: ['S'], label: this.t('plugin.desktop-ui.shortcuts.stop') },
-                        { keys: ['E'], label: this.t('plugin.desktop-ui.shortcuts.frameAdvance') },
+                        { keys: ['Space'], label: this.t('shortcuts.playPause') },
+                        { keys: ['S'], label: this.t('shortcuts.stop') },
+                        { keys: ['E'], label: this.t('shortcuts.frameAdvance') },
                     ],
                 },
                 {
                     title: 'Speed',
                     entries: [
-                        { keys: [']'], label: this.t('plugin.desktop-ui.shortcuts.speedUp') },
-                        { keys: ['['], label: this.t('plugin.desktop-ui.shortcuts.speedDown') },
-                        { keys: ['='], label: this.t('plugin.desktop-ui.shortcuts.normalSpeed') },
+                        { keys: [']'], label: this.t('shortcuts.speedUp') },
+                        { keys: ['['], label: this.t('shortcuts.speedDown') },
+                        { keys: ['='], label: this.t('shortcuts.normalSpeed') },
                     ],
                 },
                 {
                     title: 'Volume',
                     entries: [
-                        { keys: ['↑'], label: this.t('plugin.desktop-ui.shortcuts.volumeUp') },
-                        { keys: ['↓'], label: this.t('plugin.desktop-ui.shortcuts.volumeDown') },
-                        { keys: ['M'], label: this.t('plugin.desktop-ui.shortcuts.mute') },
+                        { keys: ['↑'], label: this.t('shortcuts.volumeUp') },
+                        { keys: ['↓'], label: this.t('shortcuts.volumeDown') },
+                        { keys: ['M'], label: this.t('shortcuts.mute') },
                     ],
                 },
             ],
@@ -561,29 +561,29 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
                 {
                     title: 'Seeking',
                     entries: [
-                        { keys: ['←'], label: this.t('plugin.desktop-ui.shortcuts.seekBack5') },
-                        { keys: ['→'], label: this.t('plugin.desktop-ui.shortcuts.seekForward5') },
-                        { keys: ['Shift', '← / →'], label: this.t('plugin.desktop-ui.shortcuts.seek3s') },
-                        { keys: ['Alt', '← / →'], label: this.t('plugin.desktop-ui.shortcuts.seek10s') },
-                        { keys: ['Ctrl', '← / →'], label: this.t('plugin.desktop-ui.shortcuts.seek60s') },
+                        { keys: ['←'], label: this.t('shortcuts.seekBack5') },
+                        { keys: ['→'], label: this.t('shortcuts.seekForward5') },
+                        { keys: ['Shift', '← / →'], label: this.t('shortcuts.seek3s') },
+                        { keys: ['Alt', '← / →'], label: this.t('shortcuts.seek10s') },
+                        { keys: ['Ctrl', '← / →'], label: this.t('shortcuts.seek60s') },
                     ],
                 },
                 {
                     title: 'Quick Seek',
                     entries: [
-                        { keys: ['3'], label: this.t('plugin.desktop-ui.shortcuts.seek30s') },
-                        { keys: ['6'], label: this.t('plugin.desktop-ui.shortcuts.seek60sKey') },
-                        { keys: ['9'], label: this.t('plugin.desktop-ui.shortcuts.seek90s') },
-                        { keys: ['1'], label: this.t('plugin.desktop-ui.shortcuts.seek120s') },
+                        { keys: ['3'], label: this.t('shortcuts.seek30s') },
+                        { keys: ['6'], label: this.t('shortcuts.seek60sKey') },
+                        { keys: ['9'], label: this.t('shortcuts.seek90s') },
+                        { keys: ['1'], label: this.t('shortcuts.seek120s') },
                     ],
                 },
                 {
                     title: 'Navigation',
                     entries: [
-                        { keys: ['N'], label: this.t('plugin.desktop-ui.shortcuts.next') },
-                        { keys: ['P'], label: this.t('plugin.desktop-ui.shortcuts.previous') },
-                        { keys: ['Shift', 'N'], label: this.t('plugin.desktop-ui.shortcuts.nextChapter') },
-                        { keys: ['Shift', 'P'], label: this.t('plugin.desktop-ui.shortcuts.previousChapter') },
+                        { keys: ['N'], label: this.t('shortcuts.next') },
+                        { keys: ['P'], label: this.t('shortcuts.previous') },
+                        { keys: ['Shift', 'N'], label: this.t('shortcuts.nextChapter') },
+                        { keys: ['Shift', 'P'], label: this.t('shortcuts.previousChapter') },
                     ],
                 },
             ],
@@ -591,21 +591,21 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
                 {
                     title: 'Tracks & Subtitles',
                     entries: [
-                        { keys: ['V'], label: this.t('plugin.desktop-ui.shortcuts.cycleSubs') },
-                        { keys: ['B'], label: this.t('plugin.desktop-ui.shortcuts.cycleAudio') },
-                        { keys: ['A'], label: this.t('plugin.desktop-ui.shortcuts.cycleAspect') },
-                        { keys: ['+'], label: this.t('plugin.desktop-ui.shortcuts.subSizeUp') },
-                        { keys: ['–'], label: this.t('plugin.desktop-ui.shortcuts.subSizeDown') },
+                        { keys: ['V'], label: this.t('shortcuts.cycleSubs') },
+                        { keys: ['B'], label: this.t('shortcuts.cycleAudio') },
+                        { keys: ['A'], label: this.t('shortcuts.cycleAspect') },
+                        { keys: ['+'], label: this.t('shortcuts.subSizeUp') },
+                        { keys: ['–'], label: this.t('shortcuts.subSizeDown') },
                     ],
                 },
                 {
                     title: 'Display',
                     entries: [
-                        { keys: ['F'], label: this.t('plugin.desktop-ui.shortcuts.fullscreen') },
-                        { keys: ['F11'], label: this.t('plugin.desktop-ui.shortcuts.fullscreen') },
-                        { keys: ['Esc'], label: this.t('plugin.desktop-ui.shortcuts.exitFullscreen') },
-                        { keys: ['T'], label: this.t('plugin.desktop-ui.shortcuts.showTime') },
-                        { keys: ['?'], label: this.t('plugin.desktop-ui.shortcuts.help') },
+                        { keys: ['F'], label: this.t('shortcuts.fullscreen') },
+                        { keys: ['F11'], label: this.t('shortcuts.fullscreen') },
+                        { keys: ['Esc'], label: this.t('shortcuts.exitFullscreen') },
+                        { keys: ['T'], label: this.t('shortcuts.showTime') },
+                        { keys: ['?'], label: this.t('shortcuts.help') },
                     ],
                 },
             ],
@@ -744,7 +744,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
         card.appendChild(bgKeyboard);
 
         const hintEl = document.createElement('p');
-        hintEl.textContent = this.t('plugin.desktop-ui.shortcuts.hint');
+        hintEl.textContent = this.t('shortcuts.hint');
         Object.assign(hintEl.style, {
             margin: '12px 0 0 0',
             fontSize: '13px',
