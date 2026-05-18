@@ -208,11 +208,11 @@ export class TouchZonesPlugin extends Plugin<NMVideoPlayer<any>, TouchZonesOptio
         onDouble: (e: Event) => void,
         onSingle?: (e: Event) => void,
     ): EventListener {
-        const delay = this.opts?.doubleClickDelay ?? this.opts?.doubleTapThreshold ?? 300;
         let lastTap = 0;
         let singleTimer: ReturnType<typeof setTimeout> | null = null;
 
         return (e: Event): void => {
+            const delay = this.opts?.doubleClickDelay ?? this.opts?.doubleTapThreshold ?? 300;
             const now = Date.now();
             const gap = now - lastTap;
             lastTap = now;
@@ -315,7 +315,6 @@ export class TouchZonesPlugin extends Plugin<NMVideoPlayer<any>, TouchZonesOptio
 
     private buildSeekBack(parent: HTMLElement, pos: ZonePos): void {
         const el = this.makeBox(parent, pos);
-        const seconds = this.opts?.seekSeconds ?? 10;
 
         // Single-tap onSingle: only HIDE if controls already visible. When
         // controls are inactive the container's touchstart bumpActivity is
@@ -323,6 +322,7 @@ export class TouchZonesPlugin extends Plugin<NMVideoPlayer<any>, TouchZonesOptio
         // of overlay state for direct seek.
         const handler = this.doubleTap(
             () => {
+                const seconds = this.opts?.seekSeconds ?? 10;
                 void this.player.rewind?.(seconds);
 
                 if (this.leftIndicator === null) {
@@ -342,10 +342,10 @@ export class TouchZonesPlugin extends Plugin<NMVideoPlayer<any>, TouchZonesOptio
 
     private buildSeekForward(parent: HTMLElement, pos: ZonePos): void {
         const el = this.makeBox(parent, pos);
-        const seconds = this.opts?.seekSeconds ?? 10;
 
         const handler = this.doubleTap(
             () => {
+                const seconds = this.opts?.seekSeconds ?? 10;
                 void this.player.forward?.(seconds);
 
                 if (this.rightIndicator === null) {

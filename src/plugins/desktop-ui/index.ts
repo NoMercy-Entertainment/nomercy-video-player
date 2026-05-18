@@ -289,6 +289,7 @@ function buttonVisible(
 export interface DesktopUiEvents {
     'shortcuts-toggle': undefined;
     'layout:breakpoint': LayoutBreakpointPayload;
+    'opts:changed': DesktopUiOptions;
 }
 
 
@@ -454,9 +455,9 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
         const root = this.mount('overlay');
         this.player.addClasses(root, ['overlay']);
 
-        if (!this.opts?.hideTitle) {
-            this.topBarRefs = buildTitleBar(this.player, root);
-        }
+        this.topBarRefs = buildTitleBar(this.player, root);
+        this.topBarRefs.bar.hidden = !!this.opts?.hideTitle;
+
         this.centerWrap = this.buildCenter(root);
         this.bottomBar = this.buildBottomBar(root);
 
@@ -1679,6 +1680,10 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
         });
 
         if (!('pictureInPictureEnabled' in document)) this.pipBtn.hidden = true;
+
+        this.on(DesktopUiPlugin, 'opts:changed', (opts) => {
+            this.topBarRefs.bar.hidden = !!opts.hideTitle;
+        });
     }
 
     /** v1 scrub behavior — see desktopUIPlugin.createProgressBar. */
