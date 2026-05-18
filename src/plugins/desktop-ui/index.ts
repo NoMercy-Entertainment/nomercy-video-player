@@ -98,6 +98,7 @@ import {
     applyTheaterIcon,
     applySubsIcon,
     applyPipIcon,
+    applyAudioIcon,
     applyAspectRatioIcon,
 } from './buttonState';
 
@@ -1565,6 +1566,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
         // v2 emits 'audioTrack' (not 'audioTrackChanged') with `{ id: idx }`.
         this.on('audioTrack', (d) => {
             this.activeAudioIdx = typeof d.id === 'number' ? d.id : -1;
+            this.applyAudioIcon();
             this.repaintAudioIfOpen();
         });
 
@@ -1785,6 +1787,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
         this.applyMuted(this.player.volumeState() === VolumeState.MUTED);
         this.applyRate();
         this.applySubsIcon();
+        this.applyAudioIcon();
         this.applyQualityIcon();
         this.applyAspectRatioIcon();
         this.applyPipIcon(Boolean(document.pictureInPictureElement));
@@ -2007,7 +2010,16 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
     }
 
     private applyRate(): void {
-        applyRate(this.speedBtn, this.t.bind(this));
+        const rate = this.player.playbackRate?.() ?? 1;
+        applyRate(this.speedBtn, rate, this.t.bind(this));
+    }
+
+    private applyAudioIcon(): void {
+        const tracks = this.player.audioTracks?.() ?? [];
+        const defaultIdx = tracks.findIndex(track => track.default === true);
+        const resolvedDefault = defaultIdx >= 0 ? defaultIdx : 0;
+        const isDefaultTrack = this.activeAudioIdx < 0 || this.activeAudioIdx === resolvedDefault;
+        applyAudioIcon(this.audioBtn, isDefaultTrack, this.t.bind(this));
     }
 
     private applyQualityIcon(): void {
@@ -2074,7 +2086,8 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
     }
 
     private applyAspectRatioIcon(): void {
-        applyAspectRatioIcon(this.aspectRatioBtn, this.t.bind(this));
+        const aspect = this.player.aspectRatio?.() ?? 'uniform';
+        applyAspectRatioIcon(this.aspectRatioBtn, aspect === 'uniform', this.t.bind(this));
     }
 
     /**

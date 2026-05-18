@@ -476,11 +476,13 @@
         display: none;
     }
 
-    .btn:hover .icon-normal {
+    .btn:hover .icon-normal,
+    .btn.is-active .icon-normal {
         display: none;
     }
 
-    .btn:hover .icon-hover {
+    .btn:hover .icon-hover,
+    .btn.is-active .icon-hover {
         display: inline;
     }
 
@@ -818,6 +820,7 @@
         display: inline-flex;
         align-items: center;
         justify-content: center;
+        margin-left: auto;
     }
 
     .language-button .menu-button-check {

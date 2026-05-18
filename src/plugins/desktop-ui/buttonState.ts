@@ -67,9 +67,14 @@ export function applyMutedIcon(
 
 // ── Playback rate ──────────────────────────────────────────────────────────────
 
-/** Update the speed button icon and aria-label. */
-export function applyRate(speedBtn: HTMLButtonElement, t: ITranslator['t']): void {
+/**
+ * Update the speed button icon and aria-label.
+ * Adds `is-active` when `rate` diverges from the default (1), which forces the
+ * filled icon variant via the CSS `.btn.is-active` rule.
+ */
+export function applyRate(speedBtn: HTMLButtonElement, rate: number, t: ITranslator['t']): void {
     setBtnIcon(speedBtn, svgFromIcon(fluentIcons.speed));
+    speedBtn.classList.toggle('is-active', rate !== 1);
     speedBtn.setAttribute('aria-label', t('tooltip.speed'));
 }
 
@@ -130,10 +135,29 @@ export function applyPipIcon(pipBtn: HTMLButtonElement, active: boolean, t: ITra
 }
 
 
+// ── Audio track ────────────────────────────────────────────────────────────────
+
+/**
+ * Update the audio button icon and aria-label.
+ * Adds `is-active` when the selected track is not the manifest default, which
+ * forces the filled icon variant via the CSS `.btn.is-active` rule.
+ */
+export function applyAudioIcon(audioBtn: HTMLButtonElement, isDefaultTrack: boolean, t: ITranslator['t']): void {
+    setBtnIcon(audioBtn, svgFromIcon(fluentIcons.language));
+    audioBtn.classList.toggle('is-active', !isDefaultTrack);
+    audioBtn.setAttribute('aria-label', t('tooltip.audio'));
+}
+
+
 // ── Aspect ratio ───────────────────────────────────────────────────────────────
 
-/** Update the aspect-ratio button icon and aria-label. The hover tooltip is owned by `addTooltip()`. */
-export function applyAspectRatioIcon(aspectRatioBtn: HTMLButtonElement, t: ITranslator['t']): void {
+/**
+ * Update the aspect-ratio button icon and aria-label. The hover tooltip is owned by `addTooltip()`.
+ * Adds `is-active` when the aspect diverges from the default (`'uniform'`), which forces the
+ * filled icon variant via the CSS `.btn.is-active` rule.
+ */
+export function applyAspectRatioIcon(aspectRatioBtn: HTMLButtonElement, isDefault: boolean, t: ITranslator['t']): void {
     setBtnIcon(aspectRatioBtn, svgFromIcon(fluentIcons.aspectFit));
+    aspectRatioBtn.classList.toggle('is-active', !isDefault);
     aspectRatioBtn.setAttribute('aria-label', t('tooltip.aspectRatio'));
 }
