@@ -17,6 +17,10 @@ import { fluentIcons, svgFromIcon } from './icons';
 
 export interface TopBarRefs {
     bar: HTMLDivElement;
+    /** Right column containing title + show-info. Toggle this for hideTitle,
+     *  not the whole bar — the left column carries back/close buttons that
+     *  must stay reachable even when titles are hidden. */
+    right: HTMLDivElement;
     titleText: HTMLSpanElement;
     showInfoText: HTMLSpanElement;
     backBtn: HTMLButtonElement;
@@ -69,6 +73,7 @@ export function buildTitleBar(player: NMVideoPlayer<any>, parent: HTMLElement): 
 
     return {
         bar,
+        right,
         titleText,
         showInfoText,
         backBtn,

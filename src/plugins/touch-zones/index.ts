@@ -58,6 +58,13 @@ export interface TouchZonesOptions {
     doubleClickDelay?: number;
     /** Seconds to seek on double-tap. Default 10. */
     seekSeconds?: number;
+    /**
+     * When true, single-click/tap on the center zone never toggles playback.
+     * Mirrors `disableClickToPause` on DesktopUiPlugin — both plugins ship their
+     * own click handlers (desktop-ui on the video element, touch-zones on the
+     * overlay zones), so the user needs the same switch on both. Default false.
+     */
+    disableClickToPause?: boolean;
 }
 
 interface ZonePos {
@@ -377,6 +384,7 @@ export class TouchZonesPlugin extends Plugin<NMVideoPlayer<any>, TouchZonesOptio
         const handler = this.doubleTap(
             () => { void this.player.toggleFullscreen?.(); },
             () => {
+                if (this.opts?.disableClickToPause) return;
                 if (!this._isMobile || this.controlsVisible) {
                     void this.player.togglePlayback?.();
                 }

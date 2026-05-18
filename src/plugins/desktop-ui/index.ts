@@ -456,7 +456,9 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
         this.player.addClasses(root, ['overlay']);
 
         this.topBarRefs = buildTitleBar(this.player, root);
-        this.topBarRefs.bar.hidden = !!this.opts?.hideTitle;
+        // hideTitle hides only the right column (title + show-info), not the
+        // whole bar — left column carries back/close buttons that must remain.
+        this.topBarRefs.right.hidden = !!this.opts?.hideTitle;
 
         this.centerWrap = this.buildCenter(root);
         this.bottomBar = this.buildBottomBar(root);
@@ -1682,7 +1684,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
         if (!('pictureInPictureEnabled' in document)) this.pipBtn.hidden = true;
 
         this.on(DesktopUiPlugin, 'opts:changed', (opts) => {
-            this.topBarRefs.bar.hidden = !!opts.hideTitle;
+            this.topBarRefs.right.hidden = !!opts.hideTitle;
         });
     }
 

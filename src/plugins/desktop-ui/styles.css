@@ -28,10 +28,12 @@
 	}
 
 	/* The user-agent `[hidden] { display: none }` rule loses to the
-	   .top-bar specificity above, so setting `bar.hidden = true` from the
-	   plugin (hideTitle option) silently fails to hide the element.
-	   Explicit override at matching specificity. */
-	.top-bar[hidden] {
+	   .top-bar-right specificity below, so setting `right.hidden = true`
+	   from the plugin (hideTitle option) silently fails. Explicit override
+	   at matching specificity. Applies to both columns so future hide-side
+	   toggles work without surprises. */
+	.top-bar-left[hidden],
+	.top-bar-right[hidden] {
 		display: none;
 	}
 
