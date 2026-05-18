@@ -215,9 +215,16 @@ export class KeyHandlerPlugin extends BaseKeyHandler<NMVideoPlayer<any>> {
 		this.bind('s', () => { void this.player.stop?.(); });
 	}
 
-	/** `?` — fires `plugin:desktop-ui:shortcuts-toggle` so the desktop UI overlay can open/close. */
+	/**
+	 * `?` — fires `plugin:desktop-ui:shortcuts-toggle` so the desktop UI overlay can open/close.
+	 *
+	 * Registered as `'shift+?'` because on standard keyboards pressing `?` sends
+	 * `key='?'` with `shiftKey=true`. The kit canonicalizer folds modifier state into
+	 * the combo key, so `bind('?')` would store `'?'` but the event arrives as
+	 * `'shift+?'` — a miss every time. Binding `'shift+?'` matches the actual event.
+	 */
 	protected addHelpKey(): void {
-		this.bind('?', () => {
+		this.bind('shift+?', () => {
 			try {
 				this.player.emit('plugin:desktop-ui:shortcuts-toggle', undefined);
 			} catch { /* desktop-ui not mounted — no-op */ }
