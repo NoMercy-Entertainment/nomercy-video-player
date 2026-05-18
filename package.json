@@ -13,15 +13,12 @@
 	],
 	"license": "Apache-2.0",
 	"homepage": "https://docs.nomercy.tv/player/video/",
-	"bugs": {
-		"url": "https://github.com/NoMercy-Entertainment/nomercy-video-player/issues"
-	},
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/NoMercy-Entertainment/nomercy-video-player.git"
 	},
-	"engines": {
-		"node": ">=18.0.0"
+	"bugs": {
+		"url": "https://github.com/NoMercy-Entertainment/nomercy-video-player/issues"
 	},
 	"keywords": [
 		"video",
@@ -120,13 +117,16 @@
 	"module": "./dist/index.js",
 	"types": "./dist/index.d.ts",
 	"files": [
-		"dist",
 		"CHANGELOG.md",
-		"MIGRATION.md",
 		"CODE_OF_CONDUCT.md",
 		"CONTRIBUTING.md",
-		"SECURITY.md"
+		"MIGRATION.md",
+		"SECURITY.md",
+		"dist"
 	],
+	"engines": {
+		"node": ">=18.0.0"
+	},
 	"scripts": {
 		"build": "tsc -p tsconfig.build.json",
 		"dev": "tsc -p tsconfig.build.json --watch",
@@ -143,13 +143,8 @@
 		"@nomercy-entertainment/nomercy-player-core": "file:../nomercy-player-kit",
 		"hls.js": ">=1.6.0"
 	},
-	"peerDependencies": {
-		"@nomercy-entertainment/nomercy-subtitle-octopus": ">=0.1.0"
-	},
-	"peerDependenciesMeta": {
-		"@nomercy-entertainment/nomercy-subtitle-octopus": {
-			"optional": true
-		}
+	"optionalDependencies": {
+		"@nomercy-entertainment/nomercy-subtitle-octopus": "^0.1.0"
 	},
 	"devDependencies": {
 		"@antfu/eslint-config": "5.3.0",
@@ -170,11 +165,11 @@
 		"vitest": "^4.1.2"
 	},
 	"overrides": {
-		"minimatch": "10.2.4",
-		"lodash": "4.18.1",
+		"fast-uri": "^3.1.2",
 		"follow-redirects": "1.16.0",
-		"uuid": "^11.1.1",
-		"fast-uri": "^3.1.2"
+		"lodash": "4.18.1",
+		"minimatch": "10.2.4",
+		"uuid": "^11.1.1"
 	},
 	"publishConfig": {
 		"access": "public",
