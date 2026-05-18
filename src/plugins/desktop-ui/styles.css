@@ -212,7 +212,7 @@
 	.slider-bar {
 		position: relative;
 		display: flex;
-		height: 4px;
+		height: 8px;
 		width: 100%;
 		background: rgba(255, 255, 255, 0.2);
 		border-radius: 9999px;
@@ -221,18 +221,12 @@
 		transition: height 0.15s ease;
 	}
 
-	/* Touch devices always get the larger rail — no hover affordance needed. */
-	@media (hover: none) {
-		.slider-bar {
-			height: 8px;
-		}
-	}
-
-	/* Pointer devices grow on hover and while scrubbing. */
+	/* Pointer devices grow when hovering anywhere in the top-row strip
+	   (broader hit area than the bar itself) or while actively scrubbing. */
 	@media (hover: hover) {
-		.slider-bar:hover,
+		.top-row:hover .slider-bar,
 		.slider-bar.slider-scrubbing {
-			height: 8px;
+			height: 12px;
 		}
 	}
 
@@ -521,7 +515,7 @@
 		appearance: none;
 		width: 0;
 		opacity: 0;
-		height: 4px;
+		height: 8px;
 		background: linear-gradient(
 			to right,
 			#fff 0%,
@@ -545,18 +539,10 @@
 		margin: 0 8px;
 	}
 
-	/* Grow the volume rail on hover, matching the seek-bar treatment. */
-	@media (hover: none) {
+	@media (hover: hover) {
 		.volume-container:hover .volume-slider,
 		.volume-container:focus-within .volume-slider {
-			height: 8px;
-		}
-	}
-
-	@media (hover: hover) {
-		.volume-slider:hover,
-		.volume-container:focus-within .volume-slider {
-			height: 8px;
+			height: 12px;
 		}
 	}
 
