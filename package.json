@@ -141,10 +141,8 @@
 	},
 	"dependencies": {
 		"@nomercy-entertainment/nomercy-player-core": "file:../nomercy-player-kit",
+		"@nomercy-entertainment/nomercy-subtitle-octopus": "^0.1.0",
 		"hls.js": ">=1.6.0"
-	},
-	"optionalDependencies": {
-		"@nomercy-entertainment/nomercy-subtitle-octopus": "^0.1.0"
 	},
 	"devDependencies": {
 		"@antfu/eslint-config": "5.3.0",
