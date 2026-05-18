@@ -27,6 +27,14 @@
 			transform 0.25s ease;
 	}
 
+	/* The user-agent `[hidden] { display: none }` rule loses to the
+	   .top-bar specificity above, so setting `bar.hidden = true` from the
+	   plugin (hideTitle option) silently fails to hide the element.
+	   Explicit override at matching specificity. */
+	.top-bar[hidden] {
+		display: none;
+	}
+
 	.top-bar-left {
 		display: flex;
 		align-items: center;
