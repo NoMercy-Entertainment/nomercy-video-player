@@ -143,6 +143,14 @@
 		"@nomercy-entertainment/nomercy-player-core": "file:../nomercy-player-kit",
 		"hls.js": ">=1.6.0"
 	},
+	"peerDependencies": {
+		"@nomercy-entertainment/nomercy-subtitle-octopus": ">=0.1.0"
+	},
+	"peerDependenciesMeta": {
+		"@nomercy-entertainment/nomercy-subtitle-octopus": {
+			"optional": true
+		}
+	},
 	"devDependencies": {
 		"@antfu/eslint-config": "5.3.0",
 		"@playwright/test": "^1.59.1",
