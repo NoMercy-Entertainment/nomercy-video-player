@@ -1235,10 +1235,11 @@
         border-top-color: rgba(20, 22, 30, 0.92);
     }
 
-    /* ── Keyboard shortcuts dialog — backdrop handled inline by JS ───── */
+    /* ── Keyboard shortcuts overlay ───────────────────────────────────── */
     #nmplayer-keybinds-dialog {
         scrollbar-width: thin;
         scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+        overflow-y: auto;
     }
 
     /* ── Portrait orientation — hide navigation/track buttons ─────────

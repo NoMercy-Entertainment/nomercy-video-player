@@ -100,10 +100,10 @@ describe('DesktopUiPlugin — shortcuts overlay i18n', () => {
 
         expect(player.getPlugin(DesktopUiPlugin)).toBeDefined();
 
-        const dialog = document.querySelector<HTMLDialogElement>('#nmplayer-keybinds-dialog');
-        expect(dialog).not.toBeNull();
+        const overlay = document.querySelector<HTMLDivElement>('#nmplayer-keybinds-dialog');
+        expect(overlay).not.toBeNull();
 
-        const heading = dialog!.querySelector('h2');
+        const heading = overlay!.querySelector('h2');
         expect(heading).not.toBeNull();
 
         const headingText = heading!.textContent ?? '';
@@ -116,15 +116,37 @@ describe('DesktopUiPlugin — shortcuts overlay i18n', () => {
         const player = new NMVideoPlayer('test').setup({});
         await player.addPlugin(desktopUiPlugin).ready();
 
-        const dialog = document.querySelector<HTMLDialogElement>('#nmplayer-keybinds-dialog');
-        expect(dialog).not.toBeNull();
+        const overlay = document.querySelector<HTMLDivElement>('#nmplayer-keybinds-dialog');
+        expect(overlay).not.toBeNull();
 
-        const hintParagraph = dialog!.querySelector('p');
+        const hintParagraph = overlay!.querySelector('p');
         expect(hintParagraph).not.toBeNull();
 
         const hintText = hintParagraph!.textContent ?? '';
         expect(hintText).not.toContain('plugin.desktop-ui.plugin.desktop-ui.');
         expect(hintText).not.toBe('plugin.desktop-ui.shortcuts.hint');
         expect(hintText.trim().length).toBeGreaterThan(0);
+    });
+
+    it('shortcuts overlay is mounted inside the player container, not document.body', async () => {
+        const player = new NMVideoPlayer('test').setup({});
+        await player.addPlugin(desktopUiPlugin).ready();
+
+        const overlay = document.querySelector<HTMLDivElement>('#nmplayer-keybinds-dialog');
+        expect(overlay).not.toBeNull();
+
+        const playerContainer = document.getElementById('test');
+        expect(playerContainer).not.toBeNull();
+        expect(playerContainer!.contains(overlay)).toBe(true);
+        expect(document.body === overlay!.parentElement).toBe(false);
+    });
+
+    it('shortcuts overlay is a div, not a dialog element (no top-layer promotion in fullscreen)', async () => {
+        const player = new NMVideoPlayer('test').setup({});
+        await player.addPlugin(desktopUiPlugin).ready();
+
+        const overlay = document.querySelector('#nmplayer-keybinds-dialog');
+        expect(overlay).not.toBeNull();
+        expect(overlay!.tagName.toLowerCase()).toBe('div');
     });
 });

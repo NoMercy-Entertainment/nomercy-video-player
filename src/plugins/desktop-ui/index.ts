@@ -379,7 +379,7 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
     private currentSubMenu: SubMenuId | null = null;
 
     // ── keyboard shortcuts overlay ───────────────────────────────────
-    private shortcutsDialog: HTMLDialogElement | null = null;
+    private shortcutsOverlay: HTMLDivElement | null = null;
     private _shortcutsVisible = false;
 
     private inactivityToken: number | null = null;
@@ -489,23 +489,22 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
     }
 
     // ── Keyboard shortcuts overlay ───────────────────────────────────────
-    private buildShortcutsOverlay(parent: HTMLElement): HTMLDialogElement {
-        const dialog = document.createElement('dialog');
-        dialog.id = 'nmplayer-keybinds-dialog';
+    private buildShortcutsOverlay(parent: HTMLElement): HTMLDivElement {
+        const overlay = document.createElement('div');
+        overlay.id = 'nmplayer-keybinds-dialog';
+        overlay.setAttribute('role', 'dialog');
+        overlay.setAttribute('aria-modal', 'true');
+        overlay.setAttribute('aria-label', this.t('shortcuts.title'));
 
-        const backdropStyle = document.createElement('style');
-        backdropStyle.textContent = '#nmplayer-keybinds-dialog::backdrop { background: rgba(0, 0, 0, 0.85); }';
-        dialog.appendChild(backdropStyle);
-
-        Object.assign(dialog.style, {
-            background: 'transparent',
-            border: 'none',
-            outline: 'none',
-            padding: '0',
-            maxWidth: '960px',
-            maxHeight: '90vh',
-            width: '85vw',
-            color: 'white',
+        Object.assign(overlay.style, {
+            display: 'none',
+            position: 'absolute',
+            inset: '0',
+            zIndex: '200',
+            background: 'rgba(0, 0, 0, 0.85)',
+            alignItems: 'center',
+            justifyContent: 'center',
+            pointerEvents: 'auto',
         });
 
         const card = document.createElement('div');
@@ -753,20 +752,15 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
         });
         card.appendChild(hintEl);
 
-        dialog.appendChild(card);
+        overlay.appendChild(card);
 
-        this.listen(dialog, 'click', (e: Event) => {
-            if (e.target === dialog) this.hideShortcuts();
+        this.listen(overlay, 'click', (e: Event) => {
+            if (e.target === overlay) this.hideShortcuts();
         });
 
-        // Sync flag when browser natively closes the dialog (its own Escape handling).
-        this.listen(dialog, 'close', () => {
-            this._shortcutsVisible = false;
-        });
-
-        parent.appendChild(dialog);
-        this.shortcutsDialog = dialog;
-        return dialog;
+        parent.appendChild(overlay);
+        this.shortcutsOverlay = overlay;
+        return overlay;
     }
 
     private toggleShortcuts(): void {
@@ -780,13 +774,15 @@ export class DesktopUiPlugin extends Plugin<NMVideoPlayer<VideoPlaylistItem>, De
 
     private showShortcuts(): void {
         this._shortcutsVisible = true;
-        this.shortcutsDialog?.showModal();
+        if (this.shortcutsOverlay) {
+            this.shortcutsOverlay.style.display = 'flex';
+        }
     }
 
     private hideShortcuts(): void {
         this._shortcutsVisible = false;
-        if (this.shortcutsDialog?.open) {
-            this.shortcutsDialog.close();
+        if (this.shortcutsOverlay) {
+            this.shortcutsOverlay.style.display = 'none';
         }
     }
 
