@@ -1,0 +1,72 @@
+<!doctype html>
+<!--
+  Copyright (c) NoMercy Entertainment
+  Licensed under the Apache License, Version 2.0. See LICENSE for details.
+  SPDX-License-Identifier: Apache-2.0
+
+  The setup guide's code, verbatim apart from the import specifiers (which
+  point at src so vite can serve them) and a local media file. If the guide is
+  right, this renders a working player. If it is wrong, this fails the way a
+  reader following it would.
+-->
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Setup Guide Fixture</title>
+		<style>
+			#player {
+				width: 100%;
+				aspect-ratio: 16 / 9;
+				background: #000;
+			}
+		</style>
+	</head>
+	<body>
+		<div id="player"></div>
+		<script type="module">
+			import nmplayer from '/src/index.ts';
+			import { DesktopUiPlugin } from '/src/plugins/desktop-ui/index.ts';
+			import { KeyHandlerPlugin } from '/src/plugins/key-handler/index.ts';
+			import { SubtitleOverlayPlugin } from '/src/plugins/subtitle-overlay/index.ts';
+			import { OctopusPlugin } from '/src/plugins/octopus/index.ts';
+			import { MediaSessionPlugin } from '/src/plugins/media-session/index.ts';
+			import { CastSenderPlugin } from '/src/plugins/cast-sender/index.ts';
+
+			window.__guideError = null;
+			window.__guideReady = false;
+
+			try {
+				const player = nmplayer('player');
+
+				player.addPlugin(DesktopUiPlugin, { inactivityMs: 2000 });
+				player.addPlugin(KeyHandlerPlugin);
+				player.addPlugin(SubtitleOverlayPlugin);
+				player.addPlugin(OctopusPlugin);
+				player.addPlugin(MediaSessionPlugin);
+				player.addPlugin(CastSenderPlugin);
+
+				player.setup({
+					baseUrl: '',
+					playlist: [
+						{
+							id: 'big-buck-bunny',
+							title: 'Big Buck Bunny',
+							url: '/e2e/media/sample.mp4',
+							duration: 3,
+						},
+					],
+					muted: true,
+					autoPlay: true,
+				});
+
+				await player.ready();
+
+				window.player = player;
+				window.__guideReady = true;
+			} catch (e) {
+				window.__guideError = e?.message || String(e);
+			}
+		</script>
+	</body>
+</html>
