@@ -72,6 +72,38 @@ test.describe('The setup guide produces a working player', () => {
 	});
 });
 
+test('the HLS source the guide is written around plays', async ({ page }) => {
+	// The guide's example item is an .m3u8, and it tells the reader hls.js is a
+	// separate install because the package imports it only on meeting a stream.
+	// This proves that path runs, rather than only the progressive one.
+	await page.goto('/e2e/guide-fixture.html?src=/e2e/media/stream.m3u8');
+	await page.waitForFunction(() => (window as any).__guideReady === true, { timeout: 20_000 });
+
+	const url = await page.evaluate(() => (window as any).player.item()?.url as string);
+	expect(url, 'the fixture used the HLS source').toContain('.m3u8');
+
+	// Chromium plays no HLS natively, so an hls.js instance on the backend is
+	// what separates "the library loaded and worked" from a silent fallback.
+
+
+	await page.waitForFunction(
+		() => {
+			const el = (window as any).player?.videoElement as HTMLMediaElement | undefined;
+			return !!el && el.paused === false && el.currentTime > 0.1;
+		},
+		{ timeout: 20_000 },
+	);
+
+	// Chromium plays no HLS natively, so an hls.js instance on the backend is
+	// what separates the library having loaded from a silent fallback. It is
+	// attached while the stream loads, not at ready(), so this is asserted
+	// after playback has advanced rather than before.
+	const usedHlsJs = await page.evaluate(
+		() => Boolean((window as any).player.backend()?.hls),
+	);
+	expect(usedHlsJs, 'hls.js handled the stream').toBe(true);
+});
+
 test('screenshot of what a reader ends up looking at', async ({ page }) => {
 	await page.goto('/e2e/guide-fixture.html');
 	await page.waitForFunction(() => (window as any).__guideReady === true, { timeout: 20_000 });

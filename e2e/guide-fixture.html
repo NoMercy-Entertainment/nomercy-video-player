@@ -52,7 +52,7 @@
 						{
 							id: 'big-buck-bunny',
 							title: 'Big Buck Bunny',
-							url: '/e2e/media/sample.mp4',
+							url: new URLSearchParams(location.search).get('src') || '/e2e/media/sample.mp4',
 							duration: 3,
 						},
 					],
