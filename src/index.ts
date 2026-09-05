@@ -644,8 +644,10 @@ export class NMVideoPlayer<T extends VideoPlaylistItem = VideoPlaylistItem>
 		// lazily so getter-style tokens (Vue refs, stores) stay live.
 		// Read per request rather than captured, so a consumer whose token or
 		// rule changes mid-session is not answered from a stale closure.
+		// Live config, not `options.auth`: setup seeds it and `player.auth()`
+		// updates it, so a rule set after setup reaches media requests too.
 		instance.setAuthHeaderProvider?.((url: string) =>
-			this.options?.auth?.mediaAuthorization?.(url));
+			this.auth()?.mediaAuthorization?.(url));
 
 		// Consumer's HDR-on-SDR policy, read once here rather than normalized
 		// into `options` — `hdrDecision`'s own default ('play') applies at the
