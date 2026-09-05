@@ -48,11 +48,13 @@
 
 				player.setup({
 					baseUrl: '',
+					baseImageUrl: '/e2e/media',
 					playlist: [
 						{
 							id: 'big-buck-bunny',
 							title: 'Big Buck Bunny',
 							url: new URLSearchParams(location.search).get('src') || '/e2e/media/sample.mp4',
+							image: '/poster.jpg',
 							duration: 3,
 						},
 					],

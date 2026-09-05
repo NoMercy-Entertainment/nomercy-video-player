@@ -103,6 +103,21 @@ test('the HLS source the guide is written around plays', async ({ page }) => {
 	expect(usedHlsJs, 'hls.js handled the stream').toBe(true);
 });
 
+test('a relative poster resolves against baseImageUrl, not baseUrl', async ({ page }) => {
+	// The guide sets both and says an item's `image` goes through baseImageUrl.
+	// The two bases differ here, so a poster resolved against the wrong one is
+	// visible in the result rather than hidden behind a matching prefix.
+	await page.goto('/e2e/guide-fixture.html');
+	await page.waitForFunction(() => (window as any).__guideReady === true, { timeout: 20_000 });
+
+	const resolved = await page.evaluate(async () => {
+		const url = await (window as any).player.resolveUrl('/poster.jpg', 'poster');
+		return url?.href ?? String(url);
+	});
+
+	expect(resolved, 'poster went through baseImageUrl').toContain('/e2e/media/poster.jpg');
+});
+
 test('screenshot of what a reader ends up looking at', async ({ page }) => {
 	await page.goto('/e2e/guide-fixture.html');
 	await page.waitForFunction(() => (window as any).__guideReady === true, { timeout: 20_000 });
