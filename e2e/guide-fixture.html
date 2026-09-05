@@ -34,10 +34,15 @@
 			import { CastSenderPlugin } from '/src/plugins/cast-sender/index.ts';
 
 			window.__guideError = null;
+			window.__prevented = [];
 			window.__guideReady = false;
 
 			try {
 				const player = nmplayer('player');
+
+				player.on('playPrevented', (data) => {
+					window.__prevented.push(data);
+				});
 
 				player.addPlugin(DesktopUiPlugin, { inactivityMs: 2000 });
 				player.addPlugin(KeyHandlerPlugin);
@@ -58,7 +63,7 @@
 							duration: 3,
 						},
 					],
-					muted: true,
+					muted: new URLSearchParams(location.search).get('muted') !== 'false',
 					autoPlay: true,
 				});
 

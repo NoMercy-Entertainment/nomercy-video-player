@@ -118,6 +118,109 @@ test('a relative poster resolves against baseImageUrl, not baseUrl', async ({ pa
 	expect(resolved, 'poster went through baseImageUrl').toContain('/e2e/media/poster.jpg');
 });
 
+test('the same id gives back the same player, not a second one', async ({ page }) => {
+	await page.goto('/e2e/guide-fixture.html');
+	await page.waitForFunction(() => (window as any).__guideReady === true, { timeout: 20_000 });
+
+	const result = await page.evaluate(async () => {
+		const mod = await import('/src/index.ts');
+		const again = mod.default('player');
+		return {
+			same: again === (window as any).player,
+			videos: document.querySelectorAll('#player video').length,
+		};
+	});
+
+	expect(result.same, 'second call returned the same instance').toBe(true);
+	expect(result.videos, 'no second video element was created').toBe(1);
+});
+
+test('a non-div container is refused by code, not silently', async ({ page }) => {
+	await page.goto('/e2e/guide-fixture.html');
+	await page.waitForFunction(() => (window as any).__guideReady === true, { timeout: 20_000 });
+
+	const codes = await page.evaluate(async () => {
+		const mod = await import('/src/index.ts');
+		const out: Array<string | null> = [];
+
+		const section = document.createElement('section');
+		section.id = 'not-a-div';
+		document.body.appendChild(section);
+
+		try {
+			mod.default('not-a-div');
+			out.push(null);
+		}
+		catch (error: any) {
+			out.push(error?.code ?? error?.message ?? null);
+		}
+
+		try {
+			mod.default('nothing-with-this-id');
+			out.push(null);
+		}
+		catch (error: any) {
+			out.push(error?.code ?? error?.message ?? null);
+		}
+
+		return out;
+	});
+
+	expect(codes[0], 'a <section> container').toBe('core:player/element-not-div');
+	expect(codes[1], 'a missing container').toBe('core:player/element-missing');
+});
+
+test('dispose tears the player down', async ({ page }) => {
+	await page.goto('/e2e/guide-fixture.html');
+	await page.waitForFunction(() => (window as any).__guideReady === true, { timeout: 20_000 });
+
+	const after = await page.evaluate(async () => {
+		await (window as any).player.dispose();
+		return {
+			phase: (window as any).player.phase(),
+			videos: document.querySelectorAll('#player video').length,
+		};
+	});
+
+	expect(after.phase, 'phase after dispose').toBe('disposed');
+	expect(after.videos, 'video element removed').toBe(0);
+});
+
+test('a refused play reports itself, rolls state back, and rethrows', async ({ page }) => {
+	// Chromium under Playwright allows unmuted autoplay, so the refusal has to
+	// come from the backend rejecting — which is the exact condition the player
+	// branches on when a real browser declines.
+	await page.goto('/e2e/guide-fixture.html');
+	await page.waitForFunction(() => (window as any).__guideReady === true, { timeout: 20_000 });
+
+	const result = await page.evaluate(async () => {
+		const player = (window as any).player;
+		await player.pause();
+
+		const backend = player.backend();
+		backend.play = () => Promise.reject(new Error('NotAllowedError'));
+
+		let threw = false;
+		try {
+			await player.play();
+		}
+		catch {
+			threw = true;
+		}
+
+		return {
+			threw,
+			prevented: (window as any).__prevented,
+			paused: player.videoElement.paused,
+		};
+	});
+
+	expect(result.prevented.length, 'the refusal was announced').toBeGreaterThan(0);
+	expect(result.prevented.at(-1).reason).toBe('backend-refused');
+	expect(result.threw, 'play() rejected as well as announcing').toBe(true);
+	expect(result.paused, 'state rolled back to paused').toBe(true);
+});
+
 test('screenshot of what a reader ends up looking at', async ({ page }) => {
 	await page.goto('/e2e/guide-fixture.html');
 	await page.waitForFunction(() => (window as any).__guideReady === true, { timeout: 20_000 });
