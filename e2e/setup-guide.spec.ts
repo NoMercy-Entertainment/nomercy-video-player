@@ -85,7 +85,6 @@ test('the HLS source the guide is written around plays', async ({ page }) => {
 	// Chromium plays no HLS natively, so an hls.js instance on the backend is
 	// what separates "the library loaded and worked" from a silent fallback.
 
-
 	await page.waitForFunction(
 		() => {
 			const el = (window as any).player?.videoElement as HTMLMediaElement | undefined;
