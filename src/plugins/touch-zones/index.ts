@@ -456,7 +456,7 @@ export class TouchZonesPlugin<T extends VideoPlaylistItem = VideoPlaylistItem> e
 		const handler = this.doubleTap(
 			() => { void this.player.toggleFullscreen?.(); },
 			() => {
-				if (this.opts?.disableClickToPause)
+				if (this.opts?.disableClickToPause || this.player.options?.disableClickToPause)
 					return;
 				void this.player.togglePlayback?.();
 			},

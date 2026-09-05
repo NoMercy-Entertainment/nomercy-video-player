@@ -120,6 +120,24 @@ describe('TouchZonesPlugin', () => {
 			expect(toggleSpy).not.toHaveBeenCalled();
 		});
 
+		it('setup({ disableClickToPause: true }) suppresses single-tap without the plugin option', async () => {
+			const player = new NMVideoPlayer('test').setup({ disableClickToPause: true });
+			player.addPlugin(touchZonesPlugin, { doubleTapThreshold: 300 });
+			await player.ready();
+
+			const toggleSpy = vi.fn().mockResolvedValue(undefined);
+			(player as any).togglePlayback = toggleSpy;
+
+			const container = document.getElementById('test')!;
+			const centerBox = findZoneBox(container, '2', '3');
+			expect(centerBox).toBeDefined();
+
+			centerBox!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+			await new Promise(resolve => setTimeout(resolve, 350));
+
+			expect(toggleSpy).not.toHaveBeenCalled();
+		});
+
 		it('disableClickToPause:true does NOT suppress double-tap toggleFullscreen', async () => {
 			const player = setup();
 			player.addPlugin(touchZonesPlugin, { doubleTapThreshold: 300, disableClickToPause: true });

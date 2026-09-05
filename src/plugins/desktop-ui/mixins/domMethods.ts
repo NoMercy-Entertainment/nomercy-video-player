@@ -15,6 +15,7 @@
  *       wireSliderBar, wireEvents.
  */
 
+import type { VideoPlayerConfig } from '../../../types';
 import type { BottomBarRefs, BottomRowRefs, CenterRefs } from '../helpers/dom';
 import type { MenuControlRefs } from '../helpers/menuControl';
 import type { TooltipButtonRefs } from '../helpers/tooltips';
@@ -319,7 +320,7 @@ export const domMethods = {
 			this.listen(container, 'click', (event: Event) => {
 				this.bumpActivity();
 				const target = event.target as HTMLElement;
-				if (target.tagName === 'VIDEO' && !this.opts?.disableClickToPause) {
+				if (target.tagName === 'VIDEO' && !this.opts?.disableClickToPause && !(this.player as { options?: VideoPlayerConfig }).options?.disableClickToPause) {
 					void this.player.togglePlayback();
 				}
 			});

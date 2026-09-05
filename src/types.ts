@@ -389,6 +389,14 @@ export interface VideoPlayerConfig<T extends BasePlaylistItem = VideoPlaylistIte
 	 */
 	disableControls?: boolean;
 	/**
+	 * Stop a click or tap on the video from toggling playback. Read by every
+	 * plugin that binds its own click handling — `DesktopUiPlugin` on the video
+	 * element, `TouchZonesPlugin` on its overlay zones — so one setting covers
+	 * a player that registers both. Either source switches it off: this field,
+	 * or the same-named option on an individual plugin.
+	 */
+	disableClickToPause?: boolean;
+	/**
 	 * Custom backend factory. Overrides the kit's default backend resolution
 	 * (`html5` / `mse` / `webcodecs`). Receives the resolved kind so factories
 	 * can branch on it.
