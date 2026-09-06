@@ -539,7 +539,9 @@ export class Html5VideoBackend
 				default: hlsAudioTrack.default === true,
 			}));
 		}
-		// Native: HTMLMediaElement.audioTracks (Safari/Chrome with multi-audio).
+		// Native: HTMLMediaElement.audioTracks. Measured absent in Chrome 152,
+		// Edge 152 and bundled Chromium, so this branch is Safari in practice
+		// and yields [] elsewhere; the HLS path above is what fills the list.
 		const nativeTracks = (this.element as unknown as { audioTracks?: { length: number; [k: number]: { id: string; language: string; label: string; enabled: boolean } } }).audioTracks;
 		if (nativeTracks && nativeTracks.length > 0) {
 			const out: AudioTrack[] = [];

@@ -530,7 +530,9 @@ export class NMVideoPlayer<T extends VideoPlaylistItem = VideoPlaylistItem>
 	 * `mediaReady` fires so the backend's track lists are populated.
 	 *
 	 * Language matching: exact tag first, then prefix (e.g. `'en'` matches
-	 * `'en-US'`). No match → leave selection at off; no warning emitted.
+	 * `'en-US'`). No match leaves an UNSELECTED slot alone, but where a track is
+	 * already selected the slot is handed to the stream's own default rendition
+	 * instead. No warning either way.
 	 */
 	private _applyDefaultTracks(): void {
 		const remembered = this.languageMemory.subtitleChoice();
