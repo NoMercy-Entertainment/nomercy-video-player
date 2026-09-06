@@ -25,7 +25,7 @@ import type {
 	IPlatform,
 	IPlayer,
 	IPreloadStrategy,
-	IStreamFactory,
+	IStreamFactory, IStreamSource,
 	ITransitionStrategy,
 	IUrlResolver,
 	TimeState as KitTimeState,
@@ -592,6 +592,7 @@ export class NMVideoPlayer<T extends VideoPlaylistItem = VideoPlaylistItem>
 
 	// ── Stream registration ── composed in via `streamRegistrationMethods` mixin.
 	declare registerStream: (factory: IStreamFactory, prepend?: boolean) => this;
+	declare resolveCustomStream: (url: string, contentType?: string) => IStreamSource | undefined;
 	declare unregisterStream: (id: string) => this;
 	declare streams: () => ReadonlyArray<string>;
 	declare getStreamFactory: (id: string) => IStreamFactory | undefined;
@@ -648,6 +649,13 @@ export class NMVideoPlayer<T extends VideoPlaylistItem = VideoPlaylistItem>
 		// updates it, so a rule set after setup reaches media requests too.
 		instance.setAuthHeaderProvider?.((url: string) =>
 			this.auth()?.mediaAuthorization?.(url));
+
+		// Without this the stream registry is seeded and never asked, so
+		// `registerStream` records a factory that no load path consults. Only
+		// consumer-registered factories are offered: HLS and progressive files
+		// stay on the backend's own path exactly as before.
+		instance.setStreamResolver?.((url: string, contentType?: string) =>
+			this.resolveCustomStream?.(url, contentType));
 
 		// Consumer's HDR-on-SDR policy, read once here rather than normalized
 		// into `options` — `hdrDecision`'s own default ('play') applies at the

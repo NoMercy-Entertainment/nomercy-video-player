@@ -6,9 +6,16 @@
 //  SPDX-License-Identifier: Apache-2.0
 // -----------------------------------------------------------------------------
 
-import type { AudioTrack, AuthHeaderProvider, BackendLoaderState, BackendState, HdrOnSdrFallback, MinimalBackendEventPayload, QualityLevel, SubtitleCueChange, SubtitleTrack } from '@nomercy-entertainment/nomercy-player-core';
+import type { AudioTrack, AuthHeaderProvider, BackendLoaderState, BackendState, HdrOnSdrFallback, IStreamSource, MinimalBackendEventPayload, QualityLevel, SubtitleCueChange, SubtitleTrack } from '@nomercy-entertainment/nomercy-player-core';
 
 import type { HtmlPreloadMode } from '../../types';
+
+/**
+ * Asks the player's stream registry whether a consumer registered a factory for
+ * this URL. Returns a source to play it with, or `undefined` to let the backend
+ * handle the URL the way it always has.
+ */
+export type StreamResolver = (url: string, contentType?: string) => IStreamSource | undefined;
 
 /**
  * Per-event payload map. Each backend event has a fixed payload shape so
@@ -139,6 +146,15 @@ export interface IVideoBackend {
 	 * stack omit it.
 	 */
 	setAuthHeaderProvider?(provider: AuthHeaderProvider): void;
+
+	/**
+	 * Wire the lookup that asks the player's stream registry whether a consumer
+	 * has registered a factory for a URL. The backend calls it before its own
+	 * HLS and progressive handling, and falls through to that handling when the
+	 * lookup returns nothing, so a player with no registered factory behaves
+	 * exactly as it did before. Optional — backends with no registry omit it.
+	 */
+	setStreamResolver?(resolver: StreamResolver): void;
 
 	/**
 	 * Consumer policy for an all-HDR item on a display that can't show HDR and

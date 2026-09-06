@@ -6,8 +6,9 @@
 //  SPDX-License-Identifier: Apache-2.0
 // -----------------------------------------------------------------------------
 
-import type { AudioTrack, HdrOnSdrFallback, QualityLevel, SubtitleTrack } from '@nomercy-entertainment/nomercy-player-core';
+import type { AudioTrack, HdrOnSdrFallback, QualityLevel, SubtitleTrack, IStreamSource} from '@nomercy-entertainment/nomercy-player-core';
 import type { HtmlPreloadMode } from '../../types';
+import type { StreamResolver } from './IVideoBackend';
 import type { BackendEventPayload, BackendState, IVideoBackend, SubtitleCue, SubtitleCueChange } from './IVideoBackend';
 import {
 	abrCeiling,
@@ -360,6 +361,23 @@ export class Html5VideoBackend
 		performance.mark('nm:backend:load:start');
 		const headerValue = this._authHeaderProvider?.(url);
 
+		// A consumer's factory is asked first, because the branches below cover
+		// only HLS and whatever the element itself decodes. Nothing registered
+		// means nothing returned, and the built-in path runs untouched.
+		if (this._customSource) {
+			this._customSource.destroy();
+			this._customSource = undefined;
+		}
+
+		const customSource = this._streamResolver?.(url);
+		if (customSource) {
+			this._customSource = customSource;
+			await customSource.attach(this.element);
+			this._state = 'ready';
+			performance.mark('nm:backend:load:end');
+			return;
+		}
+
 		if (hlsUrl && !nativeHls) {
 			const { default: Hls } = await import('hls.js');
 
@@ -470,6 +488,18 @@ export class Html5VideoBackend
 	// playbackRate / volume / mute / unmute / captureStream / setSinkId /
 	// getSinkId / mediaKeys / setMediaKeys / mediaElement / pauseLoader /
 	// resumeLoader / loaderState / setAuthHeaderProvider
+
+	private _streamResolver?: StreamResolver;
+	private _customSource?: IStreamSource;
+
+	/**
+	 * Wire the lookup that asks the player's stream registry for a consumer's
+	 * factory. Without it the backend keeps its own HLS and progressive handling
+	 * and a registered factory is never consulted.
+	 */
+	setStreamResolver(resolver: StreamResolver): void {
+		this._streamResolver = resolver;
+	}
 
 	// ── Time / position (video-specific: buffered uses currentTime walk) ──
 
