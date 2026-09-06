@@ -89,7 +89,7 @@ export interface VideoPlaylistItem extends BasePlaylistItem {
 	fonts?: FontTrackRef[];
 	/** Series / show title displayed in the top-bar when season/episode are present. */
 	show?: string;
-	/** Season number (1-based). Combined with `episode` to render "S01E03" label. */
+	/** Season number. `0` means extras. Rendered unpadded: `S1E3` in the top bar, `S1: E3` on the playlist card. */
 	season?: number;
 	/** Episode number (1-based). */
 	episode?: number;
@@ -106,7 +106,7 @@ export interface VideoPlaylistItem extends BasePlaylistItem {
 
 	/** Human-readable season label (e.g. `"Season 1"`). Consumer-supplied display field. */
 	seasonName?: string;
-	/** Stable item UUID. Consumer-supplied identifier used by sync/connect plugins. */
+	/** Stable item UUID. Consumer-supplied and carried through untouched; nothing in this package reads it. */
 	uuid?: string;
 	/** Channel or network logo URL. Consumer-supplied display field. */
 	logo?: string;
