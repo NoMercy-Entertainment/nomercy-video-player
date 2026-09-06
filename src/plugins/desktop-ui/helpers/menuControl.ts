@@ -20,7 +20,7 @@
  * set of callbacks) into every function here.
  */
 
-import type { IVideoPlayer, VideoPlaylistItem } from '@nomercy-entertainment/nomercy-video-player';
+import type { IVideoPlayer, VideoPlayerConfig, VideoPlaylistItem } from '@nomercy-entertainment/nomercy-video-player';
 import type { ActivityState } from './activity';
 import type { MenuFrameRefs, MenuRenderState, SubMenuId, SubtitleMenuAction } from './menus';
 import {
@@ -346,7 +346,12 @@ export function repaintPane(
 		renderAudioPane(menus.panes.language, player, listen, closeOnPick, st);
 	if (id === 'playlist') {
 		renderPlaylistPane(menus.panes.playlist, player, listen, closeOnPick, {
-			imageBaseUrl: opts?.imageBaseUrl,
+			// The player config is the single place a consumer sets an image base.
+			// Without this fallback, setting `baseImageUrl` there still leaves the
+			// playlist thumbnails relative, and the same value has to be repeated
+			// as a plugin option to make them resolve.
+			imageBaseUrl: opts?.imageBaseUrl
+				?? (player as { options?: VideoPlayerConfig }).options?.baseImageUrl,
 		});
 	}
 	if (id === 'subtitleSettings') {
