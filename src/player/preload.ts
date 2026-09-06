@@ -25,7 +25,11 @@ import { DefaultPreloadStrategy } from '@nomercy-entertainment/nomercy-player-co
  *    category `OctopusPlugin` resolves with) — `'font'` / `auto`
  *
  * Video crossfade is disabled by default (`GaplessTransitionStrategy`). Asset
- * preloading still runs so the next item starts instantly on hard-cut.
+ * preloading still runs, and what it does is issue one `HEAD` request per asset
+ * with `mode: 'no-cors'` (`core/mixins/lifecycle.ts` `_runPreload`). A `HEAD`
+ * returns no body and an opaque response caches nothing a later load can use,
+ * so this warms no media and the next item does not start any sooner. The
+ * observable output is `preloadProgress` and `preloadComplete`.
  */
 export class VideoPreloadStrategy extends DefaultPreloadStrategy {
 	override assetsToPreload(item: BasePlaylistItem): PreloadAsset[] {
