@@ -1,0 +1,38 @@
+#!/bin/sh
+# Reject any commit message carrying an injected attribution trailer.
+#
+# Stoney's rule is absolute: no Co-Authored-By in a NoMercy commit, ever. It kept arriving anyway,
+# because the instruction lives in a file an agent can be told to ignore and a harness can override.
+# A rule that depends on remembering is a rule that fails on the one commit nobody was watching.
+#
+# Deliberately aggressive. It matches the trailer anywhere in the message, in any casing, with any
+# spacing or punctuation between the words, and with or without the hyphen. The cost is that a commit
+# which merely DISCUSSES the trailer is refused too. That is the right trade: the wording is never
+# needed in a message, and a false stop costs one rewrite while a miss costs a rewritten history.
+#
+# Comment lines are stripped first, since git discards them and the commit template may name the rule.
+
+msg_file="$1"
+[ -f "$msg_file" ] || exit 0
+
+body=$(grep -v '^[[:space:]]*#' "$msg_file")
+
+# co-author in any spelling: Co-Authored-By, Co authored by, Coauthored-By, Co-Author, CoAuthor.
+CO='[Cc][Oo][-_ ]*[Aa][Uu][Tt][Hh][Oo][Rr]([Ee][Dd])?([-_ ]*[Bb][Yy])?[[:space:]]*:'
+SESSION='[Cc][Ll][Aa][Uu][Dd][Ee][-_ ]*[Ss][Ee][Ss][Ss][Ii][Oo][Nn][[:space:]]*:'
+GENERATED='[Gg]enerated[[:space:]]+with[[:space:]]+\[?[Cc]laude'
+
+hit=$(printf '%s\n' "$body" | grep -nE "$CO|$SESSION|$GENERATED" | head -3)
+
+if [ -n "$hit" ]; then
+  echo "commit rejected: the message carries an attribution trailer." >&2
+  echo "" >&2
+  printf '%s\n' "$hit" | sed 's/^/    /' >&2
+  echo "" >&2
+  echo 'CLAUDE.md: "No Co-Authored-By in git commits - ever." Remove the trailer and retry.' >&2
+  echo "Co-Authored-By, Claude-Session and \"Generated with Claude Code\" are all refused," >&2
+  echo "in any casing or spacing. Conventional commit body only, no attribution lines." >&2
+  exit 1
+fi
+
+exit 0
