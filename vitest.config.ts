@@ -14,7 +14,7 @@ import { defineConfig } from 'vitest/config';
 
 const coreRoot = fileURLToPath(new URL('../nomercy-player-core/src', import.meta.url));
 const selfRoot = fileURLToPath(new URL('./src', import.meta.url));
-const octopusSrc = fileURLToPath(new URL('../nomercy-subtitle-octopus/src', import.meta.url));
+const octopusSrc = fileURLToPath(new URL('../../subtitles/nomercy-subtitle-octopus/src', import.meta.url));
 const hlsMock = fileURLToPath(new URL('./src/__tests__/__mocks__/hls.js.ts', import.meta.url));
 // Monorepo: alias siblings to their live TypeScript source so tests pick up
 // unbuilt changes. Standalone / CI: resolve them from node_modules instead.

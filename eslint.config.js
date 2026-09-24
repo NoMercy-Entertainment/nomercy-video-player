@@ -49,7 +49,7 @@ export default antfu({
 		'node/prefer-global/process': 'off',
 	},
 }, {
-	// NoMercy player code standard (packages/eslint-plugin-player).
+	// NoMercy player code standard (packages/player-web/eslint-plugin-player).
 	files: ['src/**/*.ts'],
 	plugins: { player },
 	rules: {

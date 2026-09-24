@@ -25,7 +25,7 @@
  * `fonts.json` entries.
  *
  * NMSubtitleOctopus forwarding regression (availableFonts → upstream):
- * tested in packages/nomercy-subtitle-octopus/src/__tests__/octopus.test.ts.
+ * tested in packages/subtitles/nomercy-subtitle-octopus/src/__tests__/octopus.test.ts.
  * That test mocks SubtitlesOctopus directly so the real NMSubtitleOctopus
  * logic runs and we can assert the fonts map reaches the upstream constructor.
  */
