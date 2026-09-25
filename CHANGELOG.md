@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+## [2.2.3] — 2026-09-25
+
+### Added
+
+- `disableClickToPause` in `setup()` stops a click from pausing the video.
+
+### Fixed
+
+- Streams added with `registerStream()` are now used for playback.
+- Playlist thumbnails load from the configured image URL.
+- Changing auth at runtime now applies to media requests.
+- Georgia subtitles fall back to a serif font, and subtitle colors match the palette.
+- One press of `?` opens the shortcuts overlay.
+- Cast artwork shows the right image, and the media-key option works.
+- The help key on a TV remote works.
+
 ## [2.2.2] — 2026-09-04
 
 ### Fixed
