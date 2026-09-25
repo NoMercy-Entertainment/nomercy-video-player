@@ -51,6 +51,10 @@ export default defineConfig({
 			},
 		},
 	],
+	optimizeDeps: {
+		// Scan the e2e fixtures too, or the dev server reloads every page mid-run.
+		entries: ['src/index.ts', 'e2e/*.html'],
+	},
 	build: {
 		sourcemap: false,
 		minify: 'terser',
