@@ -6,10 +6,9 @@
 //  SPDX-License-Identifier: Apache-2.0
 // -----------------------------------------------------------------------------
 
-import type { AudioTrack, HdrOnSdrFallback, QualityLevel, SubtitleTrack, IStreamSource} from '@nomercy-entertainment/nomercy-player-core';
+import type { AudioTrack, HdrOnSdrFallback, IStreamSource, QualityLevel, SubtitleTrack } from '@nomercy-entertainment/nomercy-player-core';
 import type { HtmlPreloadMode } from '../../types';
-import type { StreamResolver } from './IVideoBackend';
-import type { BackendEventPayload, BackendState, IVideoBackend, SubtitleCue, SubtitleCueChange } from './IVideoBackend';
+import type { BackendEventPayload, BackendState, IVideoBackend, StreamResolver, SubtitleCue, SubtitleCueChange } from './IVideoBackend';
 import {
 	abrCeiling,
 	appendAuthTokenParam,
