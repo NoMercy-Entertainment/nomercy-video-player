@@ -146,8 +146,8 @@
 		"@nomercy-entertainment/eslint-plugin-player": "^0.3.0",
 		"@playwright/test": "^1.60.0",
 		"@types/node": "^25.9.0",
-		"@vitest/coverage-v8": "^4.1.6",
-		"@vitest/ui": "^4.1.6",
+		"@vitest/coverage-v8": "^4.1.11",
+		"@vitest/ui": "^4.1.11",
 		"eslint": "^10.4.0",
 		"eslint-plugin-format": "^2.0.1",
 		"happy-dom": "^20.9.0",
@@ -159,11 +159,11 @@
 		"typescript": "^6.0.3",
 		"vite": "^8.0.13",
 		"vite-plugin-dts": "^5.0.0",
-		"vitest": "^4.1.6"
+		"vitest": "^4.1.11"
 	},
 	"overrides": {
 		"brace-expansion": "^5.0.6",
-		"js-yaml": "^4.3.0",
+		"js-yaml": "^4.3.2",
 		"minimatch": "10.2.4"
 	},
 	"publishConfig": {
