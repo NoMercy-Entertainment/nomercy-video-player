@@ -419,6 +419,7 @@ export class NMVideoPlayer<T extends VideoPlaylistItem = VideoPlaylistItem>
 		// Record the chosen LANGUAGE, not the index — an index means a different
 		// language on the next file. Fires for the viewer's own pick and for the
 		// selection _applyDefaultTracks restores, which write the same value.
+		// The caption slot below is different: only the viewer's pick is kept.
 		this.on('audioTrack', ({ id }) => {
 			if (id === null)
 				return;
@@ -426,6 +427,9 @@ export class NMVideoPlayer<T extends VideoPlaylistItem = VideoPlaylistItem>
 		});
 
 		this.on('subtitle', ({ track }) => {
+			// A pick _applyDefaultTracks makes is the player's, not the viewer's.
+			if (this._selectingDefaults)
+				return;
 			this.languageMemory.rememberSubtitle(
 				track === null ? SUBTITLES_OFF : this.subtitles()[track],
 			);
@@ -536,6 +540,20 @@ export class NMVideoPlayer<T extends VideoPlaylistItem = VideoPlaylistItem>
 	 * instead. No warning either way.
 	 */
 	private _applyDefaultTracks(): void {
+		this._selectingDefaults = true;
+		try {
+			this._selectDefaultSubtitle();
+		}
+		finally {
+			this._selectingDefaults = false;
+		}
+		this._selectDefaultAudio();
+	}
+
+	/** True while the player picks a caption itself; such a pick is never remembered. */
+	private _selectingDefaults = false;
+
+	private _selectDefaultSubtitle(): void {
 		const remembered = this.languageMemory.subtitleChoice();
 		const wanted: SubtitleChoice | undefined = remembered
 			?? (this.options?.defaultSubtitleLanguage
@@ -553,7 +571,9 @@ export class NMVideoPlayer<T extends VideoPlaylistItem = VideoPlaylistItem>
 				this.subtitle(matchIdx);
 			}
 		}
+	}
 
+	private _selectDefaultAudio(): void {
 		const audioLang = this.languageMemory.audioLanguage() ?? this.options?.defaultAudioLanguage;
 		const selectedIdx = this.audioTrack()?.index ?? null;
 

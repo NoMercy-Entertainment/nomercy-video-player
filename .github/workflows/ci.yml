@@ -12,7 +12,10 @@ permissions:
 
 jobs:
   test:
-    runs-on: [self-hosted, Linux, X64, beast-unit]
+    # GitHub-hosted for now: the beast-unit runners mount /var/lib/apt read-only,
+    # so `playwright install --with-deps` fails before a test runs
+    # (nomercy-github-runner#14). Back to self-hosted once that is fixed.
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
 

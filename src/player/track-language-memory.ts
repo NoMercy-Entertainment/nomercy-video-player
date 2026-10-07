@@ -95,10 +95,16 @@ export interface SubtitleDescriptor {
 	language: string;
 	type?: string;
 	format?: string;
+	/**
+	 * Set when the viewer made the pick. A sign or forced variant saved without
+	 * it comes from a build that stored the player's own default, so it is not
+	 * a preference.
+	 */
+	explicit?: boolean;
 }
 
 function descriptorOf(track: SubtitleTrack): SubtitleDescriptor | null {
-	return track.language ? { language: track.language, type: track.type, format: formatOf(track) } : null;
+	return track.language ? { language: track.language, type: track.type, format: formatOf(track), explicit: true } : null;
 }
 
 /** The file's format, taken from its URL — the manifest does not carry one. */
@@ -120,7 +126,13 @@ function parseSubtitleChoice(raw: string | null): SubtitleChoice | null {
 		return { language: raw };
 	try {
 		const parsed = JSON.parse(raw) as SubtitleDescriptor;
-		return typeof parsed?.language === 'string' ? parsed : null;
+		if (typeof parsed?.language !== 'string')
+			return null;
+		// A sign or forced variant nobody marked as a viewer pick was the
+		// player's own default: keep the language, drop the variant.
+		if (!parsed.explicit && (parsed.type === 'sign' || parsed.type === 'forced'))
+			return { language: parsed.language };
+		return parsed;
 	}
 	catch {
 		return null;

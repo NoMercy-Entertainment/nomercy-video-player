@@ -68,7 +68,7 @@ describe('trackLanguageMemory', () => {
 		const memory = new TrackLanguageMemory();
 		memory.rememberSubtitle(sdh);
 
-		expect(memory.subtitleChoice()).toEqual({ language: 'eng', type: 'sdh', format: 'ass' });
+		expect(memory.subtitleChoice()).toEqual({ language: 'eng', type: 'sdh', format: 'ass', explicit: true });
 	});
 
 	it('reads a bare language written by an older build as a choice', () => {
@@ -82,7 +82,7 @@ describe('trackLanguageMemory', () => {
 		new TrackLanguageMemory(storage).rememberSubtitle(sdh);
 
 		expect(new TrackLanguageMemory(storage).subtitleChoice())
-			.toEqual({ language: 'eng', type: 'sdh', format: 'ass' });
+			.toEqual({ language: 'eng', type: 'sdh', format: 'ass', explicit: true });
 	});
 
 	it('survives a storage backend that throws on every access', () => {
