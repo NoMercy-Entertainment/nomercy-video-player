@@ -137,6 +137,27 @@ describe('matchSubtitleTrack', () => {
 		expect(matchSubtitleTrack(tracks, { language: 'eng', type: 'full', format: 'ass' }, matchLanguage)).toBe(1);
 	});
 
+	describe('when the language has several variants', () => {
+		const englishSign: SubtitleTrack = { id: '5', language: 'eng', label: 'English (Signs)', type: 'sign', url: 'S:/en.sign.ass' };
+		const englishForced: SubtitleTrack = { id: '6', language: 'eng', label: 'English (Forced)', type: 'forced', url: 'S:/en.forced.ass' };
+
+		it('prefers the full track over a sign track listed first when only a language is wanted', () => {
+			const tracks = [englishSign, englishAss];
+
+			expect(matchSubtitleTrack(tracks, { language: 'eng' }, matchLanguage)).toBe(1);
+		});
+
+		it('prefers the full track over sign and forced tracks when the saved variant is gone', () => {
+			const tracks = [englishForced, englishSign, englishVtt];
+
+			expect(matchSubtitleTrack(tracks, { language: 'eng', type: 'alt', format: 'ass' }, matchLanguage)).toBe(2);
+		});
+
+		it('takes a sign track when it is the only one in the language', () => {
+			expect(matchSubtitleTrack([dutch, englishSign], { language: 'eng' }, matchLanguage)).toBe(1);
+		});
+	});
+
 	it('reports no match rather than guessing a language the item does not carry', () => {
 		expect(matchSubtitleTrack([dutch], { language: 'eng' }, matchLanguage)).toBe(-1);
 	});
