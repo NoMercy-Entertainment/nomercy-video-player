@@ -151,5 +151,18 @@ export function matchSubtitleTrack(
 	if (sameVariant >= 0)
 		return sameVariant;
 
-	return matchLanguage(tracks.map(track => track.language), wanted.language);
+	const byLanguage = matchLanguage(tracks.map(track => track.language), wanted.language);
+	return byLanguage < 0 ? byLanguage : preferFullVariant(tracks, byLanguage);
+}
+
+// Server order puts a sign or forced track ahead of the full one often enough
+// that "first track in the language" shows only the signs.
+function preferFullVariant(tracks: ReadonlyArray<SubtitleTrack>, matched: number): number {
+	const language = tracks[matched]?.language;
+	const full = tracks.findIndex(track => track.language === language && track.type === 'full');
+	if (full >= 0)
+		return full;
+
+	const plain = tracks.findIndex(track => track.language === language && track.type !== 'sign' && track.type !== 'forced');
+	return plain >= 0 ? plain : matched;
 }
