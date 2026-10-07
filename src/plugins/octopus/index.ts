@@ -12,6 +12,10 @@ import type { NMVideoPlayer } from '../../index';
 import type { VideoPlaylistItem } from '../../types';
 import { mergeConfig, Plugin } from '@nomercy-entertainment/nomercy-player-core';
 import { readFontFamilyNames } from './font-names';
+import { scaleAssFontSize } from './style-scale';
+
+// A zero or negative scale would ask libass for text that cannot be drawn.
+const MIN_FONT_SCALE = 0.1;
 
 interface FontManifestEntry {
 	file: string;
@@ -30,6 +34,8 @@ function isFontEntry(value: unknown): value is FontManifestEntry {
 /** Minimal interface describing the subset of NMSubtitleOctopus we call. */
 interface SubtitleOctopusInstance {
 	on(event: string, fn: (...args: unknown[]) => void): void;
+	/** Replaces the track; the renderer remounts and redraws the current frame. */
+	trackContent(content: string | null): void;
 	dispose(): void;
 }
 
@@ -116,6 +122,9 @@ export class OctopusPlugin<T extends VideoPlaylistItem = VideoPlaylistItem> exte
 	private _availableFontsForCurrent: Record<string, string> | null = null;
 	/** Blob URLs created during load — revoked in destroy() to avoid memory leaks. */
 	private ownedBlobs: string[] = [];
+	/** The track as fetched, before the viewer's size is applied. Null when nothing is shown. */
+	private trackSource: string | null = null;
+	private appliedScale = 1;
 
 	/**
 	 * Accepts constructor-supplied opts for callers that instantiate the plugin
@@ -147,6 +156,10 @@ export class OctopusPlugin<T extends VideoPlaylistItem = VideoPlaylistItem> exte
 	override use(): void {
 		this.on('subtitle', (data) => {
 			void this.applyActive(data?.track);
+		});
+
+		this.on('subtitleStyle', () => {
+			this.applyStyle();
 		});
 
 		this.on('item', () => {
@@ -232,6 +245,25 @@ export class OctopusPlugin<T extends VideoPlaylistItem = VideoPlaylistItem> exte
 		}
 
 		await this.load(url, resolved);
+	}
+
+	/** The viewer's caption size as a scale, 1 being the track's own. */
+	private wantedScale(): number {
+		const size = this.player.subtitleStyle().fontSize;
+		return Math.max(size / 100, MIN_FONT_SCALE);
+	}
+
+	/**
+	 * Hand the renderer the track at the viewer's size. Replacing the track
+	 * makes it redraw the current frame, so a paused video follows too.
+	 */
+	private applyStyle(): void {
+		const source = this.trackSource;
+		const scale = this.wantedScale();
+		if (!this.instance || source === null || scale === this.appliedScale)
+			return;
+		this.appliedScale = scale;
+		this.instance.trackContent(scaleAssFontSize(source, scale));
 	}
 
 	private resolveTrackUrl(track: string | number): string | null {
@@ -411,9 +443,12 @@ export class OctopusPlugin<T extends VideoPlaylistItem = VideoPlaylistItem> exte
 			if (!videoEl)
 				return;
 
+			this.trackSource = String(subContent);
+			this.appliedScale = this.wantedScale();
+
 			const opts: SubtitleOctopusCtorOptions = {
 				video: videoEl,
-				trackContent: subContent,
+				trackContent: scaleAssFontSize(this.trackSource, this.appliedScale),
 				availableFonts,
 				targetFps: this.opts?.targetFps,
 				renderMode: this.opts?.renderMode ?? 'wasm-blend',
@@ -453,6 +488,7 @@ export class OctopusPlugin<T extends VideoPlaylistItem = VideoPlaylistItem> exte
 
 	private destroy(): void {
 		this.currentLoadedUrl = null;
+		this.trackSource = null;
 		this.revokeOwnedBlobs();
 		this._availableFontsForCurrent = null;
 		const inst = this.instance;
