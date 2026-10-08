@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [2.2.5] — 2026-10-08
+
+### Changed
+
+- Version alignment with the trio; no code change.
+
 ## [2.2.4] — 2026-10-08
 
 ### Fixed
