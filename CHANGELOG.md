@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [2.2.4] — 2026-10-08
+
+### Fixed
+
+- Core 2.2.4: the saved volume no longer turns to 0 after a mute.
+- A language-only caption pick now lands on the full track before a sign-language or forced one.
+- Only the viewer's own caption pick is remembered.
+- The viewer's caption size now applies to ASS tracks and redraws when it changes.
+
 ## [2.2.3] — 2026-09-25
 
 ### Added
