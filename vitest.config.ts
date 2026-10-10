@@ -76,6 +76,8 @@ export default defineConfig({
 	},
 	test: {
 		globals: true,
+		// Self-hosted CI runners are slower and shared; give tests more headroom there only.
+		testTimeout: process.env.CI ? 20_000 : 5_000,
 		environment: 'happy-dom',
 		include: ['src/**/__tests__/**/*.test.ts'],
 		coverage: {

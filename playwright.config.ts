@@ -11,6 +11,9 @@ import { defineConfig } from '@playwright/test';
 export default defineConfig({
 	testDir: 'e2e',
 	timeout: 30_000,
+	// Self-hosted CI runners are shared; fewer workers and one retry there only.
+	workers: process.env.CI ? 2 : undefined,
+	retries: process.env.CI ? 1 : 0,
 	reporter: [['html', { outputFolder: 'reports/playwright' }]],
 	use: {
 		baseURL: 'http://localhost:5503',

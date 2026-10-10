@@ -16,6 +16,7 @@ jobs:
     # so `playwright install --with-deps` fails before a test runs
     # (nomercy-github-runner#14). Back to self-hosted once that is fixed.
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
 
