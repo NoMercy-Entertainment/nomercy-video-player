@@ -288,4 +288,43 @@ describe('LiveTranscodingPlugin — beforeLoad gate', () => {
 
 		expect(inst.transcodedTo()).toBe(0);
 	});
+
+	describe('holds the load for the transcoder', () => {
+		type Dispatch = (name: string, data: unknown) => Promise<{ prevented: boolean }>;
+		const item = { id: 'ep3', url: '/ep3.m3u8', progress: { timestamp: 0, percentage: 10, time: 30 } };
+
+		async function setup(): Promise<{ dispatch: () => Promise<{ prevented: boolean }>; emitProgress: (seconds: number) => void }> {
+			const channel = makeMockChannel();
+			const player = new NMVideoPlayer('test').setup({});
+			vi.spyOn(LiveTranscodingPlugin.prototype as unknown as { websocket: () => unknown }, 'websocket').mockReturnValue(channel);
+			player.addPlugin(liveTranscodingPlugin, { wsUrl: 'wss://transcode.example.com', seekTimeoutMs: 400, resumeAheadSeconds: 5 });
+			await player.ready();
+			const dispatchBefore = (player as unknown as { _dispatchBefore: Dispatch })._dispatchBefore.bind(player);
+			return {
+				dispatch: async () => dispatchBefore('beforeLoad', { item }),
+				emitProgress: (seconds) => { channel.triggerMessage({ type: 'progress', transcodedSeconds: seconds }); },
+			};
+		}
+
+		it('stays pending until the requested timestamp is transcoded', async () => {
+			const { dispatch, emitProgress } = await setup();
+			let settled = false;
+			const pending = dispatch().then((outcome) => { settled = true; return outcome; });
+
+			await new Promise<void>(resolve => setTimeout(resolve, 150));
+			expect(settled).toBe(false);
+
+			emitProgress(40);
+			const outcome = await pending;
+			expect(outcome.prevented).toBe(false);
+		});
+
+		it('gives up after seekTimeoutMs when the server sends nothing', async () => {
+			const { dispatch } = await setup();
+			const start = Date.now();
+			const outcome = await dispatch();
+			expect(outcome.prevented).toBe(false);
+			expect(Date.now() - start).toBeGreaterThanOrEqual(350);
+		});
+	});
 });

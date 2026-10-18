@@ -452,6 +452,13 @@ describe('V1VideoCompatPlugin', () => {
 			expect(player.hasPIP()).toBe(false);
 		});
 
+		it('hasPIP() is false when the pip controller reports no support', async () => {
+			const fake = buildFakePlatform({ fullscreen: true, pip: true });
+			vi.spyOn(fake.platform.pip!, 'isSupported').mockReturnValue(false);
+			const player = await buildCompatPlayer({ platform: fake.platform });
+			expect(player.hasPIP()).toBe(false);
+		});
+
 		it('setFloatingPlayer(active) delegates to pip()', async () => {
 			const fake = buildFakePlatform();
 			const player = await buildCompatPlayer({ platform: fake.platform });

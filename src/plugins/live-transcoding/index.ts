@@ -84,15 +84,16 @@ export class LiveTranscodingPlugin<T extends VideoPlaylistItem = VideoPlaylistIt
 			});
 		});
 
-		this.on('beforeLoad', async (event) => {
+		this.on('beforeLoad', (event) => {
 			const item = event?.data?.item;
 			if (!item)
 				return;
 			this._transcodedTo = 0;
 			this.currentJobId = String((item as { id?: unknown }).id ?? '');
-			// Gate is best-effort — when the server is offline we don't block
-			// the player; producers can wire stricter gating downstream.
-			await this.waitFor(0);
+			// The dispatcher ignores a listener's return value, so the gate only
+			// holds through event.delay(). waitFor() is bounded by seekTimeoutMs.
+			const resumeAt = (item as { progress?: { time?: number } }).progress?.time ?? 0;
+			event.delay(this.waitFor(resumeAt + (this.opts?.resumeAheadSeconds ?? 1)));
 		});
 
 		this.on('beforeSeek', async (event) => {
