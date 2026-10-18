@@ -46,11 +46,9 @@ interface DrmItemHint {
  * EME DRM coordination plugin. Handles license acquisition for Widevine /
  * FairPlay / PlayReady and routes HDCP / output-protection signals.
  *
- * Stub-but-loadable: registration + lifecycle is real, license fetch routing
- * (with optional `customSignRequest`) is real, but the actual EME key-system
- * handshake is gated behind `requestMediaKeySystemAccess` so JSDOM and other
- * environments without EME stay quiet. When the API is missing, an
- * `unsupported` event is emitted and the plugin exits cleanly.
+ * On an item with `drm`, it creates MediaKeys, binds them to the video element
+ * and answers each `encrypted` event with a license exchange. Failures emit
+ * `key:error`. Without EME it emits `unsupported` and exits cleanly.
  */
 export class DrmPlugin<T extends VideoPlaylistItem = VideoPlaylistItem> extends Plugin<NMVideoPlayer<T>, DrmOptions, DrmEvents> {
 	static override readonly id: string = 'drm';
@@ -58,6 +56,7 @@ export class DrmPlugin<T extends VideoPlaylistItem = VideoPlaylistItem> extends 
 	static override readonly description: string = 'EME DRM coordination — Widevine / FairPlay / PlayReady with HDCP signalling';
 
 	private supported = false;
+	private listening = false;
 
 	/** Probes EME availability and wires the `current` listener to trigger the key-system handshake. */
 	override use(): void {
@@ -80,6 +79,7 @@ export class DrmPlugin<T extends VideoPlaylistItem = VideoPlaylistItem> extends 
 	/** Resets EME support state on teardown. */
 	override dispose(): void {
 		this.supported = false;
+		this.listening = false;
 	}
 
 	/**
@@ -139,11 +139,26 @@ export class DrmPlugin<T extends VideoPlaylistItem = VideoPlaylistItem> extends 
 		return ve?.mediaKeys ?? null;
 	}
 
+	private openSession(keys: MediaKeys, event: MediaEncryptedEvent): void {
+		const session = keys.createSession();
+		const fail = (err: unknown): void => {
+			this.emit('key:error', { sessionId: session.sessionId, error: err instanceof Error ? err : new Error(String(err)) });
+		};
+		this.listen(session, 'message', (message) => {
+			this.exchangeLicense(session, (message as MediaKeyMessageEvent).message).catch(fail);
+		});
+		session.generateRequest(event.initDataType, event.initData as BufferSource).catch(fail);
+	}
+
+	private async exchangeLicense(session: MediaKeySession, challenge: ArrayBuffer): Promise<void> {
+		await session.update(await this.fetchLicense(challenge));
+	}
+
 	private async tryHandshake(keySystem: string | undefined): Promise<void> {
 		if (!this.supported || !keySystem)
 			return;
 		const nav = navigator as Navigator & {
-			requestMediaKeySystemAccess?: (keySystem: string, configs: MediaKeySystemConfiguration[]) => Promise<unknown>;
+			requestMediaKeySystemAccess?: (keySystem: string, configs: MediaKeySystemConfiguration[]) => Promise<MediaKeySystemAccess>;
 		};
 		if (typeof nav.requestMediaKeySystemAccess !== 'function') {
 			this.emit('unsupported', {
@@ -164,7 +179,16 @@ export class DrmPlugin<T extends VideoPlaylistItem = VideoPlaylistItem> extends 
 						audioCapabilities: [{ contentType: 'audio/mp4;codecs="mp4a.40.2"' }],
 						videoCapabilities: [{ contentType: 'video/mp4;codecs="avc1.42E01E"' }],
 					};
-			await nav.requestMediaKeySystemAccess(keySystem, [config]);
+			const access = await nav.requestMediaKeySystemAccess(keySystem, [config]);
+			const keys = await access.createMediaKeys();
+			const video = this.player.videoElement;
+			if (!video)
+				return;
+			await video.setMediaKeys(keys);
+			if (!this.listening) {
+				this.listening = true;
+				this.listen(video, 'encrypted', (event) => { this.openSession(keys, event as MediaEncryptedEvent); });
+			}
 		}
 		catch (err) {
 			this.emit('key:error', {
