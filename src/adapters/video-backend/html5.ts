@@ -187,6 +187,8 @@ export class Html5VideoBackend
 	 * tells a restarting server's 404 apart from a video that is genuinely gone.
 	 */
 	private _sawConnectionFailure = false;
+	/** The ladder was spent and the error escalated; a later fragment load clears it. */
+	private _networkErrorEscalated = false;
 	/**
 	 * True while the ladder is riding out a source the server stopped serving.
 	 *
@@ -301,6 +303,7 @@ export class Html5VideoBackend
 	async load(url: string, opts?: { preload?: HtmlPreloadMode; startTime?: number }): Promise<void> {
 		this.currentUrl = url;
 		this._hadError = false;
+		this._networkErrorEscalated = false;
 		this._ended = false;
 		this._state = 'loading';
 		this.emit('loadstart');
@@ -1034,6 +1037,7 @@ export class Html5VideoBackend
 		this._netRetryCount = 0;
 		this._mediaRecoveryStartMs = 0;
 		this._sawConnectionFailure = false;
+		this._networkErrorEscalated = false;
 		this._recoveringFromOutage = false;
 		if (this._onlineHandler !== undefined) {
 			globalThis.removeEventListener?.('online', this._onlineHandler);
@@ -1083,6 +1087,7 @@ export class Html5VideoBackend
 			// still deserves its session rather than a dead error overlay.
 			this._watchForConnectivityReturn();
 			this._recoveringFromOutage = false;
+			this._networkErrorEscalated = true;
 			this._escalateHlsError(data.details, `HLS network error after ${limit} retries: ${data.details}`);
 			return;
 		}
@@ -1233,6 +1238,11 @@ export class Html5VideoBackend
 		this.hls.on(Hls.Events.FRAG_LOADED, () => {
 			if (this._netRetryCount > 0)
 				this._netRetryCount = 0;
+			if (this._networkErrorEscalated) {
+				this._networkErrorEscalated = false;
+				this._hadError = false;
+				this._state = 'ready';
+			}
 		});
 	}
 

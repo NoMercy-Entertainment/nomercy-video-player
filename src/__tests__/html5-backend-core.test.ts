@@ -1283,6 +1283,37 @@ describe('HLS error recovery', () => {
 		vi.useRealTimers();
 	});
 
+	it('leaves the error state once fragments load again after the device is back online', async () => {
+		const hls = await loadHls();
+		vi.useFakeTimers();
+		try {
+			for (let attempt = 0; attempt <= SOURCE_OUTAGE_BACKOFF_MS.length; attempt++) {
+				hls.fire('hlsError', { fatal: true, type: 'networkError', details: 'manifestLoadError' });
+				await vi.runAllTimersAsync();
+			}
+			expect(backend.state()).toBe('error');
+
+			globalThis.dispatchEvent(new Event('online'));
+			expect(backend.state()).toBe('error');
+
+			hls.fire('hlsFragLoaded', {});
+			expect(backend.state()).not.toBe('error');
+		}
+		finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it('keeps the error state when a fragment loads after a media element error', async () => {
+		const hls = await loadHls();
+		const videoEl = container.querySelector('video') as HTMLVideoElement;
+
+		videoEl.dispatchEvent(new Event('error'));
+		hls.fire('hlsFragLoaded', {});
+
+		expect(backend.state()).toBe('error');
+	});
+
 	it('fails fast on a 404 that no connection failure preceded', async () => {
 		const hls = await loadHls();
 		vi.useFakeTimers();
