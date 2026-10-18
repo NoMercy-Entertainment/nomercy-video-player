@@ -1151,6 +1151,28 @@ describe('unload()', () => {
 		const last = cueEvents.at(-1) as { cues: unknown[] };
 		expect(last.cues).toEqual([]);
 	});
+
+	function attachCustomSource(): { destroy: ReturnType<typeof vi.fn> } {
+		const source = { attach: vi.fn(async () => {}), destroy: vi.fn() };
+		backend.setStreamResolver(() => source as never);
+		return source;
+	}
+
+	it('destroys a custom stream source on unload', async () => {
+		const source = attachCustomSource();
+		await backend.load('https://example.invalid/custom.bin');
+
+		backend.unload();
+		expect(source.destroy).toHaveBeenCalledOnce();
+	});
+
+	it('destroys a custom stream source on dispose, once', async () => {
+		const source = attachCustomSource();
+		await backend.load('https://example.invalid/custom.bin');
+
+		backend.dispose();
+		expect(source.destroy).toHaveBeenCalledOnce();
+	});
 });
 
 // ---------------------------------------------------------------------------

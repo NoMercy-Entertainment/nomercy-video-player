@@ -364,10 +364,7 @@ export class Html5VideoBackend
 		// A consumer's factory is asked first, because the branches below cover
 		// only HLS and whatever the element itself decodes. Nothing registered
 		// means nothing returned, and the built-in path runs untouched.
-		if (this._customSource) {
-			this._customSource.destroy();
-			this._customSource = undefined;
-		}
+		this._destroyCustomSource();
 
 		const customSource = this._streamResolver?.(url);
 		if (customSource) {
@@ -449,6 +446,7 @@ export class Html5VideoBackend
 			this.hls = undefined;
 			this.hlsInstance = undefined;
 		}
+		this._destroyCustomSource();
 		resetMediaElement(this.element);
 		this.currentUrl = undefined;
 		this.emitEmptySubtitleCue();
@@ -491,6 +489,11 @@ export class Html5VideoBackend
 
 	private _streamResolver?: StreamResolver;
 	private _customSource?: IStreamSource;
+
+	private _destroyCustomSource(): void {
+		this._customSource?.destroy();
+		this._customSource = undefined;
+	}
 
 	/**
 	 * Wire the lookup that asks the player's stream registry for a consumer's
