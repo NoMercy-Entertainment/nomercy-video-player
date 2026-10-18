@@ -289,14 +289,25 @@ export function applyAllVisibilityRules(
 	const RESERVED_CHROME_WIDTH = 148;
 	const availableWidth = Math.max(0, containerWidth - RESERVED_CHROME_WIDTH);
 
+	const breakpoints = resolveBreakpoints(opts);
+	const active = breakpoints.find(bp => containerWidth <= bp.maxWidth)
+		?? breakpoints[breakpoints.length - 1]!;
+
 	let accumulatedWidth = 0;
 	const visibleKeys: Array<keyof DesktopUiButtonOptions> = [];
 	const hiddenKeys: Array<keyof DesktopUiButtonOptions> = [];
 
-	for (const key of priority) {
+	for (const [rank, key] of priority.entries()) {
 		const btn = state.buttonMap[key];
 		if (!btn)
 			continue;
+
+		// Rank is the index in the priority list, counting keys without an element.
+		if (rank > active.hideAfterRank) {
+			btn.hidden = true;
+			hiddenKeys.push(key);
+			continue;
+		}
 
 		// Rule 2 — content gating: already hidden by capability logic, skip.
 		const contentHidden = btn.getAttribute('data-content-hidden') === 'true';
@@ -327,9 +338,6 @@ export function applyAllVisibilityRules(
 	}
 
 	// Emit layout:breakpoint for backwards-compat subscribers.
-	const breakpoints = resolveBreakpoints(opts);
-	const active = breakpoints.find(bp => containerWidth <= bp.maxWidth)
-		?? breakpoints[breakpoints.length - 1]!;
 	container.setAttribute('data-breakpoint', active.name);
 
 	if (active.name !== state.currentBreakpointName) {

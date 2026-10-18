@@ -174,6 +174,26 @@ describe('DesktopUiPlugin — progressive breakpoint system', () => {
 			expect(tinyTransition).toBeDefined();
 		});
 
+		it('hides buttons ranked past hideAfterRank even when the width has room', async () => {
+			const player = setup({
+				breakpoints: [
+					{ name: 'tiny', maxWidth: 1000, hideAfterRank: 0 },
+					{ name: 'full', maxWidth: Infinity, hideAfterRank: Infinity },
+				] satisfies Breakpoint[],
+			});
+			await player.ready();
+
+			const events: Array<LayoutBreakpointPayload> = [];
+			onBreakpoint(player, data => events.push(data));
+
+			simulateWidth(900); // 752 px free after chrome: the fit loop alone would show many buttons
+
+			const tiny = events.find(evt => evt.to === 'tiny');
+			expect(tiny).toBeDefined();
+			expect(tiny!.visibleButtons).toEqual(['play']);
+			expect(tiny!.hiddenButtons).toContain('mute');
+		});
+
 		it('sets data-breakpoint attribute on container after resize', async () => {
 			const player = setup();
 			await player.ready();
@@ -221,6 +241,11 @@ describe('DesktopUiPlugin — progressive breakpoint system', () => {
 				// seekBack/seekForward are opt-in; enable them so priority ordering
 				// can be demonstrated against them.
 				buttons: { seekBack: true, seekForward: true },
+				// No rank cutoff, so only the fit pass decides what shows.
+				breakpoints: [
+					{ name: 'sm', maxWidth: 480, hideAfterRank: Infinity },
+					{ name: 'xl', maxWidth: Infinity, hideAfterRank: Infinity },
+				] satisfies Breakpoint[],
 				buttonPriority: [
 					// fullscreen first — most important.
 					'fullscreen',
