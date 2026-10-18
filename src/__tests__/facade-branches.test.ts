@@ -272,6 +272,13 @@ describe('NMVideoPlayer — facade branches', () => {
 			expect(prefix.audioSelections).toEqual([1]);
 		});
 
+		it('applies defaultAudioLanguage when the backend publishes its audio list after mediaReady', async () => {
+			const probe = await buildTrackProbe({ defaultAudioLanguage: 'nl' }, [], ['en', 'nl']);
+			const backend = probe.player.backend() as unknown as { emit: (name: string, data: unknown) => void };
+			backend.emit('audioTracks', { tracks: [] });
+			expect(probe.audioSelections).toEqual([1]);
+		});
+
 		it('no configured default languages selects nothing', async () => {
 			const probe = await buildTrackProbe({}, ['en'], ['en']);
 			probe.player.emit('mediaReady' as any, {} as any);

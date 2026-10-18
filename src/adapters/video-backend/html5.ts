@@ -406,6 +406,10 @@ export class Html5VideoBackend
 				performance.mark('nm:backend:manifest-parsed');
 				this._emitHlsTrackLists();
 			});
+			// hls.js fills its audio list after the manifest parse, then fires this.
+			hlsInstance.on(Hls.Events.AUDIO_TRACKS_UPDATED, () => {
+				this._emitAudioTracks();
+			});
 
 			performance.mark('nm:backend:loadSource');
 			hlsInstance.loadSource(url);
@@ -1266,6 +1270,10 @@ export class Html5VideoBackend
 			this.emit('levels', { levels });
 		});
 
+		this._emitAudioTracks();
+	}
+
+	private _emitAudioTracks(): void {
 		const tracks = this.audioTracks();
 		if (tracks.length > 0)
 			this.emit('audioTracks', { tracks });

@@ -87,6 +87,7 @@ vi.mock('hls.js', () => {
 			FRAG_LOADED: 'hlsFragLoaded',
 			LEVEL_SWITCHED: 'hlsLevelSwitched',
 			FRAG_CHANGED: 'hlsFragChanged',
+			AUDIO_TRACKS_UPDATED: 'hlsAudioTracksUpdated',
 		};
 
 		static ErrorTypes: Record<string, string> = {
@@ -1489,6 +1490,32 @@ describe('MANIFEST_PARSED event handling', () => {
 		await flushMicrotasks();
 
 		expect(audioTrackEvents.length).toBeGreaterThan(0);
+	});
+
+	it('emits audioTracks when hls.js publishes its audio list after the manifest parse', async () => {
+		const loadPromise = backend.load('https://example.invalid/test.m3u8');
+		await flushMicrotasks();
+		const videoEl = container.querySelector('video') as HTMLVideoElement;
+		Object.defineProperty(videoEl, 'readyState', { value: 1, configurable: true });
+		videoEl.dispatchEvent(new Event('loadedmetadata'));
+		await loadPromise;
+
+		const hls = _hlsRegistry.lastInstance!;
+		const audioTrackEvents: Array<{ tracks: unknown[] }> = [];
+		backend.on('audioTracks', payload => audioTrackEvents.push(payload as { tracks: unknown[] }));
+
+		hls.fire('hlsManifestParsed', {});
+		await flushMicrotasks();
+		expect(audioTrackEvents).toHaveLength(0);
+
+		hls.audioTracks = [{ lang: 'en', name: 'English aac', default: true }];
+		hls.fire('hlsAudioTracksUpdated', {});
+		expect(audioTrackEvents).toHaveLength(1);
+		expect(audioTrackEvents[0]!.tracks).toHaveLength(1);
+
+		hls.audioTracks = [{ lang: 'en', name: 'English aac', default: true }, { lang: 'nl', name: 'Dutch', default: false }];
+		hls.fire('hlsAudioTracksUpdated', {});
+		expect(audioTrackEvents).toHaveLength(2);
 	});
 });
 

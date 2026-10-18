@@ -842,6 +842,8 @@ export class NMVideoPlayer<T extends VideoPlaylistItem = VideoPlaylistItem>
 			if (!data)
 				return;
 			this.emit('audioTracks', data);
+			// The list can arrive after mediaReady, when the defaults found nothing.
+			this._selectDefaultAudio();
 		});
 
 		return instance;
