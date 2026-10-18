@@ -87,6 +87,7 @@ vi.mock('hls.js', () => {
 			FRAG_LOADED: 'hlsFragLoaded',
 			LEVEL_SWITCHED: 'hlsLevelSwitched',
 			FRAG_CHANGED: 'hlsFragChanged',
+			AUDIO_TRACKS_UPDATED: 'hlsAudioTracksUpdated',
 		};
 
 		static ErrorTypes: Record<string, string> = {
@@ -1151,6 +1152,28 @@ describe('unload()', () => {
 		const last = cueEvents.at(-1) as { cues: unknown[] };
 		expect(last.cues).toEqual([]);
 	});
+
+	function attachCustomSource(): { destroy: ReturnType<typeof vi.fn> } {
+		const source = { attach: vi.fn(async () => {}), destroy: vi.fn() };
+		backend.setStreamResolver(() => source as never);
+		return source;
+	}
+
+	it('destroys a custom stream source on unload', async () => {
+		const source = attachCustomSource();
+		await backend.load('https://example.invalid/custom.bin');
+
+		backend.unload();
+		expect(source.destroy).toHaveBeenCalledOnce();
+	});
+
+	it('destroys a custom stream source on dispose, once', async () => {
+		const source = attachCustomSource();
+		await backend.load('https://example.invalid/custom.bin');
+
+		backend.dispose();
+		expect(source.destroy).toHaveBeenCalledOnce();
+	});
 });
 
 // ---------------------------------------------------------------------------
@@ -1259,6 +1282,37 @@ describe('HLS error recovery', () => {
 
 		hls.fire('hlsFragLoaded', {});
 		vi.useRealTimers();
+	});
+
+	it('leaves the error state once fragments load again after the device is back online', async () => {
+		const hls = await loadHls();
+		vi.useFakeTimers();
+		try {
+			for (let attempt = 0; attempt <= SOURCE_OUTAGE_BACKOFF_MS.length; attempt++) {
+				hls.fire('hlsError', { fatal: true, type: 'networkError', details: 'manifestLoadError' });
+				await vi.runAllTimersAsync();
+			}
+			expect(backend.state()).toBe('error');
+
+			globalThis.dispatchEvent(new Event('online'));
+			expect(backend.state()).toBe('error');
+
+			hls.fire('hlsFragLoaded', {});
+			expect(backend.state()).not.toBe('error');
+		}
+		finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it('keeps the error state when a fragment loads after a media element error', async () => {
+		const hls = await loadHls();
+		const videoEl = container.querySelector('video') as HTMLVideoElement;
+
+		videoEl.dispatchEvent(new Event('error'));
+		hls.fire('hlsFragLoaded', {});
+
+		expect(backend.state()).toBe('error');
 	});
 
 	it('fails fast on a 404 that no connection failure preceded', async () => {
@@ -1436,6 +1490,32 @@ describe('MANIFEST_PARSED event handling', () => {
 		await flushMicrotasks();
 
 		expect(audioTrackEvents.length).toBeGreaterThan(0);
+	});
+
+	it('emits audioTracks when hls.js publishes its audio list after the manifest parse', async () => {
+		const loadPromise = backend.load('https://example.invalid/test.m3u8');
+		await flushMicrotasks();
+		const videoEl = container.querySelector('video') as HTMLVideoElement;
+		Object.defineProperty(videoEl, 'readyState', { value: 1, configurable: true });
+		videoEl.dispatchEvent(new Event('loadedmetadata'));
+		await loadPromise;
+
+		const hls = _hlsRegistry.lastInstance!;
+		const audioTrackEvents: Array<{ tracks: unknown[] }> = [];
+		backend.on('audioTracks', payload => audioTrackEvents.push(payload as { tracks: unknown[] }));
+
+		hls.fire('hlsManifestParsed', {});
+		await flushMicrotasks();
+		expect(audioTrackEvents).toHaveLength(0);
+
+		hls.audioTracks = [{ lang: 'en', name: 'English aac', default: true }];
+		hls.fire('hlsAudioTracksUpdated', {});
+		expect(audioTrackEvents).toHaveLength(1);
+		expect(audioTrackEvents[0]!.tracks).toHaveLength(1);
+
+		hls.audioTracks = [{ lang: 'en', name: 'English aac', default: true }, { lang: 'nl', name: 'Dutch', default: false }];
+		hls.fire('hlsAudioTracksUpdated', {});
+		expect(audioTrackEvents).toHaveLength(2);
 	});
 });
 
