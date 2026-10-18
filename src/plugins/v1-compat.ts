@@ -415,7 +415,7 @@ export class V1VideoCompatPlugin extends Plugin<NMVideoPlayer> {
 
 		player.hasPIP = (): boolean => {
 			warn('hasPIP');
-			return player.platform().pip !== undefined;
+			return player.platform().pip?.isSupported() ?? false;
 		};
 
 		player.setFloatingPlayer = (active: boolean): void => {
