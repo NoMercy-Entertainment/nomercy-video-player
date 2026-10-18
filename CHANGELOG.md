@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [2.2.6] — 2026-10-18
+
+### Fixed
+
+- Core 2.2.6: the 50 fixes listed in the core changelog.
+- DRM: MediaKeys are created and bound, and the license exchange runs.
+- Captions: the ASS renderer keeps its per-item font cache across subtitle loads, resolves manifest font URLs, reports fonts that fail, and drops a load that is no longer the active request; the Subtitle Settings back arrow returns to the main menu.
+- Streams: `audioTracks` is emitted when hls.js publishes its audio list; the player leaves the error state when fragments load after an outage; a custom stream source is destroyed on unload and dispose; live transcoding holds `beforeLoad` until the transcoder reaches the resume point.
+- UI: breakpoint `hideAfterRank` applies to button visibility; the TV aspect-ratio toast has a duration; `hasPIP()` asks the pip controller whether it is supported.
+
 ## [2.2.5] — 2026-10-08
 
 ### Changed
