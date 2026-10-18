@@ -403,6 +403,9 @@ function buildPlaylistPaneShell(
 	return root;
 }
 
+/** Back handler for the Subtitle Settings pane while a property picker is showing. */
+const pickerBack = new WeakMap<HTMLDivElement, () => void>();
+
 function buildSubMenuPane(
 	player: IVideoPlayer,
 	parent: HTMLElement,
@@ -421,6 +424,10 @@ function buildSubMenuPane(
 		.appendTo(pane)
 		.get();
 
+	const paneActions: MenuActions = id === 'subtitleSettings'
+		? { ...actions, backToMain: () => (pickerBack.get(pane) ?? actions.backToMain)() }
+		: actions;
+
 	buildSubMenuHeader(
 		player,
 		header,
@@ -429,7 +436,7 @@ function buildSubMenuPane(
 		title,
 		undefined,
 		listen,
-		actions,
+		paneActions,
 	);
 
 	createElement('div', `${id}-scroll-container`)
@@ -693,6 +700,12 @@ export function renderSubtitleSettingsPane(
 		return;
 	scroll.replaceChildren();
 
+	// Back from the list goes to the main menu; a picker visit or a close from a picker leaves both stale.
+	pickerBack.delete(pane);
+	const titleEl = pane.querySelector<HTMLSpanElement>('.menu-header .menu-button-text');
+	if (titleEl)
+		titleEl.textContent = player.t('plugin.desktop-ui.menu.subtitleSettings');
+
 	const style = readSubtitleStyle(player);
 
 	for (const row of SETTING_ROWS) {
@@ -745,23 +758,7 @@ function renderSubtitlePropertyPane(
 	const titleEl = header?.querySelector<HTMLSpanElement>('.menu-button-text');
 	if (titleEl)
 		titleEl.textContent = label;
-	const back = header?.querySelector<HTMLButtonElement>('.menu-header-back');
-	if (back) {
-		// Override the back-to-main behavior on this pane to return to
-		// the settings rows. Clone-replace the listener so a fresh
-		// closure runs even on subsequent clicks.
-		const fresh = back.cloneNode(true) as HTMLButtonElement;
-		back.replaceWith(fresh);
-		listen(fresh, 'click', (event: Event) => {
-			event.stopPropagation();
-			if (titleEl)
-				titleEl.textContent = player.t('plugin.desktop-ui.menu.subtitleSettings');
-			renderSubtitleSettingsPane(pane, player, listen, onPick);
-			// Restore the default back-to-main behavior on the next
-			// mount of the back button (handled by buildSubMenuPane on
-			// next pane open).
-		});
-	}
+	pickerBack.set(pane, () => renderSubtitleSettingsPane(pane, player, listen, onPick));
 
 	const scroll = pane.querySelector<HTMLDivElement>('.subtitleSettings-scroll-container');
 	if (!scroll)

@@ -227,13 +227,14 @@ export class TvKeyHandlerPlugin<T extends VideoPlaylistItem = VideoPlaylistItem>
 	 * prefer the event surface.
 	 */
 	private osdMessage(text: string, durationMs?: number): void {
+		const ms = durationMs ?? 3000;
 		const msg = this.player.getPlugin(MessagePlugin);
 		if (msg) {
-			msg.show(text, durationMs ?? 3000);
+			msg.show(text, ms);
 		}
 
 		try {
-			this.player.emit('display-message', { text, ms: durationMs });
+			this.player.emit('display-message', { text, ms });
 		}
 		catch { /* swallow — consumer may not listen */ }
 	}
