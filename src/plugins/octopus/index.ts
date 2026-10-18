@@ -116,6 +116,8 @@ export class OctopusPlugin<T extends VideoPlaylistItem = VideoPlaylistItem> exte
 
 	private instance: SubtitleOctopusInstance | null = null;
 	private currentLoadedUrl: string | null = null;
+	/** Bumped by every load() and destroy(); a load that sees a newer value is stale. */
+	private loadSeq = 0;
 	/** Cached constructor from the dynamic import. `null` = import failed (degraded). `undefined` = not yet attempted. */
 	private _ctor: SubtitleOctopusCtor | null | undefined = undefined;
 	/** Memoised font name→blobUrl map for the active playlist item. Null = not yet fetched. */
@@ -423,6 +425,7 @@ export class OctopusPlugin<T extends VideoPlaylistItem = VideoPlaylistItem> exte
 
 		this.destroy();
 		this.currentLoadedUrl = url;
+		const seq = this.loadSeq;
 
 		const OctopusCtor = await this.loadCtor();
 		if (!OctopusCtor) {
@@ -432,12 +435,16 @@ export class OctopusPlugin<T extends VideoPlaylistItem = VideoPlaylistItem> exte
 		}
 
 		try {
-			if (this.currentLoadedUrl !== url)
+			if (seq !== this.loadSeq)
 				return;
 
 			const subResolved = prefetched ?? (await this.resolveUrl(url, 'subtitle'));
 			const subContent = await this.fetch(subResolved.href);
 			const availableFonts = await this.resolveFontsForCurrent();
+
+			// A newer load or destroy() ran during the awaits above.
+			if (seq !== this.loadSeq)
+				return;
 
 			const videoEl = this.player.videoElement;
 			if (!videoEl)
@@ -476,6 +483,8 @@ export class OctopusPlugin<T extends VideoPlaylistItem = VideoPlaylistItem> exte
 			});
 		}
 		catch (error) {
+			if (seq !== this.loadSeq)
+				return;
 			this.currentLoadedUrl = null;
 			this.report({
 				code: 'plugin:octopus/load-failed',
@@ -487,6 +496,7 @@ export class OctopusPlugin<T extends VideoPlaylistItem = VideoPlaylistItem> exte
 	}
 
 	private destroy(): void {
+		this.loadSeq++;
 		this.currentLoadedUrl = null;
 		this.trackSource = null;
 		this.revokeOwnedBlobs();
