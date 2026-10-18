@@ -41,6 +41,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { NMVideoPlayer } from '../../index';
 import {
+	buildMenuFrame,
 	renderAspectRatioPane,
 	renderAudioPane,
 	renderSubtitleSettingsPane,
@@ -376,6 +377,54 @@ describe('renderSubtitleSettingsPane — Reset row', () => {
 
 		// writeSubtitleStyle calls player.subtitleStyle(patch) — patch must be set
 		expect(writtenPatch).toBeDefined();
+	});
+});
+
+describe('renderSubtitleSettingsPane — back arrow', () => {
+	beforeEach(() => resetAndMount());
+	afterEach(() => cleanup());
+
+	async function mountPane(): Promise<{ pane: HTMLDivElement; backToMain: ReturnType<typeof vi.fn>; rerender: () => void }> {
+		const player = new NMVideoPlayer('test').setup({});
+		await player.ready();
+		Object.assign(player, { subtitleStyle: () => ({ fontSize: 100, fontFamily: 'sans-serif', textColor: 'white' }) });
+
+		const backToMain = vi.fn();
+		const menus = buildMenuFrame(
+			player as never,
+			document.body,
+			realListen,
+			{ closeMenu: () => {}, openSubMenu: () => {}, backToMain },
+		);
+		const pane = menus.panes.subtitleSettings;
+		const rerender = (): void => renderSubtitleSettingsPane(pane, player as never, realListen, () => {});
+		rerender();
+		return { pane, backToMain, rerender };
+	}
+
+	const back = (pane: HTMLDivElement): HTMLButtonElement => pane.querySelector<HTMLButtonElement>('.menu-header-back')!;
+	const title = (pane: HTMLDivElement): string => pane.querySelector('.menu-header .menu-button-text')!.textContent ?? '';
+
+	it('goes to the main menu after a property picker visit', async () => {
+		const { pane, backToMain } = await mountPane();
+
+		pane.querySelector<HTMLButtonElement>('.subtitleSettings-scroll-container button')!.click();
+		back(pane).click(); // picker -> list
+		expect(backToMain).not.toHaveBeenCalled();
+
+		back(pane).click(); // list -> main
+		expect(backToMain).toHaveBeenCalledTimes(1);
+	});
+
+	it('resets the header title when the pane opens again from a picker', async () => {
+		const { pane, rerender } = await mountPane();
+		const listTitle = title(pane);
+
+		pane.querySelector<HTMLButtonElement>('.subtitleSettings-scroll-container button')!.click();
+		expect(title(pane)).not.toBe(listTitle);
+
+		rerender();
+		expect(title(pane)).toBe(listTitle);
 	});
 });
 
