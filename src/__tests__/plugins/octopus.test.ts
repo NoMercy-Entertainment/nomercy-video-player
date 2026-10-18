@@ -304,7 +304,7 @@ describe('OctopusPlugin', () => {
 			expect(blobUrls.length).toBeGreaterThan(0);
 		});
 
-		it('revokes blob URLs when destroy() is called', async () => {
+		it('keeps blob URLs when the track is turned off and revokes them when the item changes', async () => {
 			mockText('[Script Info]\n\n[Events]\n');
 			mockJson([{ file: 'A.ttf' }]);
 			mockBinary([1, 2]);
@@ -323,6 +323,9 @@ describe('OctopusPlugin', () => {
 			expect(blobUrls.length).toBeGreaterThan(0);
 
 			await inst.subtitle(null);
+			expect(blobUrls.length).toBeGreaterThan(0);
+
+			(player as any).emit('item', { item: {}, index: 0 });
 			expect(blobUrls).toHaveLength(0);
 		});
 	});

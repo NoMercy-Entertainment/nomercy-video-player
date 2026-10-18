@@ -122,7 +122,8 @@ export class OctopusPlugin<T extends VideoPlaylistItem = VideoPlaylistItem> exte
 	private _ctor: SubtitleOctopusCtor | null | undefined = undefined;
 	/** Memoised font name→blobUrl map for the active playlist item. Null = not yet fetched. */
 	private _availableFontsForCurrent: Record<string, string> | null = null;
-	/** Blob URLs created during load — revoked in destroy() to avoid memory leaks. */
+	private fontsEpoch = 0;
+	/** Blob URLs created during load — revoked in resetFonts() to avoid memory leaks. */
 	private ownedBlobs: string[] = [];
 	/** The track as fetched, before the viewer's size is applied. Null when nothing is shown. */
 	private trackSource: string | null = null;
@@ -166,15 +167,19 @@ export class OctopusPlugin<T extends VideoPlaylistItem = VideoPlaylistItem> exte
 
 		this.on('item', () => {
 			this.destroy();
-			this._availableFontsForCurrent = null;
+			this.resetFonts();
 		});
 
-		this.lifecycle.addCleanup(() => this.destroy());
+		this.lifecycle.addCleanup(() => {
+			this.destroy();
+			this.resetFonts();
+		});
 	}
 
 	/** Disposes the libass renderer instance and clears internal URL and font caches. */
 	override dispose(): void {
 		this.destroy();
+		this.resetFonts();
 	}
 
 	/**
@@ -214,7 +219,7 @@ export class OctopusPlugin<T extends VideoPlaylistItem = VideoPlaylistItem> exte
 				: (this.opts?.fonts ?? []);
 		}
 		this.opts = mergeConfig<OctopusOptions>(this.opts ?? {}, { fonts: urls });
-		this._availableFontsForCurrent = null;
+		this.resetFonts();
 		const url = this.currentLoadedUrl;
 		if (url) {
 			this.destroy();
@@ -322,6 +327,13 @@ export class OctopusPlugin<T extends VideoPlaylistItem = VideoPlaylistItem> exte
 	private async resolveFontsForCurrent(): Promise<Record<string, string>> {
 		if (this._availableFontsForCurrent)
 			return this._availableFontsForCurrent;
+		const epoch = this.fontsEpoch;
+		// Memoise only if the item did not change while the fonts downloaded.
+		const remember = (map: Record<string, string>): Record<string, string> => {
+			if (epoch === this.fontsEpoch)
+				this._availableFontsForCurrent = map;
+			return map;
+		};
 
 		const item = this.player.item?.();
 
@@ -335,9 +347,7 @@ export class OctopusPlugin<T extends VideoPlaylistItem = VideoPlaylistItem> exte
 		const directFiles = typedFonts.filter(entry => !isManifest(entry.file)).map(entry => entry.file);
 
 		if (!manifestUrl && directFiles.length === 0) {
-			const fallbackMap = await this.buildFontMap(this.opts?.fonts ?? []);
-			this._availableFontsForCurrent = fallbackMap;
-			return this._availableFontsForCurrent;
+			return remember(await this.buildFontMap(this.opts?.fonts ?? []));
 		}
 
 		const fontUrls: string[] = [];
@@ -369,8 +379,7 @@ export class OctopusPlugin<T extends VideoPlaylistItem = VideoPlaylistItem> exte
 		for (const file of directFiles)
 			fontUrls.push(await this.resolveFontUrl(file));
 
-		this._availableFontsForCurrent = await this.buildFontMap([...fontUrls, ...(this.opts?.fonts ?? [])]);
-		return this._availableFontsForCurrent;
+		return remember(await this.buildFontMap([...fontUrls, ...(this.opts?.fonts ?? [])]));
 	}
 
 	/**
@@ -511,8 +520,6 @@ export class OctopusPlugin<T extends VideoPlaylistItem = VideoPlaylistItem> exte
 		this.loadSeq++;
 		this.currentLoadedUrl = null;
 		this.trackSource = null;
-		this.revokeOwnedBlobs();
-		this._availableFontsForCurrent = null;
 		const inst = this.instance;
 		this.instance = null;
 		if (!inst)
@@ -523,6 +530,13 @@ export class OctopusPlugin<T extends VideoPlaylistItem = VideoPlaylistItem> exte
 		catch {
 			// Defensive — never let a teardown error escape the player.
 		}
+	}
+
+	/** Drops the per-item font map and its blob URLs. Called when the item changes or the plugin goes away. */
+	private resetFonts(): void {
+		this.fontsEpoch++;
+		this.revokeOwnedBlobs();
+		this._availableFontsForCurrent = null;
 	}
 
 	private revokeOwnedBlobs(): void {

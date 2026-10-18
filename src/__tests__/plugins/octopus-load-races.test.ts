@@ -48,7 +48,7 @@ function text(body: string): Response {
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
 	let resolve!: (value: T) => void;
-	const promise = new Promise<T>((r) => { resolve = r; });
+	const promise = new Promise<T>((settle) => { resolve = settle; });
 	return { promise, resolve };
 }
 
@@ -146,6 +146,64 @@ describe('OctopusPlugin — stale load', () => {
 	});
 });
 
+describe('OctopusPlugin — font reuse across loads', () => {
+	const fontUrl = 'https://cdn.example.com/f/a.ttf';
+
+	function fontCount(url: string): number {
+		return fetchedUrls.filter(fetched => fetched === url).length;
+	}
+
+	async function pluginWithItem(holder: { item: unknown }): Promise<{ player: NMVideoPlayer; plugin: OctopusPlugin }> {
+		const player = setup();
+		(player as unknown as PlayerInternal).item = () => holder.item;
+		player.addPlugin(octopusPlugin);
+		await player.ready();
+		return { player, plugin: player.getPlugin(OctopusPlugin)! };
+	}
+
+	it('fetches each font once for two tracks of the same item', async () => {
+		route(url => text(url.endsWith('.ttf') ? 'font' : '[Script Info]'));
+		const { plugin } = await pluginWithItem({ item: { fonts: [{ file: fontUrl }] } });
+
+		await plugin.subtitle('https://cdn.example.com/a.ass');
+		await plugin.subtitle('https://cdn.example.com/b.ass');
+		await plugin.subtitle(null);
+		await plugin.subtitle('https://cdn.example.com/a.ass');
+
+		expect(octopusCalls).toHaveLength(3);
+		expect(fontCount(fontUrl)).toBe(1);
+	});
+
+	it('fetches the fonts again once the item changes', async () => {
+		route(url => text(url.endsWith('.ttf') ? 'font' : '[Script Info]'));
+		const { player, plugin } = await pluginWithItem({ item: { fonts: [{ file: fontUrl }] } });
+
+		await plugin.subtitle('https://cdn.example.com/a.ass');
+		player.emit('item' as never, { item: {}, index: 1 } as never);
+		await plugin.subtitle('https://cdn.example.com/a.ass');
+
+		expect(fontCount(fontUrl)).toBe(2);
+	});
+
+	it('does not keep fonts that finished downloading after the item changed', async () => {
+		const slowFont = deferred<string>();
+		route(url => (url.endsWith('/a.ttf') ? slowFont.promise.then(text) : text(url.endsWith('.ttf') ? 'font' : '[Script Info]')));
+		const holder = { item: { fonts: [{ file: fontUrl }] } as unknown };
+		const { player, plugin } = await pluginWithItem(holder);
+
+		const stale = plugin.subtitle('https://cdn.example.com/a.ass');
+		await vi.waitFor(() => expect(fontCount(fontUrl)).toBe(1));
+		holder.item = { fonts: [{ file: 'https://cdn.example.com/f/b.ttf' }] };
+		player.emit('item' as never, { item: {}, index: 1 } as never);
+		slowFont.resolve('font');
+		await stale;
+		await plugin.subtitle('https://cdn.example.com/a.ass');
+
+		expect(octopusCalls).toHaveLength(1);
+		expect(Object.keys(octopusCalls[0]!.availableFonts as object)).toEqual(['b']);
+	});
+});
+
 describe('OctopusPlugin — manifest fonts', () => {
 	function manifestPlayer(): NMVideoPlayer {
 		const player = new NMVideoPlayer('test').setup({ baseUrl: 'https://server.test' } as never);
@@ -184,7 +242,7 @@ describe('OctopusPlugin — manifest fonts', () => {
 		player.addPlugin(octopusPlugin);
 		await player.ready();
 		const plugin = player.getPlugin(OctopusPlugin)!;
-		const report = vi.spyOn(plugin as unknown as { report: (r: unknown) => void }, 'report');
+		const report = vi.spyOn(plugin as unknown as { report: (entry: unknown) => void }, 'report');
 		await plugin.subtitle('https://server.test/sub.ass');
 
 		expect(report).toHaveBeenCalledWith(expect.objectContaining({
