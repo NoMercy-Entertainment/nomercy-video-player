@@ -145,3 +145,51 @@ describe('OctopusPlugin — stale load', () => {
 		expect(octopusCalls).toHaveLength(1);
 	});
 });
+
+describe('OctopusPlugin — manifest fonts', () => {
+	function manifestPlayer(): NMVideoPlayer {
+		const player = new NMVideoPlayer('test').setup({ baseUrl: 'https://server.test' } as never);
+		(player as unknown as PlayerInternal).videoElement = document.createElement('video');
+		const item = { fonts: [{ file: '/api/fonts/fonts.json' }] };
+		(player as unknown as PlayerInternal).item = () => item;
+		return player;
+	}
+
+	it('fetches manifest-derived fonts through the player base URL', async () => {
+		route((url) => {
+			if (url.endsWith('fonts.json'))
+				return text(JSON.stringify([{ file: 'Inter.ttf' }]));
+			return text('data');
+		});
+
+		const player = manifestPlayer();
+		player.addPlugin(octopusPlugin);
+		await player.ready();
+		await player.getPlugin(OctopusPlugin)!.subtitle('https://server.test/sub.ass');
+
+		expect(fetchedUrls).toContain('https://server.test/api/fonts/fonts.json');
+		expect(fetchedUrls).toContain('https://server.test/api/fonts/Inter.ttf');
+	});
+
+	it('reports a font that failed to download', async () => {
+		route((url) => {
+			if (url.endsWith('fonts.json'))
+				return text(JSON.stringify([{ file: 'Inter.ttf' }]));
+			if (url.endsWith('Inter.ttf'))
+				return Promise.reject(new Error('network failure'));
+			return text('[Script Info]');
+		});
+
+		const player = manifestPlayer();
+		player.addPlugin(octopusPlugin);
+		await player.ready();
+		const plugin = player.getPlugin(OctopusPlugin)!;
+		const report = vi.spyOn(plugin as unknown as { report: (r: unknown) => void }, 'report');
+		await plugin.subtitle('https://server.test/sub.ass');
+
+		expect(report).toHaveBeenCalledWith(expect.objectContaining({
+			code: 'plugin:octopus/font-load-failed',
+			severity: 'warning',
+		}));
+	});
+});

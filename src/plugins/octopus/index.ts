@@ -351,7 +351,8 @@ export class OctopusPlugin<T extends VideoPlaylistItem = VideoPlaylistItem> exte
 					: [];
 
 				const baseFolder = manifestUrl.replace(/\/[^/]*$/u, '');
-				fontUrls.push(...validEntries.map(entry => `${baseFolder}/${entry.file}`));
+				for (const entry of validEntries)
+					fontUrls.push(await this.resolveFontUrl(`${baseFolder}/${entry.file}`));
 			}
 			catch (error) {
 				this.report({
@@ -365,14 +366,8 @@ export class OctopusPlugin<T extends VideoPlaylistItem = VideoPlaylistItem> exte
 
 		// Direct font paths are server-relative on the wire — resolve through
 		// the player's url pipeline (baseUrl + auth transform) before fetching.
-		for (const file of directFiles) {
-			try {
-				fontUrls.push((await this.resolveUrl(file, 'font')).href);
-			}
-			catch {
-				fontUrls.push(file);
-			}
-		}
+		for (const file of directFiles)
+			fontUrls.push(await this.resolveFontUrl(file));
 
 		this._availableFontsForCurrent = await this.buildFontMap([...fontUrls, ...(this.opts?.fonts ?? [])]);
 		return this._availableFontsForCurrent;
@@ -400,9 +395,16 @@ export class OctopusPlugin<T extends VideoPlaylistItem = VideoPlaylistItem> exte
 		);
 
 		const map: Record<string, string> = {};
-		for (const result of entries) {
-			if (result.status !== 'fulfilled')
+		for (const [index, result] of entries.entries()) {
+			if (result.status !== 'fulfilled') {
+				this.report({
+					code: 'plugin:octopus/font-load-failed',
+					severity: 'warning',
+					context: { fontUrl: urls[index] },
+					cause: result.reason,
+				});
 				continue;
+			}
 			const [names, blobUrl] = result.value;
 			for (const name of names) {
 				// First font to claim a name keeps it — attachment order decides,
@@ -411,6 +413,16 @@ export class OctopusPlugin<T extends VideoPlaylistItem = VideoPlaylistItem> exte
 			}
 		}
 		return map;
+	}
+
+	/** Font paths are server-relative on the wire; fall back to the raw path if the resolver throws. */
+	private async resolveFontUrl(file: string): Promise<string> {
+		try {
+			return (await this.resolveUrl(file, 'font')).href;
+		}
+		catch {
+			return file;
+		}
 	}
 
 	private fontNameFromUrl(url: string): string {
