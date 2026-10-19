@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [2.2.7] — 2026-10-19
+
+### Changed
+
+- Pin `@nomercy-entertainment/nomercy-player-core` 2.2.7 (the trio releases at one version).
+
 ## [2.2.6] — 2026-10-18
 
 ### Fixed
