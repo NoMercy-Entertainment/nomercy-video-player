@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [2.2.8] — 2026-10-21
+
+### Fixed
+
+- The playlist's season rail lists specials (season 0) after the last season, labeled "Extras" instead of "Season 0".
+
 ## [2.2.7] — 2026-10-19
 
 ### Changed
