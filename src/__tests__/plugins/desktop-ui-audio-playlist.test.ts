@@ -487,6 +487,24 @@ describe('renderPlaylistPane — seasonal queue', () => {
 		expect(seasonBtns.length).toBe(2);
 	});
 
+	// Stoney, 2026-10-21: "Extras come after last season in the playlist."
+	it('lists Extras (season 0) after the last season, labeled Extras', async () => {
+		const player = await makePlayer();
+		const pane = player.container.querySelector<HTMLDivElement>('.playlist-menu')!;
+		const queue = [
+			{ id: 1, title: 'S1E1', season: 1, episode: 1 },
+			{ id: 2, title: 'S2E1', season: 2, episode: 1 },
+			{ id: 3, title: 'Special', season: 0, episode: 1 },
+		];
+		Object.assign(player, { queue: () => queue, index: () => 0 });
+
+		renderPlaylistPane(pane, player, (target, event, fn) => target.addEventListener(event, fn), () => {});
+
+		const ids = Array.from(pane.querySelectorAll('[id^="season-button-"]')).map(btn => btn.id);
+		expect(ids).toEqual(['season-button-1', 'season-button-2', 'season-button-0']);
+		expect(pane.querySelector('#season-button-0')?.textContent).toBe(player.t('plugin.desktop-ui.token.extras'));
+	});
+
 	it('renders only episodes for the active season initially', async () => {
 		const player = await makePlayer();
 		const container = player.container;

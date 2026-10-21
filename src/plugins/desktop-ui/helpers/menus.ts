@@ -866,14 +866,18 @@ export function renderPlaylistPane(
 
 	pane.classList.remove('playlist-flat');
 
-	const seasons = Array.from(new Set(queue.map(item => item.season).filter((season): season is number => typeof season === 'number'))).sort((itemA, itemB) => itemA - itemB);
+	// Specials (season 0) come after the last season, as in the playlist.
+	const seasons = Array.from(new Set(queue.map(item => item.season).filter((season): season is number => typeof season === 'number')))
+		.sort((itemA, itemB) => Number(itemA === 0) - Number(itemB === 0) || itemA - itemB);
 	const currentItem = queue[curIdx];
 	const activeSeason = typeof currentItem?.season === 'number' ? currentItem.season : (seasons[0] ?? 1);
 
 	if (seasonScroll) {
 		seasonScroll.replaceChildren();
 		for (const sNum of seasons) {
-			const seasonLabel = player.t('plugin.desktop-ui.menu.season', { number: String(sNum) });
+			const seasonLabel = sNum === 0
+				? player.t('plugin.desktop-ui.token.extras')
+				: player.t('plugin.desktop-ui.menu.season', { number: String(sNum) });
 			const btn = createButton(`season-button-${sNum}`, seasonLabel, () => {});
 			btn.classList.add('language-button');
 			if (sNum === activeSeason)
