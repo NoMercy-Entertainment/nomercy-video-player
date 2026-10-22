@@ -13,16 +13,17 @@ Thanks for your interest in `@nomercy-entertainment/nomercy-video-player`. This 
 ```bash
 git clone https://github.com/NoMercy-Entertainment/nomercy-video-player.git
 cd nomercy-video-player
-npm install
-npm test          # vitest run (unit tests must pass)
-npm run typecheck # tsc --noEmit
-npm run build     # writes dist/
+corepack enable   # once; picks yarn 4 from package.json
+yarn install
+yarn test         # vitest run (unit tests must pass)
+yarn typecheck    # tsc --noEmit
+yarn build        # writes dist/
 ```
 
 The package also has a real-browser e2e suite built with Playwright:
 
 ```bash
-npm run test:e2e  # runs pretest:e2e (generates fixtures via the NoMercy ffmpeg fork) then npx playwright test
+yarn test:e2e     # runs pretest:e2e (generates fixtures via the NoMercy ffmpeg fork) then playwright test
 ```
 
 The `pretest:e2e` step downloads and runs the NoMercy ffmpeg fork to produce short test media files. The generated fixtures go into `e2e/media/` and are not committed. Running `test:e2e` for the first time may take a few minutes on a slow connection.
@@ -32,7 +33,7 @@ The `pretest:e2e` step downloads and runs the NoMercy ffmpeg fork to produce sho
 - Branch off `master`. Feature branches: `feat/<short-description>`. Fixes: `fix/<short-description>`.
 - Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/) (`feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `perf`, `ci`). Imperative, lowercase subject, no trailing period.
 - Tests required for new features. Bug fixes should include a regression test.
-- Run `npm run lint:fix` before pushing. CI rejects lint failures.
+- Run `yarn lint:fix` before pushing. CI rejects lint failures.
 - No `Co-Authored-By` trailers unless we paired live.
 
 ## Plugin contributions

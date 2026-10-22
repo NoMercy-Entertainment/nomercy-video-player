@@ -3,7 +3,7 @@ name: Retract Release
 # npm has no unpublish worth using: after 72 hours it is refused, and before
 # then it breaks every lockfile that already resolved the version. Retraction
 # here means deprecating the bad version and moving the dist-tag back, so
-# `npm install <pkg>` stops resolving to it while pinned consumers keep working.
+# an unpinned install of the package stops resolving to it while pinned consumers keep working.
 #
 # Publishing runs on OIDC trusted publishing, which does NOT cover deprecate or
 # dist-tag. This workflow needs an NPM_TOKEN secret with publish rights.

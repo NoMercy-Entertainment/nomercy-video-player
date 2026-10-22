@@ -2,6 +2,7 @@
 	"name": "@nomercy-entertainment/nomercy-video-player",
 	"type": "module",
 	"version": "2.2.8",
+	"packageManager": "yarn@4.18.1",
 	"description": "Headless, event-driven HTML5 video player with HLS streaming, subtitle rendering (VTT/ASS/SSA), and a plugin system. No UI — you build your own.",
 	"author": {
 		"name": "NoMercy Entertainment",
@@ -123,7 +124,7 @@
 	"scripts": {
 		"build": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.build.json && tsc-alias -p tsconfig.build.json && node node_modules/@nomercy-entertainment/nomercy-player-core/scripts/resolve-translation-globs.mjs && node node_modules/@nomercy-entertainment/nomercy-player-core/scripts/copy-dist-assets.mjs && node node_modules/@nomercy-entertainment/nomercy-player-core/scripts/inline-css-assets.mjs",
 		"build:iife": "vite build --config vite.iife.config.ts",
-		"build:all": "npm run build && npm run build:iife",
+		"build:all": "yarn build && yarn build:iife",
 		"dev": "tsc -p tsconfig.build.json --watch",
 		"typecheck": "tsc --noEmit",
 		"lint": "eslint . --max-warnings 0",
@@ -133,9 +134,9 @@
 		"test:ui": "vitest --ui --watch",
 		"test:coverage": "vitest run --coverage",
 		"pretest:e2e": "node scripts/generate-e2e-fixtures.mjs",
-		"test:e2e": "npx playwright test",
-		"test:e2e:report": "npx playwright show-report reports/playwright",
-		"prepublishOnly": "npm run build:all"
+		"test:e2e": "playwright test",
+		"test:e2e:report": "playwright show-report reports/playwright",
+		"prepublishOnly": "yarn build:all"
 	},
 	"dependencies": {
 		"@nomercy-entertainment/nomercy-player-core": "2.2.7",
@@ -161,7 +162,7 @@
 		"vite-plugin-dts": "^5.0.0",
 		"vitest": "^4.1.11"
 	},
-	"overrides": {
+	"resolutions": {
 		"brace-expansion": "^5.0.6",
 		"js-yaml": "^4.3.2",
 		"katex": "^0.18.2",

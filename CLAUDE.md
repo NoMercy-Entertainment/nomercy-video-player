@@ -43,4 +43,4 @@ Read it; it is not repeated here. What follows is what's specific to video.
 - All player features are exposed through events. New functionality must emit events.
 - Public API is exported from `src/index.ts`. Don't export internal modules directly.
 - `playSegment`/`clearSegment` (bounded time-window playback with loop/hold/advance) stay video-only: they model disc-menu state windows and chapter-range/intro-loop playback, concepts with no music analogue — music's `repeatState('one')` already covers whole-track looping.
-- Run `npm run typecheck` and `npm test` before committing changes.
+- Run `yarn typecheck` and `yarn test` before committing changes.

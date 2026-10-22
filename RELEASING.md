@@ -15,13 +15,13 @@ install with an explicit tag or version during the rc phase.
 ## Build
 
 The package ships two artifacts from one `dist/`: the ESM build from `tsc` and the
-IIFE CDN bundle from Vite (`vite.iife.config.ts`). `npm run build` wipes `dist/` before
+IIFE CDN bundle from Vite (`vite.iife.config.ts`). `yarn build` wipes `dist/` before
 it compiles, so the bundle must always be produced after it, never before.
 
 ```
-npm run build       # tsc ESM dist + translation and asset passes
-npm run build:iife  # Vite IIFE bundle into the same dist/
-npm run build:all   # both, in the right order
+yarn build       # tsc ESM dist + translation and asset passes
+yarn build:iife  # Vite IIFE bundle into the same dist/
+yarn build:all   # both, in the right order
 ```
 
 The `prepublishOnly` hook runs `build:all`, so a publish from any environment packs
@@ -39,5 +39,5 @@ verification) lives in the core repo's RELEASING.md. Steps specific to this pack
    convention, not mechanics.
 4. Add a `[2.0.0]` entry to `CHANGELOG.md` summarizing changes since the last rc.
 5. After core `2.0.0` is on the registry, run
-   `npm update @nomercy-entertainment/nomercy-player-core` before publishing so the
+   `yarn up @nomercy-entertainment/nomercy-player-core` before publishing so the
    build scripts and lockfile come from the stable core.
