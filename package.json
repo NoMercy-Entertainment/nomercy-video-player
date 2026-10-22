@@ -133,8 +133,7 @@
 		"test:watch": "vitest",
 		"test:ui": "vitest --ui --watch",
 		"test:coverage": "vitest run --coverage",
-		"pretest:e2e": "node scripts/generate-e2e-fixtures.mjs",
-		"test:e2e": "playwright test",
+		"test:e2e": "node scripts/generate-e2e-fixtures.mjs && playwright test",
 		"test:e2e:report": "playwright show-report reports/playwright",
 		"prepublishOnly": "yarn build:all"
 	},
