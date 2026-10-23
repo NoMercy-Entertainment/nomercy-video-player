@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [2.2.9] — 2026-10-23
+
+### Fixed
+
+- The buffering and loading toast shows text instead of the raw key `plugin.desktop-ui.message.buffering` in a language that has no desktop-ui locale file (needs core 2.2.9).
+
 ## [2.2.8] — 2026-10-21
 
 ### Fixed
