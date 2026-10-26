@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [2.3.0] — 2026-10-26
+
+### Changed
+
+- Version-only release to keep the trio at one version with core 2.3.0 and music-player 2.3.0.
+
 ## [2.2.9] — 2026-10-23
 
 ### Fixed
