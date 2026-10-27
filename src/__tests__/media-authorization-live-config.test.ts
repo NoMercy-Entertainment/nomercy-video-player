@@ -75,4 +75,28 @@ describe('mediaAuthorization reads the live auth config', () => {
 		const provider = spy.mock.calls[0]![0] as (url: string) => string | undefined;
 		expect(provider('https://example.invalid/a.m3u8')).toBe('Bearer rotated');
 	});
+
+	it('carries the token to a listed origin and to no other', () => {
+		const spy = vi.spyOn(Html5VideoBackend.prototype, 'setAuthHeaderProvider');
+		const videoPlayer = new NMVideoPlayer('media-auth-test').setup({
+			auth: { bearerToken: 'tok-1', mediaOrigins: 'https://media.example.test' },
+		});
+
+		videoPlayer.backend();
+
+		const provider = spy.mock.calls[0]![0] as (url: string) => string | undefined;
+		expect(provider('https://media.example.test/a.m3u8')).toBe('Bearer tok-1');
+		expect(provider('https://stranger.example.test/a.m3u8')).toBeUndefined();
+	});
+
+	it('leaves no callable on player.auth() that answers with the token', () => {
+		const videoPlayer = new NMVideoPlayer('media-auth-test').setup({
+			auth: { bearerToken: 'tok-1', mediaOrigins: 'https://media.example.test' },
+		});
+
+		const answers = Object.values(videoPlayer.auth() ?? {}).flatMap(value =>
+			typeof value === 'function' ? [Reflect.apply(value, undefined, ['https://media.example.test/a.m3u8'])] : []);
+
+		expect(JSON.stringify(answers)).not.toContain('tok-1');
+	});
 });

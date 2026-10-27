@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Media requests ask the core for their `Authorization` through an internal method, so `auth.mediaOrigins` works and `player.auth()` exposes no callable that returns the bearer. Needs the core release that adds `mediaOrigins`.
+
 ## [2.3.0] — 2026-10-26
 
 ### Changed

@@ -671,7 +671,7 @@ export class NMVideoPlayer<T extends VideoPlaylistItem = VideoPlaylistItem>
 		// Live config, not `options.auth`: setup seeds it and `player.auth()`
 		// updates it, so a rule set after setup reaches media requests too.
 		instance.setAuthHeaderProvider?.((url: string) =>
-			this.auth()?.mediaAuthorization?.(url));
+			this._mediaAuthorization(url));
 
 		// Without this the stream registry is seeded and never asked, so
 		// `registerStream` records a factory that no load path consults. Only
@@ -1262,6 +1262,9 @@ export class NMVideoPlayer<T extends VideoPlaylistItem = VideoPlaylistItem>
 		(partial: Partial<AuthConfig>): void;
 		(clear: null): void;
 	};
+
+	/** @internal */
+	declare _mediaAuthorization: (url: string) => string | undefined;
 
 	declare refreshAuth: () => Promise<void>;
 	declare resolveUrl: (url: string, category?: UrlCategory) => Promise<ResolvedUrl>;
