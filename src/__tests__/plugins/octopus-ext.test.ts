@@ -234,6 +234,20 @@ describe('OctopusPlugin — item event resets font cache', () => {
 		// Renderer was also destroyed
 		expect(inst.renderer()).toBeNull();
 	});
+
+	it('passes the renderer only options it reads: debug yes, the retired tuning knobs no', async () => {
+		mockText('[Script Info]\n\n[Events]\n');
+		mockJson([]);
+
+		const player = setup();
+		player.addPlugin(octopusPlugin, { debug: true, renderAhead: 10, targetFps: 24, prescaleFactor: 2, renderMode: 'lossy' });
+		await player.ready();
+		await player.getPlugin(OctopusPlugin)!.subtitle('https://cdn.example.com/sub.ass');
+
+		expect(octopusCalls[0]!.debug).toBe(true);
+		for (const retired of ['renderAhead', 'targetFps', 'prescaleFactor', 'renderMode'])
+			expect(octopusCalls[0]).not.toHaveProperty(retired);
+	});
 });
 
 describe('OctopusPlugin — manifest fetch failure', () => {
