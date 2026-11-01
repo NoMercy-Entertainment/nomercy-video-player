@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+## [2.5.0] — 2026-11-01
+
+### Fixed
+
+- The ASS selection carries to the next item and is redrawn after it loads; an out-of-order apply no longer replaces the newest one; a failed subtitle or font load is retried.
+- ASS captions line up with the frame on screen (needs `nomercy-subtitle-octopus` 0.2.0, which locks subtitle time to the presented video frame and fits the caption canvas to its wrapper) and no longer make the video drop frames.
+
+### Removed
+
+- The `OctopusPlugin` renderer options `renderAhead`, `targetFps`, `renderMode`, `prescaleFactor`, `prescaleHeightLimit`, `maxRenderHeight` and `lossyRender`. The worker never read them, so removing them changes no behavior. Delete them from your options; TypeScript flags each one.
+
+### Changed
+
+- Needs `@nomercy-entertainment/nomercy-subtitle-octopus` `^0.2.0` and core 2.5.0. The bundled worker is `nomercy-libass-worker.js`.
+
 ## [2.4.0] — 2026-10-28
 
 ### Changed

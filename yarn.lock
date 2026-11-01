@@ -614,19 +614,19 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@nomercy-entertainment/nomercy-player-core@npm:2.4.0":
-  version: 2.4.0
-  resolution: "@nomercy-entertainment/nomercy-player-core@npm:2.4.0"
+"@nomercy-entertainment/nomercy-player-core@npm:2.5.0":
+  version: 2.5.0
+  resolution: "@nomercy-entertainment/nomercy-player-core@npm:2.5.0"
   dependencies:
     hls.js: "npm:^1.6.0"
-  checksum: 10c0/f5f9eec95c12561fbc887f0e797e800b8a2c861a0f9954c05f858c390864df8c50a9ed69b54629b162e118e5f997eed874a6742483f57b5dd6bec36ddc751157
+  checksum: 10c0/424477f5a6cf76a534a3897564a4a2f8b0ee8691b0a046b63eec89fb68cc7ec729a64c1cab80b0a81c53fd5ba47aa63b5a1ab8e2d4e8dbd4db8ee13dff09ef26
   languageName: node
   linkType: hard
 
-"@nomercy-entertainment/nomercy-subtitle-octopus@npm:^0.1.0":
-  version: 0.1.0
-  resolution: "@nomercy-entertainment/nomercy-subtitle-octopus@npm:0.1.0"
-  checksum: 10c0/6fc1129564d37e3b0cf81cf9a403eb0c784cc46c8ebdba468a4837f430c2bf31f4161d31b91f4167bfbd890f5d2c6ec1b6a898411f4ab3e9d1e010da34ddf771
+"@nomercy-entertainment/nomercy-subtitle-octopus@npm:^0.2.0":
+  version: 0.2.1
+  resolution: "@nomercy-entertainment/nomercy-subtitle-octopus@npm:0.2.1"
+  checksum: 10c0/060bd7cdb33e7570d37843d7336b368039422d79cf5fe19b14170e7d7ca21b80527ca97f486df988d6b4147ffa2d9263c7757d19e532bb0ce0ed568d02937912
   languageName: node
   linkType: hard
 
@@ -636,8 +636,8 @@ __metadata:
   dependencies:
     "@antfu/eslint-config": "npm:^9.0.0"
     "@nomercy-entertainment/eslint-plugin-player": "npm:^0.3.0"
-    "@nomercy-entertainment/nomercy-player-core": "npm:2.4.0"
-    "@nomercy-entertainment/nomercy-subtitle-octopus": "npm:^0.1.0"
+    "@nomercy-entertainment/nomercy-player-core": "npm:2.5.0"
+    "@nomercy-entertainment/nomercy-subtitle-octopus": "npm:^0.2.0"
     "@playwright/test": "npm:^1.60.0"
     "@types/node": "npm:^25.9.0"
     "@vitest/coverage-v8": "npm:^4.1.11"
