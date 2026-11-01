@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<title>Next-item warmup fixture</title>
+		<style>
+			#player {
+				width: 640px;
+				height: 360px;
+				background: #000;
+			}
+		</style>
+	</head>
+	<body>
+		<div id="player"></div>
+		<script type="module">
+			import nmplayer from '/src/index.ts';
+
+			const params = new URLSearchParams(location.search);
+			const lead = params.get('lead');
+
+			const episode = (n) => ({
+				id: `ep${n}`,
+				title: `Episode ${n}`,
+				url: `/e2e/media/ep${n}/master.m3u8`,
+				subtitles: [{ id: `en${n}`, label: 'English', language: 'en', kind: 'subtitles', default: true, url: `/e2e/media/ep${n}/captions.vtt` }],
+			});
+
+			window.__log = [];
+			const stamp = (name, extra) => window.__log.push({ name, at: performance.now(), ...extra });
+
+			const player = nmplayer('player');
+			player.on('ready', () => {
+				window.player = player;
+				window.__playerReady = true;
+			});
+			player.on('ended', () => stamp('ended'));
+			player.on('playing', () => stamp('playing', { item: player.item()?.id }));
+			player.on('subtitleCue', (cue) => stamp('cue', { text: JSON.stringify(cue).slice(0, 120) }));
+			player.on('mediaReady', () => {
+				stamp('mediaReady', { item: player.item()?.id });
+				try { player.subtitle(0); } catch { /* no track yet */ }
+			});
+			player.on('preloadStart', () => stamp('preloadStart'));
+			player.on('warmupStart', () => stamp('warmupStart'));
+
+			player.setup({
+				playlist: [episode(1), episode(2)],
+				muted: true,
+				autoPlay: true,
+				...(lead ? { preloadLeadSeconds: Number(lead) } : {}),
+			});
+		</script>
+	</body>
+</html>

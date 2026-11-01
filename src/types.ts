@@ -373,6 +373,8 @@ export interface VideoPlayerConfig<T extends BasePlaylistItem = VideoPlaylistIte
 	stretching?: Stretching;
 	playbackRates?: number[];
 	preload?: HtmlPreloadMode;
+	/** Segments the next-item warmup fetches per stream after the manifests; `0` = manifests only. Default `3`. */
+	preloadSegments?: number;
 	/**
 	 * Disable only the hardware / OS media-key bindings (the play/pause, next
 	 * and previous media keys) that `KeyHandlerPlugin` installs, while keeping

@@ -64,6 +64,7 @@ import {
 } from '@nomercy-entertainment/nomercy-player-core';
 import { Html5VideoBackend } from './adapters/video-backend/html5';
 import { readItemImage } from './player/itemImage';
+import { NextItemWarmup } from './player/next-item-warmup';
 import { normalizeVideoPlaylistItem } from './player/normalize-item';
 import { VideoPreloadStrategy } from './player/preload';
 import { pickStartItem } from './player/start-selection';
@@ -386,6 +387,11 @@ export class NMVideoPlayer<T extends VideoPlaylistItem = VideoPlaylistItem>
 		this.on('item', (data) => {
 			const item = data?.item;
 			this._applyPosterForRaw(readItemImage(item));
+			this._nextItemWarmup.onItemChange(item?.id);
+		});
+
+		this.on('time', ({ time, duration }) => {
+			this._nextItemWarmup.onTime(time, duration);
 		});
 
 		// Apply the incoming item's poster BEFORE backend.load() clears the
@@ -454,6 +460,19 @@ export class NMVideoPlayer<T extends VideoPlaylistItem = VideoPlaylistItem>
 			catch { /* backend may not be ready yet — ignore */ }
 		});
 	}
+
+	readonly _nextItemWarmup = new NextItemWarmup({
+		leadSeconds: () => this.options?.preloadLeadSeconds ?? 0,
+		segments: () => this.options?.preloadSegments ?? 3,
+		next: () => this.peekNext(),
+		resolveUrl: async item => (await this.resolveUrl(item.url ?? '', 'media')).href,
+		backend: () => this._backend,
+		bufferedAhead: () => (this._backend ? this._backend.buffered() - this._backend.currentTime() : 0),
+		environment: () => ({
+			online: typeof navigator === 'undefined' || navigator.onLine !== false,
+			saveData: typeof navigator !== 'undefined' && Reflect.get(Reflect.get(navigator, 'connection') ?? {}, 'saveData') === true,
+		}),
+	});
 
 	private _languageMemoryInstance: TrackLanguageMemory | undefined;
 
@@ -1338,6 +1357,7 @@ composeMixins(NMVideoPlayer.prototype, ...playerCoreMethods);
 			return;
 		}
 
+		this._nextItemWarmup.dispose();
 		this._disposeBackend();
 	};
 }
@@ -1386,7 +1406,7 @@ composeMixins(NMVideoPlayer.prototype, ...playerCoreMethods);
 		// Video defaults to a hard cut between items (no crossfade) while still
 		// preloading so the next item starts instantly. Consumer-supplied
 		// strategies always win — only inject when absent.
-		const leadSeconds = config.preloadLeadSeconds ?? 10;
+		const leadSeconds = config.preloadLeadSeconds ?? 60;
 		const enrichedConfig: VideoPlayerConfig<VideoPlaylistItem> = {
 			crossfadeEnabled: false,
 			...config,

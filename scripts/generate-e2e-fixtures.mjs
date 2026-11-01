@@ -58,6 +58,66 @@ Dialogue: 0,0:00:00.00,0:00:01.50,Default,,0,0,0,,First ASS cue
 Dialogue: 0,0:00:01.50,0:00:03.00,Default,,0,0,0,,Second ASS cue
 `;
 
+const EPISODE_SECONDS = 24;
+const EPISODE_RENDITIONS = [
+	{ dir: 'v0', size: '320x180', bandwidth: 400000 },
+	{ dir: 'v1', size: '640x360', bandwidth: 1200000 },
+];
+
+/** Two multi-rendition HLS episodes (ep1, ep2) with a VTT each, for the next-item warmup spec. */
+function generateEpisodePair(ffmpeg) {
+	for (const episode of ['ep1', 'ep2']) {
+		const episodeDir = join(mediaDir, episode);
+		let master = '#EXTM3U\n';
+
+		for (const rendition of EPISODE_RENDITIONS) {
+			mkdirSync(join(episodeDir, rendition.dir), { recursive: true });
+			run(ffmpeg, [
+				'-f',
+				'lavfi',
+				'-i',
+				`testsrc=duration=${EPISODE_SECONDS}:size=${rendition.size}:rate=15`,
+				'-f',
+				'lavfi',
+				'-i',
+				`sine=frequency=${episode === 'ep1' ? 440 : 660}:duration=${EPISODE_SECONDS}`,
+				'-c:v',
+				'libx264',
+				'-pix_fmt',
+				'yuv420p',
+				'-g',
+				'60',
+				'-keyint_min',
+				'60',
+				'-sc_threshold',
+				'0',
+				'-c:a',
+				'aac',
+				'-shortest',
+				'-f',
+				'hls',
+				'-hls_time',
+				'4',
+				'-hls_list_size',
+				'0',
+				'-hls_segment_filename',
+				`${episode}/${rendition.dir}/seg_%03d.ts`,
+				`${episode}/${rendition.dir}/index.m3u8`,
+			]);
+			master += `#EXT-X-STREAM-INF:BANDWIDTH=${rendition.bandwidth},RESOLUTION=${rendition.size}\n${rendition.dir}/index.m3u8\n`;
+		}
+
+		writeFileSync(join(episodeDir, 'master.m3u8'), master);
+
+		let vtt = 'WEBVTT\n\n';
+		for (let second = 0; second < EPISODE_SECONDS; second += 2) {
+			const format = value => `00:00:${String(value).padStart(2, '0')}.000`;
+			vtt += `${format(second)} --> ${format(second + 2)}\n${episode} caption at ${second}s\n\n`;
+		}
+		writeFileSync(join(episodeDir, 'captions.vtt'), vtt);
+	}
+}
+
 async function main() {
 	const ffmpeg = await ensureFfmpeg();
 	mkdirSync(mediaDir, { recursive: true });
@@ -101,6 +161,8 @@ async function main() {
 
 	writeFileSync(join(mediaDir, 'sample.vtt'), SAMPLE_VTT);
 	writeFileSync(join(mediaDir, 'sample.ass'), SAMPLE_ASS);
+
+	generateEpisodePair(ffmpeg);
 
 	console.log(`e2e fixtures generated in ${mediaDir} using ${ffmpeg}`);
 }

@@ -8,6 +8,7 @@
 
 import type { AudioTrack, HdrOnSdrFallback, IStreamSource, QualityLevel, SubtitleTrack } from '@nomercy-entertainment/nomercy-player-core';
 import type { HtmlPreloadMode } from '../../types';
+import type { HlsLoaderConstructor } from './hls-warm-cache';
 import type { BackendEventPayload, BackendState, IVideoBackend, StreamResolver, SubtitleCue, SubtitleCueChange } from './IVideoBackend';
 import {
 	abrCeiling,
@@ -25,9 +26,15 @@ import {
 	sizeAbrCeiling,
 	supportsNativeHls,
 } from '@nomercy-entertainment/nomercy-player-core';
+import { createWarmLoader, HlsWarmCache } from './hls-warm-cache';
 import { isMediaAbsentStatus, MEDIA_ABSENT, SOURCE_OUTAGE_BACKOFF_MS, sourceOutageRetryLimit } from './source-outage';
 
+/** Cap on bytes the next-item warmup may hold in memory. */
+const WARM_MAX_BYTES = 24 * 1024 * 1024;
+
 interface HlsLevel {
+	/** Absolute URL of the level's playlist. */
+	uri?: string;
 	attrs?: { 'CODECS'?: string; 'VIDEO-RANGE'?: string };
 	bitrate?: number;
 	height?: number;
@@ -53,6 +60,7 @@ interface HlsSubtitleTrack {
 interface HlsConstructor {
 	new(config?: Record<string, unknown>): HlsInstance;
 	isSupported?(): boolean;
+	DefaultConfig?: { loader?: HlsLoaderConstructor };
 	Events: Record<string, string>;
 	ErrorTypes: Record<string, string>;
 }
@@ -64,6 +72,8 @@ interface HlsInstance {
 	audioTrack: number;
 	subtitleTrack: number;
 	currentLevel: number;
+	/** Level the first fragment is fetched from; write it from `MANIFEST_PARSED`. */
+	startLevel: number;
 	/**
 	 * Level being loaded right now. Populated earlier than `currentLevel`
 	 *  (set when ABR picks; `currentLevel` only updates after the fragment
@@ -312,6 +322,7 @@ export class Html5VideoBackend
 			this.element.preload = opts.preload;
 
 		const hlsUrl = isHls(url);
+		const warmed = this._warmCache.take(url);
 		const nativeHls = supportsNativeHls(this.element);
 
 		// Tear down any previous Hls instance BEFORE wiring a new source.
@@ -391,7 +402,10 @@ export class Html5VideoBackend
 					suggestion: 'Use a Chromium-based browser, Safari, or Firefox 119+ for HLS support.',
 				});
 			}
+			const BaseLoader = Hls.DefaultConfig?.loader;
+			const warmLoader = warmed && BaseLoader ? createWarmLoader(BaseLoader, warmed.entries) : undefined;
 			const hlsInstance: HlsInstance = new Hls({
+				...(warmLoader ? { loader: warmLoader } : {}),
 				autoStartLoad: true,
 				enableWorker: true,
 				lowLatencyMode: false,
@@ -405,6 +419,10 @@ export class Html5VideoBackend
 			hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
 				performance.mark('nm:backend:manifest-parsed');
 				this._emitHlsTrackLists();
+				// Start on the level that was warmed so its playlist and segments are the ones served from memory.
+				const warmedLevel = warmed?.levelUrl ? hlsInstance.levels.findIndex(level => level.uri === warmed.levelUrl) : -1;
+				if (warmedLevel >= 0)
+					hlsInstance.startLevel = warmedLevel;
 			});
 			// hls.js fills its audio list after the manifest parse, then fires this.
 			hlsInstance.on(Hls.Events.AUDIO_TRACKS_UPDATED, () => {
@@ -440,6 +458,24 @@ export class Html5VideoBackend
 		this.emit('loadedmetadata', { url, kind: this.kind, duration: this.element.duration });
 	}
 
+	private readonly _warmCache = new HlsWarmCache();
+
+	async warm(url: string, opts?: { segments?: number }): Promise<void> {
+		if (!isHls(url) || supportsNativeHls(this.element))
+			return;
+		const playingHeight = this.hls?.levels[this.currentLevel()]?.height;
+		await this._warmCache.warm(url, {
+			segments: opts?.segments ?? 3,
+			preferredHeight: playingHeight,
+			maxBytes: WARM_MAX_BYTES,
+			authHeader: this._authHeaderProvider,
+		});
+	}
+
+	cancelWarm(): void {
+		this._warmCache.cancel();
+	}
+
 	unload(): void {
 		this._state = 'idle';
 		this._ended = false;
@@ -461,6 +497,7 @@ export class Html5VideoBackend
 	}
 
 	dispose(): void {
+		this._warmCache.cancel();
 		if (this._retryTimer !== undefined) {
 			clearTimeout(this._retryTimer);
 			this._retryTimer = undefined;

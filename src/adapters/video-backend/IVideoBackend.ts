@@ -164,6 +164,12 @@ export interface IVideoBackend {
 	 */
 	setHdrOnSdrFallback?(fallback: HdrOnSdrFallback): void;
 
+	/** Fetch the manifests and first `segments` segments of `url` into memory for the next `load(url)`. Optional; a repeat call for the same URL is a no-op. */
+	warm?(url: string, opts?: { segments?: number }): Promise<void>;
+
+	/** Abort an in-flight `warm()` and drop what it held. Idempotent. */
+	cancelWarm?(): void;
+
 	// Transport
 	play(): Promise<void>;
 	pause(): void;
