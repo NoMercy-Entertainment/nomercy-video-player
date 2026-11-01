@@ -23,7 +23,16 @@
 				id: `ep${n}`,
 				title: `Episode ${n}`,
 				url: `/e2e/media/ep${n}/master.m3u8`,
-				subtitles: [{ id: `en${n}`, label: 'English', language: 'en', kind: 'subtitles', default: true, url: `/e2e/media/ep${n}/captions.vtt` }],
+				subtitles: [
+					{
+						id: `en${n}`,
+						label: 'English',
+						language: 'en',
+						kind: 'subtitles',
+						default: true,
+						url: `/e2e/media/ep${n}/captions.vtt`,
+					},
+				],
 			});
 
 			window.__log = [];
@@ -39,7 +48,11 @@
 			player.on('subtitleCue', (cue) => stamp('cue', { text: JSON.stringify(cue).slice(0, 120) }));
 			player.on('mediaReady', () => {
 				stamp('mediaReady', { item: player.item()?.id });
-				try { player.subtitle(0); } catch { /* no track yet */ }
+				try {
+					player.subtitle(0);
+				} catch {
+					/* no track yet */
+				}
 			});
 			player.on('preloadStart', () => stamp('preloadStart'));
 			player.on('warmupStart', () => stamp('warmupStart'));
