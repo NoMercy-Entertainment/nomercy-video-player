@@ -240,7 +240,7 @@ describe('OctopusPlugin — item event resets font cache', () => {
 		mockJson([]);
 
 		const player = setup();
-		player.addPlugin(octopusPlugin, { debug: true, renderAhead: 10, targetFps: 24, prescaleFactor: 2, renderMode: 'lossy' });
+		player.addPlugin(octopusPlugin, { debug: true, renderAhead: 10, targetFps: 24, prescaleFactor: 2, renderMode: 'lossy' } as never);
 		await player.ready();
 		await player.getPlugin(OctopusPlugin)!.subtitle('https://cdn.example.com/sub.ass');
 

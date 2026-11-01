@@ -7,7 +7,6 @@
 // -----------------------------------------------------------------------------
 
 import type { ResolvedUrl } from '@nomercy-entertainment/nomercy-player-core';
-import type { OctopusOptions as NMOctopusOptions } from '@nomercy-entertainment/nomercy-subtitle-octopus';
 import type { NMVideoPlayer } from '../../index';
 import type { VideoPlaylistItem } from '../../types';
 import { mergeConfig, Plugin } from '@nomercy-entertainment/nomercy-player-core';
@@ -44,11 +43,7 @@ interface SubtitleOctopusCtorOptions {
 	video: HTMLVideoElement;
 	trackContent: unknown;
 	availableFonts: Record<string, string>;
-	targetFps?: number;
-	renderMode?: NMOctopusOptions['renderMode'];
 	lazyFileLoading?: boolean;
-	prescaleFactor?: number;
-	renderAhead?: number;
 	debug?: boolean;
 	workerUrl?: string;
 	legacyWorkerUrl?: string;
@@ -69,21 +64,9 @@ export interface OctopusOptions {
 	fallbackFont?: string;
 	/** Optional list of font file URLs to preload. */
 	fonts?: string[];
-	/** Renderer target FPS. */
-	targetFps?: number;
-	/** Render mode. Default `'wasm-blend'`. */
-	renderMode?: NMOctopusOptions['renderMode'];
 	/** Lazy-load subtitle file chunks — useful for huge ASS files. */
 	lazyFileLoading?: boolean;
-	/** Internal scaler ratio. */
-	prescaleFactor?: number;
-	/**
-	 * Frames the renderer pre-computes ahead of `currentTime`. Higher values
-	 * smooth playback through heavy ASS effects at the cost of memory.
-	 * Default `10`.
-	 */
-	renderAhead?: number;
-	/** Toggle debug logging in the upstream worker. */
+	/** Turns on the render probe (per-frame render time, dropped requests, frame-clock skew). */
 	debug?: boolean;
 }
 
@@ -478,11 +461,7 @@ export class OctopusPlugin<T extends VideoPlaylistItem = VideoPlaylistItem> exte
 				video: videoEl,
 				trackContent: scaleAssFontSize(this.trackSource, this.appliedScale),
 				availableFonts,
-				targetFps: this.opts?.targetFps,
-				renderMode: this.opts?.renderMode ?? 'wasm-blend',
 				lazyFileLoading: this.opts?.lazyFileLoading,
-				prescaleFactor: this.opts?.prescaleFactor,
-				renderAhead: this.opts?.renderAhead ?? 10,
 				debug: this.opts?.debug,
 				workerUrl: this.opts?.workerUrl,
 				legacyWorkerUrl: this.opts?.legacyWorkerUrl,
