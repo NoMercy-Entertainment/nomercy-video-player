@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [2.7.0] — 2026-11-01
+
+### Changed
+
+- A failed load carries the HTTP status of the failed request, so `next()` can skip a missing item (404, 410), refresh once on 401 and raise `fatal` on 5xx.
+- The fixed 10 s `waitForLoadedMetadata` limit is gone for every load; the media pipeline's own retry and error events decide.
+- Needs `@nomercy-entertainment/nomercy-player-core` 2.6.0.
+
 ## [2.6.0] — 2026-11-01
 
 ### Added
