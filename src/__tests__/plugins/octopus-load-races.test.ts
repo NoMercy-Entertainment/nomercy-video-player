@@ -152,9 +152,9 @@ describe('OctopusPlugin — selection carried to the next item', () => {
 	async function playerWithTracks(holder: Holder): Promise<{ player: NMVideoPlayer; plugin: OctopusPlugin }> {
 		route(() => text('[Script Info]'));
 		const player = setup();
-		Object.assign(player, { subtitles: () => holder.list, subtitle: () => holder.selection });
 		player.addPlugin(octopusPlugin);
 		await player.ready();
+		Object.assign(player, { subtitles: () => holder.list, subtitle: () => holder.selection });
 		return { player, plugin: player.getPlugin(OctopusPlugin)! };
 	}
 
@@ -207,9 +207,9 @@ describe('OctopusPlugin — selections that resolve out of order', () => {
 	it('draws the newest selection when an earlier one resolves its URL last', async () => {
 		route(() => text('[Script Info]'));
 		const player = setup();
-		Object.assign(player, { subtitles: () => [{ url: 'https://cdn.example.com/a.ass' }, { url: 'https://cdn.example.com/b.ass' }] });
 		player.addPlugin(octopusPlugin);
 		await player.ready();
+		Object.assign(player, { subtitles: () => [{ url: 'https://cdn.example.com/a.ass' }, { url: 'https://cdn.example.com/b.ass' }] });
 		const plugin = player.getPlugin(OctopusPlugin)!;
 
 		const pending = new Map<string, ReturnType<typeof deferred<{ href: string; ext: string }>>>();

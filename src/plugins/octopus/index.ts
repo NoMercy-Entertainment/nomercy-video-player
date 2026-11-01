@@ -17,6 +17,9 @@ import { scaleAssFontSize } from './style-scale';
 // A zero or negative scale would ask libass for text that cannot be drawn.
 const MIN_FONT_SCALE = 0.1;
 
+// One more try for a track that failed to load, after the connection has had a moment.
+const LOAD_RETRY_DELAY_MS = 400;
+
 interface FontManifestEntry {
 	file: string;
 	mimeType?: string;
@@ -170,6 +173,11 @@ export class OctopusPlugin<T extends VideoPlaylistItem = VideoPlaylistItem> exte
 			this.resetFonts();
 		});
 
+		// The core keeps the selected index across items and announces nothing for
+		// the next one, so the renderer torn down on `item` is rebuilt here.
+		this.on('subtitles', () => this.reapplyCarriedSelection());
+		this.on('mediaReady', () => this.reapplyCarriedSelection());
+
 		this.lifecycle.addCleanup(() => {
 			this.destroy();
 			this.resetFonts();
@@ -233,7 +241,17 @@ export class OctopusPlugin<T extends VideoPlaylistItem = VideoPlaylistItem> exte
 		return this.instance;
 	}
 
+	private reapplyCarriedSelection(): void {
+		if (this.instance || this.currentLoadedUrl)
+			return;
+		const selected = this.player.subtitle?.();
+		if (selected)
+			void this.applyActive(selected.index);
+	}
+
 	private async applyActive(track: string | number | null): Promise<void> {
+		// Bumped here so an earlier request still resolving its URL is stale by the time it returns.
+		const seq = ++this.loadSeq;
 		if (track == null) {
 			this.destroy();
 			return;
@@ -246,6 +264,8 @@ export class OctopusPlugin<T extends VideoPlaylistItem = VideoPlaylistItem> exte
 		}
 
 		const resolved = await this.resolveUrl(url, 'subtitle');
+		if (seq !== this.loadSeq)
+			return;
 		if (resolved.ext !== 'ass' && resolved.ext !== 'ssa') {
 			this.destroy();
 			return;
@@ -351,6 +371,7 @@ export class OctopusPlugin<T extends VideoPlaylistItem = VideoPlaylistItem> exte
 		}
 
 		const fontUrls: string[] = [];
+		let manifestFailed = false;
 
 		if (manifestUrl) {
 			try {
@@ -365,6 +386,7 @@ export class OctopusPlugin<T extends VideoPlaylistItem = VideoPlaylistItem> exte
 					fontUrls.push(await this.resolveFontUrl(`${baseFolder}/${entry.file}`));
 			}
 			catch (error) {
+				manifestFailed = true;
 				this.report({
 					code: 'plugin:octopus/fonts-manifest-failed',
 					severity: 'warning',
@@ -379,7 +401,9 @@ export class OctopusPlugin<T extends VideoPlaylistItem = VideoPlaylistItem> exte
 		for (const file of directFiles)
 			fontUrls.push(await this.resolveFontUrl(file));
 
-		return remember(await this.buildFontMap([...fontUrls, ...(this.opts?.fonts ?? [])]));
+		const map = await this.buildFontMap([...fontUrls, ...(this.opts?.fonts ?? [])]);
+		// A map built without the manifest's fonts is used once, then asked for again.
+		return manifestFailed ? map : remember(map);
 	}
 
 	/**
@@ -440,7 +464,7 @@ export class OctopusPlugin<T extends VideoPlaylistItem = VideoPlaylistItem> exte
 		return basename.replace(/\.[^.]+$/u, '').toLowerCase();
 	}
 
-	private async load(url: string, prefetched?: ResolvedUrl): Promise<void> {
+	private async load(url: string, prefetched?: ResolvedUrl, retried = false): Promise<void> {
 		if (url === this.currentLoadedUrl && this.instance)
 			return;
 
@@ -506,6 +530,12 @@ export class OctopusPlugin<T extends VideoPlaylistItem = VideoPlaylistItem> exte
 		catch (error) {
 			if (seq !== this.loadSeq)
 				return;
+			if (!retried) {
+				await new Promise<void>(settle => this.timeout(settle, LOAD_RETRY_DELAY_MS));
+				if (seq !== this.loadSeq)
+					return;
+				return this.load(url, prefetched, true);
+			}
 			this.currentLoadedUrl = null;
 			this.report({
 				code: 'plugin:octopus/load-failed',
