@@ -174,6 +174,36 @@ describe('OctopusPlugin — selection carried to the next item', () => {
 		expect(plugin.subtitle()).toBe('https://cdn.example.com/b.ass');
 	});
 
+	it('draws the carried ASS selection from the item alone when its media never signals ready', async () => {
+		const holder: Holder = { list: [{ url: 'https://cdn.example.com/a.ass' }], selection: { index: 0, track: { url: 'https://cdn.example.com/a.ass' } } };
+		const { player, plugin } = await playerWithTracks(holder);
+		player.emit('subtitle', { track: 0 } as never);
+		await vi.waitFor(() => expect(octopusCalls).toHaveLength(1));
+
+		holder.list = [{ url: 'https://cdn.example.com/b.ass' }];
+		holder.selection = { index: 0, track: { url: 'https://cdn.example.com/b.ass' } };
+		player.emit('item' as never, { item: {}, index: 1 } as never);
+
+		await vi.waitFor(() => expect(octopusCalls).toHaveLength(2));
+		expect(plugin.subtitle()).toBe('https://cdn.example.com/b.ass');
+	});
+
+	it('loads the carried track once when the item and then the media both announce it', async () => {
+		const holder: Holder = { list: [{ url: 'https://cdn.example.com/a.ass' }], selection: { index: 0, track: { url: 'https://cdn.example.com/a.ass' } } };
+		const { player } = await playerWithTracks(holder);
+		player.emit('subtitle', { track: 0 } as never);
+		await vi.waitFor(() => expect(octopusCalls).toHaveLength(1));
+		fetchedUrls.length = 0;
+
+		player.emit('item' as never, { item: {}, index: 1 } as never);
+		player.emit('mediaReady' as never);
+		await vi.waitFor(() => expect(octopusCalls).toHaveLength(2));
+		await new Promise(settle => setTimeout(settle, 20));
+
+		expect(fetchedUrls.filter(url => url.endsWith('.ass'))).toHaveLength(1);
+		expect(octopusCalls).toHaveLength(2);
+	});
+
 	it('draws nothing on the next item when no selection is carried', async () => {
 		const holder: Holder = { list: [{ url: 'https://cdn.example.com/a.ass' }], selection: { index: 0, track: { url: 'https://cdn.example.com/a.ass' } } };
 		const { player, plugin } = await playerWithTracks(holder);

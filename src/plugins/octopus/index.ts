@@ -151,13 +151,16 @@ export class OctopusPlugin<T extends VideoPlaylistItem = VideoPlaylistItem> exte
 			this.applyStyle();
 		});
 
+		// The item already lists its tracks, so the carried selection is redrawn
+		// now; a slow media load must not leave the next item without captions.
 		this.on('item', () => {
 			this.destroy();
 			this.resetFonts();
+			this.reapplyCarriedSelection();
 		});
 
 		// The core keeps the selected index across items and announces nothing for
-		// the next one, so the renderer torn down on `item` is rebuilt here.
+		// the next one, so the renderer torn down on `item` is rebuilt here too.
 		this.on('subtitles', () => this.reapplyCarriedSelection());
 		this.on('mediaReady', () => this.reapplyCarriedSelection());
 
