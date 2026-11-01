@@ -146,6 +146,147 @@ describe('OctopusPlugin — stale load', () => {
 	});
 });
 
+describe('OctopusPlugin — selection carried to the next item', () => {
+	interface Holder { list: Array<{ url: string }>; selection: { index: number; track: { url: string } } | null }
+
+	async function playerWithTracks(holder: Holder): Promise<{ player: NMVideoPlayer; plugin: OctopusPlugin }> {
+		route(() => text('[Script Info]'));
+		const player = setup();
+		player.addPlugin(octopusPlugin);
+		await player.ready();
+		Object.assign(player, { subtitles: () => holder.list, subtitle: () => holder.selection });
+		return { player, plugin: player.getPlugin(OctopusPlugin)! };
+	}
+
+	it('draws the carried ASS selection on the next item once its media is ready', async () => {
+		const holder: Holder = { list: [{ url: 'https://cdn.example.com/a.ass' }], selection: { index: 0, track: { url: 'https://cdn.example.com/a.ass' } } };
+		const { player, plugin } = await playerWithTracks(holder);
+		player.emit('subtitle', { track: 0 } as never);
+		await vi.waitFor(() => expect(octopusCalls).toHaveLength(1));
+
+		holder.list = [{ url: 'https://cdn.example.com/b.ass' }];
+		holder.selection = { index: 0, track: { url: 'https://cdn.example.com/b.ass' } };
+		player.emit('item' as never, { item: {}, index: 1 } as never);
+		expect(plugin.renderer()).toBeNull();
+		player.emit('mediaReady' as never);
+
+		await vi.waitFor(() => expect(octopusCalls).toHaveLength(2));
+		expect(plugin.subtitle()).toBe('https://cdn.example.com/b.ass');
+	});
+
+	it('draws nothing on the next item when no selection is carried', async () => {
+		const holder: Holder = { list: [{ url: 'https://cdn.example.com/a.ass' }], selection: { index: 0, track: { url: 'https://cdn.example.com/a.ass' } } };
+		const { player, plugin } = await playerWithTracks(holder);
+		player.emit('subtitle', { track: 0 } as never);
+		await vi.waitFor(() => expect(octopusCalls).toHaveLength(1));
+
+		holder.selection = null;
+		player.emit('item' as never, { item: {}, index: 1 } as never);
+		player.emit('mediaReady' as never);
+		await new Promise(settle => setTimeout(settle, 20));
+
+		expect(octopusCalls).toHaveLength(1);
+		expect(plugin.renderer()).toBeNull();
+	});
+
+	it('keeps the renderer it has when the media becomes ready again', async () => {
+		const holder: Holder = { list: [{ url: 'https://cdn.example.com/a.ass' }], selection: { index: 0, track: { url: 'https://cdn.example.com/a.ass' } } };
+		const { player } = await playerWithTracks(holder);
+		player.emit('subtitle', { track: 0 } as never);
+		await vi.waitFor(() => expect(octopusCalls).toHaveLength(1));
+
+		player.emit('mediaReady' as never);
+		await new Promise(settle => setTimeout(settle, 20));
+
+		expect(octopusCalls).toHaveLength(1);
+		expect(octopusDisposed).toHaveLength(0);
+	});
+});
+
+describe('OctopusPlugin — selections that resolve out of order', () => {
+	it('draws the newest selection when an earlier one resolves its URL last', async () => {
+		route(() => text('[Script Info]'));
+		const player = setup();
+		player.addPlugin(octopusPlugin);
+		await player.ready();
+		Object.assign(player, { subtitles: () => [{ url: 'https://cdn.example.com/a.ass' }, { url: 'https://cdn.example.com/b.ass' }] });
+		const plugin = player.getPlugin(OctopusPlugin)!;
+
+		const pending = new Map<string, ReturnType<typeof deferred<{ href: string; ext: string }>>>();
+		vi.spyOn(plugin as unknown as { resolveUrl: (url: string) => Promise<unknown> }, 'resolveUrl').mockImplementation((url) => {
+			const gate = deferred<{ href: string; ext: string }>();
+			pending.set(url, gate);
+			return gate.promise;
+		});
+
+		player.emit('subtitle', { track: 0 } as never);
+		player.emit('subtitle', { track: 1 } as never);
+		await vi.waitFor(() => expect(pending.size).toBe(2));
+		pending.get('https://cdn.example.com/b.ass')!.resolve({ href: 'https://cdn.example.com/b.ass', ext: 'ass' });
+		await vi.waitFor(() => expect(octopusCalls).toHaveLength(1));
+		pending.get('https://cdn.example.com/a.ass')!.resolve({ href: 'https://cdn.example.com/a.ass', ext: 'ass' });
+		await new Promise(settle => setTimeout(settle, 20));
+
+		expect(octopusCalls).toHaveLength(1);
+		expect(octopusDisposed).toHaveLength(0);
+		expect(plugin.subtitle()).toBe('https://cdn.example.com/b.ass');
+	});
+});
+
+describe('OctopusPlugin — failures that heal on the next try', () => {
+	it('retries a subtitle body that failed once', async () => {
+		let attempts = 0;
+		route(() => (++attempts === 1 ? Promise.reject(new Error('network failure')) : text('[Script Info]')));
+		const player = setup();
+		player.addPlugin(octopusPlugin);
+		await player.ready();
+		const plugin = player.getPlugin(OctopusPlugin)!;
+		const report = vi.spyOn(plugin as unknown as { report: (entry: unknown) => void }, 'report');
+
+		await plugin.subtitle('https://cdn.example.com/a.ass');
+
+		expect(octopusCalls).toHaveLength(1);
+		expect(report).not.toHaveBeenCalled();
+	});
+
+	it('reports a subtitle body that failed twice', async () => {
+		route(() => Promise.reject(new Error('network failure')));
+		const player = setup();
+		player.addPlugin(octopusPlugin);
+		await player.ready();
+		const plugin = player.getPlugin(OctopusPlugin)!;
+		const report = vi.spyOn(plugin as unknown as { report: (entry: unknown) => void }, 'report');
+
+		await plugin.subtitle('https://cdn.example.com/a.ass');
+
+		expect(octopusCalls).toHaveLength(0);
+		expect(report).toHaveBeenCalledWith(expect.objectContaining({ code: 'plugin:octopus/load-failed' }));
+	});
+
+	it('asks for the font manifest again on the next load after it failed', async () => {
+		let manifestAttempts = 0;
+		route((url) => {
+			if (url.endsWith('fonts.json')) {
+				return ++manifestAttempts === 1 ? Promise.reject(new Error('network failure')) : text(JSON.stringify([{ file: 'Inter.ttf' }]));
+			}
+			return text(url.endsWith('Inter.ttf') ? 'data' : '[Script Info]');
+		});
+		const player = new NMVideoPlayer('test').setup({ baseUrl: 'https://server.test' } as never);
+		(player as unknown as PlayerInternal).videoElement = document.createElement('video');
+		(player as unknown as PlayerInternal).item = () => ({ fonts: [{ file: '/api/fonts/fonts.json' }] });
+		player.addPlugin(octopusPlugin);
+		await player.ready();
+		const plugin = player.getPlugin(OctopusPlugin)!;
+
+		await plugin.subtitle('https://server.test/a.ass');
+		await plugin.subtitle(null);
+		await plugin.subtitle('https://server.test/a.ass');
+
+		expect(manifestAttempts).toBe(2);
+		expect(Object.keys(octopusCalls.at(-1)!.availableFonts as object)).toContain('inter');
+	});
+});
+
 describe('OctopusPlugin — font reuse across loads', () => {
 	const fontUrl = 'https://cdn.example.com/f/a.ttf';
 
