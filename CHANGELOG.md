@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+## [2.6.0] — 2026-11-01
+
+### Added
+
+- The next item's master playlist, nearest level playlist, default audio rendition and first segments load in the background before the hand-off, so the next episode starts from memory and falls back to the network on a miss. It skips when offline, on data saver or when the current buffer is low, and cancels on seek back, item change and dispose. `preloadSegments` sets the segment count.
+
+### Changed
+
+- `preloadLeadSeconds` defaults to 60 for video (was 10). The subtitle and font prefetch starts earlier with it.
+
+### Fixed
+
+- The ASS renderer redraws the carried selection from the `item` event, so a late media load no longer leaves the selection without a renderer.
+
 ## [2.5.0] — 2026-11-01
 
 ### Fixed
