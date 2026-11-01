@@ -24,10 +24,11 @@ import {
 	panePixels,
 	resetMediaElement,
 	sizeAbrCeiling,
+	StreamError,
 	supportsNativeHls,
 } from '@nomercy-entertainment/nomercy-player-core';
 import { createWarmLoader, HlsWarmCache } from './hls-warm-cache';
-import { isMediaAbsentStatus, MEDIA_ABSENT, SOURCE_OUTAGE_BACKOFF_MS, sourceOutageRetryLimit } from './source-outage';
+import { definiteFailureCode, SOURCE_OUTAGE_BACKOFF_MS, sourceOutageRetryLimit } from './source-outage';
 
 /** Cap on bytes the next-item warmup may hold in memory. */
 const WARM_MAX_BYTES = 24 * 1024 * 1024;
@@ -1117,9 +1118,12 @@ export class Html5VideoBackend
 		// that, and a consumer can act on it — offer the next item — but only if
 		// it is told which failure this was, so it gets its own code rather than
 		// the generic network one every outage ends with.
-		if (isMediaAbsentStatus(httpStatus) && !this._sawConnectionFailure) {
+		const definiteCode = this._sawConnectionFailure
+			? undefined
+			: definiteFailureCode(httpStatus, this._state === 'loading');
+		if (definiteCode) {
 			this._recoveringFromOutage = false;
-			this._escalateHlsError(MEDIA_ABSENT, `media absent (HTTP ${httpStatus}): ${data.details}`);
+			this._escalateHlsError(definiteCode, `HTTP ${httpStatus}: ${data.details}`, httpStatus);
 			return;
 		}
 
@@ -1185,10 +1189,10 @@ export class Html5VideoBackend
 	 * @param details - `HlsErrorData.details` string from hls.js
 	 * @param message - Human-readable summary for the error payload
 	 */
-	private _escalateHlsError(details: string, message: string): void {
+	private _escalateHlsError(details: string, message: string, status?: number): void {
 		this._hadError = true;
 		this._state = 'error';
-		this.emit('stream:error', { details, fatal: true });
+		this.emit('stream:error', status === undefined ? { details, fatal: true } : { details, fatal: true, status });
 		// Construct a synthetic error event so the `error` channel stays
 		// typed as `Event` (BackendEventPayload contract). Consumers that
 		// want the typed PlayerError should listen on `stream:error`.
@@ -1567,16 +1571,12 @@ export class Html5VideoBackend
 		if (this.element.readyState >= 1 /* HAVE_METADATA */)
 			return Promise.resolve();
 
-		const METADATA_TIMEOUT_MS = 10_000;
-
 		return new Promise<void>((resolve, reject) => {
-			let timer: ReturnType<typeof setTimeout>;
 			let onLoad: () => void;
 			let onElementError: () => void;
 			let onStreamError: (data?: BackendEventPayload['stream:error']) => void;
 
 			const cleanup = (): void => {
-				clearTimeout(timer);
 				this.element.removeEventListener('loadedmetadata', onLoad);
 				this.element.removeEventListener('error', onElementError);
 				this.off('stream:error', onStreamError);
@@ -1598,19 +1598,15 @@ export class Html5VideoBackend
 			onStreamError = (data?: BackendEventPayload['stream:error']): void => {
 				if (data?.fatal) {
 					cleanup();
-					reject(new Error(`HLS fatal: ${data.details}`));
+					reject(new StreamError({
+						code: data.details,
+						severity: 'error',
+						scope: { kind: 'stream', id: 'hls' },
+						message: `HLS fatal: ${data.details}`,
+						context: data.status === undefined ? undefined : { httpStatus: data.status },
+					}));
 				}
 			};
-
-			// Hard backstop: if neither loadedmetadata nor a fatal error arrives
-			// within METADATA_TIMEOUT_MS, reject so load() never parks indefinitely.
-			// This catches the case where HLS.js retries exhaust slowly (the default
-			// three-retry back-off takes 7 s on manifest 404s) or where a non-fatal
-			// error loop never escalates to fatal at all.
-			timer = setTimeout(() => {
-				cleanup();
-				reject(new Error(`waitForLoadedMetadata timed out after ${METADATA_TIMEOUT_MS} ms`));
-			}, METADATA_TIMEOUT_MS);
 
 			this.element.addEventListener('loadedmetadata', onLoad, { once: true });
 			this.element.addEventListener('error', onElementError, { once: true });

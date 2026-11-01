@@ -84,6 +84,11 @@ export function isMediaAbsentStatus(httpStatus: number): boolean {
 	return httpStatus === 404 || httpStatus === 410;
 }
 
+/** True for a 5xx from a server that is up (500, 501, 505...), as opposed to an origin-down status. */
+export function isServerErrorStatus(httpStatus: number): boolean {
+	return httpStatus >= 500 && httpStatus <= 599 && !isOriginDownStatus(httpStatus);
+}
+
 /**
  * How many rungs this failure is allowed.
  *
@@ -109,7 +114,7 @@ export function sourceOutageRetryLimit(
 		return SOURCE_OUTAGE_BACKOFF_MS.length;
 	if (isOriginDownStatus(httpStatus))
 		return SOURCE_OUTAGE_BACKOFF_MS.length;
-	if (isMediaAbsentStatus(httpStatus))
+	if (isMediaAbsentStatus(httpStatus) || isServerErrorStatus(httpStatus))
 		return NO_RETRIES;
 	if (httpStatus > 0)
 		return HTTP_STATUS_RETRY_LIMIT;
@@ -124,3 +129,22 @@ export function sourceOutageRetryLimit(
  * other.
  */
 export const MEDIA_ABSENT = 'core:stream/media-absent';
+
+/** The server answered 5xx while up; the player raises a fatal error. */
+export const SERVER_ERROR = 'core:stream/server-error';
+
+/** The media request was refused with 401; the player refreshes the token once. */
+export const UNAUTHENTICATED = 'core:auth/unauthenticated';
+
+/** The code for a failure no retry changes, else `undefined`. */
+export function definiteFailureCode(httpStatus: number, loading: boolean): string | undefined {
+	if (isMediaAbsentStatus(httpStatus))
+		return MEDIA_ABSENT;
+	if (isServerErrorStatus(httpStatus))
+		return SERVER_ERROR;
+	// A 401 counts only while loading: mid-playback the ladder picks up a refreshed token.
+	if (httpStatus === 401 && loading)
+		return UNAUTHENTICATED;
+
+	return undefined;
+}
