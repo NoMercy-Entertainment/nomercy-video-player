@@ -274,6 +274,8 @@ export interface VideoEventMap<T extends VideoPlaylistItem = VideoPlaylistItem> 
 	'theater': { active: boolean };
 	'fullscreen': { active: boolean };
 	'aspectRatio': { value: Stretching };
+	/** The source turned live or stopped being live. `player.live()` holds the same value. */
+	'live': { live: boolean };
 
 	// Fired whenever the displayed video content rectangle changes — driven by
 	// mediaReady, duration, fullscreen, and ResizeObserver on container + videoElement.
@@ -510,6 +512,9 @@ export interface IVideoPlayer<T extends VideoPlaylistItem = VideoPlaylistItem>
 
 	/** Step through `['uniform', 'fill', 'exactfit', 'none']` in order. */
 	cycleAspectRatio(): void;
+
+	/** `true` while the current source is a live stream. `duration()` is unchanged; use this, not the duration, to detect live. */
+	live(): boolean;
 
 	// ── Track selection ──
 

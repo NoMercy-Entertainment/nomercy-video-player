@@ -25,6 +25,9 @@ import { formatSeconds } from '../helpers/progressBar';
 import { applyAllVisibilityRules } from '../helpers/responsive';
 import { updateTitleBar } from '../helpers/topBar';
 
+/** A live viewer closer to the edge than this counts as at the edge. */
+const LIVE_EDGE_SLACK_SECONDS = 10;
+
 export const transportStateMethods = {
 	setPlayingState(this: DesktopUiInternals, playing: boolean): void {
 		this.centerWrap.classList.toggle('playing', playing);
@@ -54,9 +57,32 @@ export const transportStateMethods = {
 		void this.loadSpritesForItem(item);
 	},
 
+	_isLive(this: DesktopUiInternals): boolean {
+		return this.player.live?.() === true || this.cachedDuration === Number.POSITIVE_INFINITY;
+	},
+
+	/** The seekable range a live stream keeps, in player seconds; `null` when the player reports none. */
+	_liveWindow(this: DesktopUiInternals): { start: number; end: number } | null {
+		const ranges = this.player.seekable?.();
+		if (!ranges || ranges.length === 0)
+			return null;
+		return { start: ranges.start(0), end: ranges.end(ranges.length - 1) };
+	},
+
+	applyLive(this: DesktopUiInternals): void {
+		this.applyTime(this.player.time?.() ?? 0);
+	},
+
 	applyTime(this: DesktopUiInternals, seconds: number): void {
-		const dur = this.resolveDuration();
-		const pct = dur > 0 ? (seconds / dur) * 100 : 0;
+		const live = this._isLive();
+		const win = live ? this._liveWindow() : null;
+		const dur = win ? win.end - win.start : this.resolveDuration();
+		const offset = win ? win.start : 0;
+		let pct = dur > 0 ? ((seconds - offset) / dur) * 100 : 0;
+		if (live)
+			pct = win && dur > 0 ? Math.min(100, Math.max(0, pct)) : 100;
+
+		this.remainingTimeEl.classList.toggle('behind-live', Boolean(win) && win!.end - seconds > LIVE_EDGE_SLACK_SECONDS);
 
 		if (!this.isScrubbing) {
 			this.sliderRefs.sliderProgress.style.width = `${pct}%`;
@@ -67,7 +93,7 @@ export const transportStateMethods = {
 
 		try {
 			const buf = this.player.buffered();
-			const bufPct = dur > 0 ? (buf / dur) * 100 : 0;
+			const bufPct = dur > 0 ? Math.min(100, Math.max(0, ((buf - offset) / dur) * 100)) : 0;
 			if (this.chapterRefs.length > 0) {
 				this.updateChapterBuffer(bufPct);
 			}
@@ -91,7 +117,7 @@ export const transportStateMethods = {
 	},
 
 	_formatRemaining(this: DesktopUiInternals, cur: number, dur: number): string {
-		if (dur === Number.POSITIVE_INFINITY)
+		if (this._isLive())
 			return this.t('time.live');
 		if (dur <= 0)
 			return formatSeconds(0);

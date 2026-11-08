@@ -33,6 +33,10 @@ export type StreamResolver = (url: string, contentType?: string) => IStreamSourc
 export interface BackendEventPayload extends MinimalBackendEventPayload {
 	'loadstart': Event;
 	'loadedmetadata': { url: string; kind: string; duration: number };
+	/** The subtitle track list changed after load, for example hls.js added an embedded caption track on its first cue. */
+	'subtitleTracks': { tracks: SubtitleTrack[] };
+	/** The source turned live or stopped being live. Emit it on every change, never twice in a row for the same value. */
+	'live': { live: boolean };
 	'loadeddata': Event;
 	'canplay': Event;
 	'play': Event;
@@ -179,6 +183,8 @@ export interface IVideoBackend {
 	currentTime(): number;
 	currentTime(seconds: number): void;
 	duration(): number;
+	/** `true` while the source is a live stream. A custom backend that plays live implements this and emits `live` when it changes. Omit for recorded-only backends. */
+	isLive?(): boolean;
 	/**
 	 * The absolute timeline position, in seconds, that buffered data reaches.
 	 * Not a duration ahead of the playhead, and not a fraction: a scrubber

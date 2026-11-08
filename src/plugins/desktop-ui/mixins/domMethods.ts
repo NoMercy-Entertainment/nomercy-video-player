@@ -392,6 +392,7 @@ export const domMethods = {
 
 		this.on('duration', payload => this.applyDuration(payload.duration));
 		this.on('time', payload => this.applyTime(payload.time));
+		this.on('live', () => this.applyLive());
 
 		this.on('volume', (payload) => {
 			const level = typeof payload?.level === 'number' ? payload.level : this.player.volume?.() ?? 100;
@@ -508,6 +509,12 @@ export const domMethods = {
 		});
 
 		this.listen(this.remainingTimeEl, 'click', () => {
+			if (this._isLive()) {
+				const win = this._liveWindow();
+				if (win)
+					void this.player.time?.(win.end);
+				return;
+			}
 			this._showRemaining = !this._showRemaining;
 			void Promise.resolve(this.storage.setJSON('showRemaining', this._showRemaining));
 			this.applyTime(this.player.time?.() ?? 0);

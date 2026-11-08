@@ -636,6 +636,9 @@ export class DesktopUiPlugin extends Plugin<IVideoPlayer<VideoPlaylistItem>, Des
 	declare applyTime: (seconds: number) => void;
 	declare applyDuration: (dur: number) => void;
 	declare _formatRemaining: (cur: number, dur: number) => string;
+	declare _isLive: () => boolean;
+	declare _liveWindow: () => { start: number; end: number } | null;
+	declare applyLive: () => void;
 	declare applyStateVisibility: () => void;
 	declare setContentHidden: (btn: HTMLButtonElement, hidden: boolean) => void;
 	declare refreshCapabilityVisibility: () => void;

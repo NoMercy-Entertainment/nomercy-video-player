@@ -88,6 +88,7 @@ vi.mock('hls.js', () => {
 			LEVEL_SWITCHED: 'hlsLevelSwitched',
 			FRAG_CHANGED: 'hlsFragChanged',
 			AUDIO_TRACKS_UPDATED: 'hlsAudioTracksUpdated',
+			LEVEL_LOADED: 'hlsLevelLoaded',
 		};
 
 		static ErrorTypes: Record<string, string> = {
@@ -929,6 +930,80 @@ describe('setSubtitleTrack()', () => {
 // ---------------------------------------------------------------------------
 // Quality levels
 // ---------------------------------------------------------------------------
+
+describe('subtitle tracks added after load', () => {
+	it('emits subtitleTracks when the element gains a caption track, and again when one goes', async () => {
+		const textTracks = Object.assign(new EventTarget(), { length: 0 }) as unknown as TextTrackList & EventTarget;
+		const videoEl = container.querySelector('video') as HTMLVideoElement;
+		Object.defineProperty(videoEl, 'textTracks', { value: textTracks, configurable: true });
+		const loadPromise = backend.load('https://example.invalid/live.m3u8');
+		await flushMicrotasks();
+		Object.defineProperty(videoEl, 'readyState', { value: 1, configurable: true });
+		videoEl.dispatchEvent(new Event('loadedmetadata'));
+		await loadPromise;
+		const counts: number[] = [];
+		backend.on('subtitleTracks', data => counts.push(data!.tracks.length));
+
+		Object.defineProperty(textTracks, 'length', { value: 1, configurable: true });
+		Object.defineProperty(textTracks, '0', { value: { kind: 'captions', language: 'en', label: 'English', id: 'cc1', mode: 'disabled' }, configurable: true });
+		textTracks.dispatchEvent(new Event('addtrack'));
+		Object.defineProperty(textTracks, 'length', { value: 0, configurable: true });
+		textTracks.dispatchEvent(new Event('removetrack'));
+
+		expect(counts).toEqual([1, 0]);
+	});
+});
+
+describe('isLive()', () => {
+	async function loadHls(): Promise<void> {
+		const loadPromise = backend.load('https://example.invalid/live.m3u8');
+		await flushMicrotasks();
+		const videoEl = container.querySelector('video') as HTMLVideoElement;
+		Object.defineProperty(videoEl, 'readyState', { value: 1, configurable: true });
+		videoEl.dispatchEvent(new Event('loadedmetadata'));
+		await loadPromise;
+	}
+
+	it('is false before anything loads', () => {
+		expect(backend.isLive()).toBe(false);
+	});
+
+	it('turns true and emits live once when hls.js reports a live playlist', async () => {
+		await loadHls();
+		const seen: boolean[] = [];
+		backend.on('live', data => seen.push(data!.live));
+
+		_hlsRegistry.lastInstance!.fire('hlsLevelLoaded', { details: { live: true } });
+		_hlsRegistry.lastInstance!.fire('hlsLevelLoaded', { details: { live: true } });
+
+		expect(backend.isLive()).toBe(true);
+		expect(seen).toEqual([true]);
+	});
+
+	it('stays false for a recorded playlist and emits nothing', async () => {
+		await loadHls();
+		const seen: boolean[] = [];
+		backend.on('live', data => seen.push(data!.live));
+
+		_hlsRegistry.lastInstance!.fire('hlsLevelLoaded', { details: { live: false } });
+
+		expect(backend.isLive()).toBe(false);
+		expect(seen).toEqual([]);
+	});
+
+	it('goes back to false and emits when the next load is not live', async () => {
+		await loadHls();
+		_hlsRegistry.lastInstance!.fire('hlsLevelLoaded', { details: { live: true } });
+		const seen: boolean[] = [];
+		backend.on('live', data => seen.push(data!.live));
+
+		void backend.load('https://example.invalid/movie.mp4');
+		await flushMicrotasks();
+
+		expect(backend.isLive()).toBe(false);
+		expect(seen).toEqual([false]);
+	});
+});
 
 describe('qualityLevels()', () => {
 	it('returns empty array without HLS', () => {

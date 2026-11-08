@@ -274,6 +274,9 @@ export interface DesktopUiInternals {
 
 	// ── format helper ─────────────────────────────────────────────────────────────
 	_formatRemaining(cur: number, dur: number): string;
+	_isLive(): boolean;
+	_liveWindow(): { start: number; end: number } | null;
+	applyLive(): void;
 
 	// ── sprite URL ────────────────────────────────────────────────────────────────
 	_resolveSpriteUrl(item: VideoPlaylistItem | undefined | null): string | undefined;

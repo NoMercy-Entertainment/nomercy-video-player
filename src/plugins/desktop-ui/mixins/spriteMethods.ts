@@ -26,7 +26,9 @@ import { clampPopOffset, getScrubTime, loadSpriteSet, paintSpriteAt, resolveSpri
 
 export const spriteMethods = {
 	getScrubTime(this: DesktopUiInternals, event: Event): { scrubTime: number; scrubTimePlayer: number } {
-		return getScrubTime(event, this.sliderRefs.sliderBar, this.resolveDuration());
+		const win = this._isLive() ? this._liveWindow() : null;
+		const scrub = getScrubTime(event, this.sliderRefs.sliderBar, win ? win.end - win.start : this.resolveDuration());
+		return win ? { ...scrub, scrubTimePlayer: scrub.scrubTimePlayer + win.start } : scrub;
 	},
 
 	clampPopOffset(this: DesktopUiInternals, pct: number): number {

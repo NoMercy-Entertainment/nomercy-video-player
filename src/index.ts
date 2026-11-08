@@ -642,6 +642,10 @@ export class NMVideoPlayer<T extends VideoPlaylistItem = VideoPlaylistItem>
 	// ── Backend ──
 	private _backend: IVideoBackend | undefined;
 
+	live(): boolean {
+		return this._backend?.isLive?.() ?? false;
+	}
+
 	backend(): IVideoBackend;
 	backend(kind: VideoBackendKind): Promise<void>;
 	backend(kind?: VideoBackendKind): IVideoBackend | Promise<void> {
@@ -837,6 +841,13 @@ export class NMVideoPlayer<T extends VideoPlaylistItem = VideoPlaylistItem>
 			if (!data)
 				return;
 			this.emit('duration', { duration: data.duration });
+		});
+		instance.on('subtitleTracks', () => {
+			this.emit('subtitles', { tracks: this.subtitles() });
+		});
+		instance.on('live', (data?: { live: boolean }) => {
+			if (data)
+				this.emit('live', data);
 		});
 
 		// Bridge buffering / readiness signals so overlay plugins can

@@ -381,6 +381,8 @@ export class Html5VideoBackend
 		// only HLS and whatever the element itself decodes. Nothing registered
 		// means nothing returned, and the built-in path runs untouched.
 		this._destroyCustomSource();
+		this._setLive(false);
+		this._watchTextTracks();
 
 		const customSource = this._streamResolver?.(url);
 		if (customSource) {
@@ -433,6 +435,9 @@ export class Html5VideoBackend
 					hlsInstance.startLevel = warmedLevel;
 			});
 			// hls.js fills its audio list after the manifest parse, then fires this.
+			hlsInstance.on(Hls.Events.LEVEL_LOADED, (_event, data) => {
+				this._setLive(Boolean(data?.details?.live));
+			});
 			hlsInstance.on(Hls.Events.AUDIO_TRACKS_UPDATED, () => {
 				this._emitAudioTracks();
 			});
@@ -464,6 +469,37 @@ export class Html5VideoBackend
 
 		this._state = 'ready';
 		this.emit('loadedmetadata', { url, kind: this.kind, duration: this.element.duration });
+	}
+
+	private _textTrackWatch: { list: TextTrackList; handler: () => void } | undefined;
+
+	/** Report a track the element gains or loses after load; the list is read once at load otherwise. */
+	private _watchTextTracks(): void {
+		if (this._textTrackWatch) {
+			this._textTrackWatch.list.removeEventListener('addtrack', this._textTrackWatch.handler);
+			this._textTrackWatch.list.removeEventListener('removetrack', this._textTrackWatch.handler);
+			this._textTrackWatch = undefined;
+		}
+		const list = this.element.textTracks;
+		if (typeof list?.addEventListener !== 'function')
+			return;
+		const handler = (): void => this.emit('subtitleTracks', { tracks: this.subtitleTracks() });
+		list.addEventListener('addtrack', handler);
+		list.addEventListener('removetrack', handler);
+		this._textTrackWatch = { list, handler };
+	}
+
+	private _live = false;
+
+	isLive(): boolean {
+		return this._live;
+	}
+
+	private _setLive(live: boolean): void {
+		if (live === this._live)
+			return;
+		this._live = live;
+		this.emit('live', { live });
 	}
 
 	private readonly _warmCache = new HlsWarmCache();
