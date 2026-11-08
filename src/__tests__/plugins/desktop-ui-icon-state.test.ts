@@ -190,15 +190,12 @@ describe('DesktopUiPlugin — icon state (is-active divergence)', () => {
 		expect(subsBtn).not.toBeNull();
 
 		const iconTarget = subsBtn!.querySelector('.btn-icon') ?? subsBtn!;
-		const normalPath = iconTarget.querySelector<SVGPathElement>('path.icon-normal');
-		expect(normalPath).not.toBeNull();
-
-		// fluentIcons.subtitles.normal starts with "M18.75 4C20.5449 4 22 5.455"
-		// fluentIcons.subtitlesOff.normal starts with the same prefix but has
-		// an extra rect path — the two differ: subtitles has no explicit box
-		// in normal, subtitlesOff does. Discriminate on the exact d attribute.
-		// The "on" icon's normal path does NOT contain "18.75 5.5" (the box stroke).
-		expect(normalPath!.getAttribute('d')).not.toContain('18.75 5.5');
+		// An active button shows the hover glyph (`.is-active` swaps it in), and
+		// the active glyph is the filled one: it lacks the "18.75 5.5" inner box
+		// contour that the outline carries.
+		const activePath = iconTarget.querySelector<SVGPathElement>('path.icon-hover');
+		expect(activePath).not.toBeNull();
+		expect(activePath!.getAttribute('d')).not.toContain('18.75 5.5');
 	});
 
 	it('subtitles button shows the "off" icon when no track is active (-1)', async () => {
@@ -236,10 +233,13 @@ describe('DesktopUiPlugin — icon state (is-active divergence)', () => {
 		player.emit('subtitle' as never, { track: 0 } as never);
 		const subsBtn = document.querySelector<HTMLButtonElement>('[id="subtitles"]');
 		const iconTarget = subsBtn!.querySelector('.btn-icon') ?? subsBtn!;
-		const onPath = iconTarget.querySelector<SVGPathElement>('path.icon-normal')!.getAttribute('d');
+		const shown = (): string | null => iconTarget
+			.querySelector<SVGPathElement>(subsBtn!.classList.contains('is-active') ? 'path.icon-hover' : 'path.icon-normal')!
+			.getAttribute('d');
+		const onPath = shown();
 
 		player.emit('subtitle' as never, { track: -1 } as never);
-		const offPath = iconTarget.querySelector<SVGPathElement>('path.icon-normal')!.getAttribute('d');
+		const offPath = shown();
 
 		expect(onPath).not.toBe(offPath);
 	});

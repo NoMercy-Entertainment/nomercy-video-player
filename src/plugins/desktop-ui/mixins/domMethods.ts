@@ -423,6 +423,9 @@ export const domMethods = {
 		// injected track needs the same visibility recheck `levels` /
 		// `audioTracks` already get, plus a repaint if the pane is open.
 		this.on('subtitles', () => {
+			const active = this.player.subtitle()?.index;
+			this._menuControlState.activeSubtitleIdx = (typeof active === 'number' && active >= 0) ? active : -1;
+			this.applySubsIcon();
 			this.refreshCapabilityVisibility();
 			this.repaintSubsIfOpen();
 		});
