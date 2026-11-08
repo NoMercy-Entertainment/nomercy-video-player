@@ -32,6 +32,7 @@ import { definiteFailureCode, SOURCE_OUTAGE_BACKOFF_MS, sourceOutageRetryLimit }
 
 /** Cap on bytes the next-item warmup may hold in memory. */
 const WARM_MAX_BYTES = 24 * 1024 * 1024;
+const VIDEO_CODEC_RE = /^(?:avc[1-4]|hvc1|hev1|dvh[1e]|vp0?[89]|av01|dav1)/i;
 
 interface HlsLevel {
 	/** Absolute URL of the level's playlist. */
@@ -844,6 +845,13 @@ export class Html5VideoBackend
 				continue;
 			seen.add(codec);
 
+			// A video contentType may not list the audio codec of a muxed CODECS value, or decodingInfo reports it unsupported.
+			const videoCodec = codec.split(',').map(part => part.trim()).find(part => VIDEO_CODEC_RE.test(part));
+			if (!videoCodec) {
+				this._capabilityCache.set(codec, true);
+				continue;
+			}
+
 			const height: number = level.height ?? 1080;
 			const width: number = level.width ?? 1920;
 			const bitrate: number = level.bitrate ?? 4_000_000;
@@ -853,7 +861,7 @@ export class Html5VideoBackend
 				const result = await navigator.mediaCapabilities.decodingInfo({
 					type: 'media-source',
 					video: {
-						contentType: `video/mp4; codecs="${codec}"`,
+						contentType: `video/mp4; codecs="${videoCodec}"`,
 						width,
 						height,
 						bitrate,

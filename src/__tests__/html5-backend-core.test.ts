@@ -970,6 +970,35 @@ describe('qualityLevels()', () => {
 		expect(all).toHaveLength(1);
 	});
 
+	it('keeps a level whose muxed CODECS lists video and audio, probing the video codec alone', async () => {
+		const loadPromise = backend.load('https://example.invalid/test.m3u8');
+		await flushMicrotasks();
+		const videoEl = container.querySelector('video') as HTMLVideoElement;
+		Object.defineProperty(videoEl, 'readyState', { value: 1, configurable: true });
+		videoEl.dispatchEvent(new Event('loadedmetadata'));
+		await loadPromise;
+
+		const probed: string[] = [];
+		Object.defineProperty(navigator, 'mediaCapabilities', {
+			configurable: true,
+			value: {
+				decodingInfo: async (config: { video: { contentType: string } }) => {
+					probed.push(config.video.contentType);
+					return { supported: !config.video.contentType.includes(',') };
+				},
+			},
+		});
+		_hlsRegistry.lastInstance!.levels = [
+			{ bitrate: 2_000_000, height: 720, width: 1280, attrs: { CODECS: 'avc1.4D401E,mp4a.40.2' } },
+		];
+
+		await (backend as unknown as { _probeCodecCapabilities: () => Promise<void> })._probeCodecCapabilities();
+
+		expect(probed).toEqual(['video/mp4; codecs="avc1.4D401E"']);
+		expect(backend.qualityLevels()).toHaveLength(1);
+		Reflect.deleteProperty(navigator, 'mediaCapabilities');
+	});
+
 	it('HLG VIDEO-RANGE is classified as HDR', async () => {
 		const loadPromise = backend.load('https://example.invalid/test.m3u8');
 		await flushMicrotasks();
