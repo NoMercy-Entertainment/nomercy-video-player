@@ -387,6 +387,12 @@ export class Html5VideoBackend
 			await customSource.attach(this.element);
 			this._state = 'ready';
 			performance.mark('nm:backend:load:end');
+			// index.ts sets the player duration only from this event, so a custom source must emit it too.
+			const reportMetadata = (): void => this.emit('loadedmetadata', { url, kind: this.kind, duration: this.element.duration });
+			if (this.element.readyState >= 1 /* HAVE_METADATA */)
+				reportMetadata();
+			else
+				this.element.addEventListener('loadedmetadata', reportMetadata, { once: true });
 			return;
 		}
 

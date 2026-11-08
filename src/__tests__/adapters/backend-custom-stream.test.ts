@@ -86,6 +86,36 @@ describe('a consumer-registered stream factory reaching playback', () => {
 		expect(backend.mediaElement().getAttribute('src')).toContain('movie.mp4');
 	});
 
+	it('reports the duration once a custom source has metadata, so the player duration is not 0', async () => {
+		const backend = makeBackend();
+		const element = backend.mediaElement();
+		Object.defineProperty(element, 'readyState', { value: 1, configurable: true });
+		Object.defineProperty(element, 'duration', { value: 5, configurable: true });
+		const seen: Array<{ duration: number }> = [];
+		backend.on('loadedmetadata', data => seen.push(data!));
+		backend.setStreamResolver(() => fakeSource());
+
+		await backend.load(MPD);
+
+		expect(seen.map(data => data.duration)).toEqual([5]);
+	});
+
+	it('waits for the element\'s own loadedmetadata when the custom source has none yet', async () => {
+		const backend = makeBackend();
+		const element = backend.mediaElement();
+		Object.defineProperty(element, 'duration', { value: 7, configurable: true });
+		const seen: Array<{ duration: number }> = [];
+		backend.on('loadedmetadata', data => seen.push(data!));
+		backend.setStreamResolver(() => fakeSource());
+
+		await backend.load(MPD);
+		expect(seen, 'nothing to report before metadata').toEqual([]);
+
+		element.dispatchEvent(new Event('loadedmetadata'));
+
+		expect(seen.map(data => data.duration)).toEqual([7]);
+	});
+
 	it('destroys the previous source before attaching the next one', async () => {
 		const backend = makeBackend();
 		const first = fakeSource();
