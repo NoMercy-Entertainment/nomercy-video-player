@@ -833,12 +833,14 @@ export class Html5VideoBackend
 
 	private emitActiveCues(tt: TextTrack): void {
 		const active = tt.activeCues;
-		const cues: SubtitleCue[] = [];
+		const rows: VTTCue[] = [];
 		if (active && active.length > 0) {
 			for (let i = 0; i < active.length; i++) {
-				cues.push(normaliseVttCue(active[i] as VTTCue));
+				rows.push(active[i] as VTTCue);
 			}
 		}
+		// CEA-608/708 gives one cue per screen row at its grid position; a viewer reads them as one block at the bottom.
+		const cues = tt.kind === 'captions' ? mergeCaptionRows(rows) : rows.map(normaliseVttCue);
 		const change: SubtitleCueChange = { cues, language: tt.language || undefined };
 		this.emit('subtitleCue', change);
 	}
@@ -1690,6 +1692,18 @@ const ALL_TAG_RE = /<[^>]+>/g;
  * `'auto'` case (renderers fall back to safe-area positioning). `cue.size`
  * defaults to 100 per the WebVTT spec.
  */
+function mergeCaptionRows(rows: VTTCue[]): SubtitleCue[] {
+	if (rows.length === 0)
+		return [];
+	const ordered = rows
+		.map(cue => ({ cue, line: typeof cue.line === 'number' ? cue.line : 0 }))
+		.sort((upper, lower) => upper.line - lower.line)
+		.map(({ cue }) => normaliseVttCue(cue));
+	const text = ordered.map(cue => cue.text).join('\n');
+	const plainText = ordered.map(cue => cue.plainText).join('\n');
+	return [{ text, plainText, align: 'center', size: 100 }];
+}
+
 function normaliseVttCue(cue: VTTCue): SubtitleCue {
 	const raw = cue.text ?? '';
 	const safe = raw.replace(TIMESTAMP_TAG_RE, '').replace(UNRECOGNISED_INLINE_TAG_RE, '');

@@ -902,6 +902,56 @@ describe('setSubtitleTrack()', () => {
 		expect(mockTrack.mode).toBe('hidden');
 	});
 
+	describe('closed-caption rows', () => {
+		function selectTrack(kind: 'captions' | 'subtitles', cues: Array<Record<string, unknown>>): unknown[] {
+			const events: unknown[] = [];
+			backend.on('subtitleCue', data => events.push(data));
+			const videoEl = container.querySelector('video') as HTMLVideoElement;
+			const mockTrack: Record<string, unknown> = {
+				kind,
+				language: 'en',
+				label: 'English',
+				mode: 'disabled',
+				activeCues: Object.assign([...cues], { length: cues.length }),
+				addEventListener: () => {},
+				removeEventListener: () => {},
+			};
+			Object.defineProperty(videoEl, 'textTracks', { value: { length: 1, 0: mockTrack }, configurable: true });
+			backend.setSubtitleTrack(0);
+			return events;
+		}
+
+		const row = (line: number, text: string): Record<string, unknown> => ({ text, line, size: 100, align: 'left', position: 10, snapToLines: true });
+
+		it('emits the rows of a CEA caption track as one block in reading order, bottom-center', () => {
+			const events = selectTrack('captions', [row(14.29, 'third'), row(0, 'first'), row(7.14, 'second')]);
+
+			const change = events.at(-1) as { cues: Array<{ text: string; plainText: string; line?: number; align: string; size: number; position?: number }> };
+			expect(change.cues).toHaveLength(1);
+			expect(change.cues[0]!.text).toBe('first\nsecond\nthird');
+			expect(change.cues[0]!.plainText).toBe('first\nsecond\nthird');
+			expect(change.cues[0]!.line).toBeUndefined();
+			expect(change.cues[0]!.position).toBeUndefined();
+			expect(change.cues[0]!.align).toBe('center');
+			expect(change.cues[0]!.size).toBe(100);
+		});
+
+		it('keeps the authored placement of a WebVTT subtitles track', () => {
+			const events = selectTrack('subtitles', [row(1, 'one'), row(15, 'two')]);
+
+			const change = events.at(-1) as { cues: Array<{ text: string; line?: number; align: string }> };
+			expect(change.cues.map(cue => cue.text)).toEqual(['one', 'two']);
+			expect(change.cues[0]!.align).toBe('start');
+			expect(change.cues[0]!.line).toBe(0);
+		});
+
+		it('emits no cue when a caption track has no active row', () => {
+			const events = selectTrack('captions', []);
+
+			expect((events.at(-1) as { cues: unknown[] }).cues).toEqual([]);
+		});
+	});
+
 	it('emits active cues when setSubtitleTrack selects a track with pre-existing cues', () => {
 		const cueEvents: unknown[] = [];
 		backend.on('subtitleCue', data => cueEvents.push(data));
