@@ -26,7 +26,7 @@ const CHOICE_KEY = 'twitch-use-own-player';
 export interface TwitchPluginOptions {
 	/** Client id sent to Twitch's web API when resolving a clip. */
 	clientId?: string;
-	/** Live list proxy (see `proxy/hls-proxy.ts`). When set, live plays in this player; without it, live uses Twitch's embed. No video passes through it. */
+	/** Address of a live playlist proxy that you run yourself. When set, live plays in this player; without it, live uses Twitch's embed. No video passes through it. */
 	proxyUrl?: string;
 }
 

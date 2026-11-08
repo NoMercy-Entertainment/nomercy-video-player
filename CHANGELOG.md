@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+## [2.8.0] — 2026-11-08
+
+### Added
+
+- `./plugins/twitch`: `TwitchPlugin` plays a Twitch channel, VOD or clip. Options: `clientId` (clip look-up) and `proxyUrl` (a live playlist proxy you run; without it live uses Twitch's embed). Events: `clip:resolved`, `channel:offline`, `channel:ended`. The plugin ships its own translations.
+- `liveSync` option (`targetLatency`, `maxCatchUpRate`, `forwardBuffer`) keeps live HLS near the live edge. `live()` and the `live` event report a live stream explicitly; desktop-ui shows LIVE.
+- The video backend emits `subtitleTracks`, so caption tracks that arrive late reach the `subtitles` event.
+
+### Fixed
+
+- The subtitles button shows the filled icon while a track is on, including when the track list changes after load.
+- Closed-caption rows show as one bottom-centre block.
+
 ## [2.7.0] — 2026-11-01
 
 ### Changed
