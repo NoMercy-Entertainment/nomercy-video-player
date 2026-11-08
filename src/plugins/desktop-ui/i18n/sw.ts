@@ -9,6 +9,7 @@
 import type { DesktopUiTranslationKey } from './en';
 
 export default {
+	'plugin.desktop-ui.time.live': 'MOJA KWA MOJA',
 	'plugin.desktop-ui.tooltip.play': 'Cheza / Simamisha',
 	'plugin.desktop-ui.tooltip.previous': 'Iliyopita',
 	'plugin.desktop-ui.tooltip.next': 'Ifuatayo',

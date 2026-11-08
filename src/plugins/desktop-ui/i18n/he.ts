@@ -9,6 +9,7 @@
 import type { DesktopUiTranslationKey } from './en';
 
 export default {
+	'plugin.desktop-ui.time.live': 'שידור חי',
 	'plugin.desktop-ui.tooltip.play': 'נגן / השהה',
 	'plugin.desktop-ui.tooltip.previous': 'הקודם',
 	'plugin.desktop-ui.tooltip.next': 'הבא',

@@ -9,6 +9,7 @@
 import type { DesktopUiTranslationKey } from './en';
 
 export default {
+	'plugin.desktop-ui.time.live': 'BEINT',
 	'plugin.desktop-ui.tooltip.play': 'Spila / Hlé',
 	'plugin.desktop-ui.tooltip.previous': 'Fyrra',
 	'plugin.desktop-ui.tooltip.next': 'Naesta',

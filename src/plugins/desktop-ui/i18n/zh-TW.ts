@@ -9,6 +9,7 @@
 import type { DesktopUiTranslationKey } from './en';
 
 export default {
+	'plugin.desktop-ui.time.live': '直播',
 	'plugin.desktop-ui.tooltip.play': '播放 / 暫停',
 	'plugin.desktop-ui.tooltip.previous': '上一個',
 	'plugin.desktop-ui.tooltip.next': '下一個',

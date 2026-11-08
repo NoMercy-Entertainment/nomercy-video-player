@@ -9,6 +9,7 @@
 import type { DesktopUiTranslationKey } from './en';
 
 export default {
+	'plugin.desktop-ui.time.live': 'ΖΩΝΤΑΝΑ',
 	'plugin.desktop-ui.tooltip.play': 'Αναπαραγωγή / Παύση',
 	'plugin.desktop-ui.tooltip.previous': 'Προηγούμενο',
 	'plugin.desktop-ui.tooltip.next': 'Επόμενο',

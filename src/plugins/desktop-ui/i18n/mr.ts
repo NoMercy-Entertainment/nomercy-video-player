@@ -9,6 +9,7 @@
 import type { DesktopUiTranslationKey } from './en';
 
 export default {
+	'plugin.desktop-ui.time.live': 'लाइव्ह',
 	'plugin.desktop-ui.tooltip.play': 'चालवा / थांबवा',
 	'plugin.desktop-ui.tooltip.previous': 'मागील',
 	'plugin.desktop-ui.tooltip.next': 'पुढील',

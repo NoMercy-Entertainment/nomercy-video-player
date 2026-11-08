@@ -9,6 +9,7 @@
 import type { DesktopUiTranslationKey } from './en';
 
 export default {
+	'plugin.desktop-ui.time.live': 'ផ្សាយផ្ទាល់',
 	'plugin.desktop-ui.tooltip.play': 'ចាក់ / ផ្អាក',
 	'plugin.desktop-ui.tooltip.previous': 'មុន',
 	'plugin.desktop-ui.tooltip.next': 'បន្ទាប់',

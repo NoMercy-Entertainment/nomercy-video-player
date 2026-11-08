@@ -9,6 +9,7 @@
 import type { DesktopUiTranslationKey } from './en';
 
 export default {
+	'plugin.desktop-ui.time.live': 'สด',
 	'plugin.desktop-ui.tooltip.play': 'เล่น / หยุดชั่วคราว',
 	'plugin.desktop-ui.tooltip.previous': 'ก่อนหน้า',
 	'plugin.desktop-ui.tooltip.next': 'ถัดไป',

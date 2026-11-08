@@ -9,6 +9,7 @@
 import type { DesktopUiTranslationKey } from './en';
 
 export default {
+	'plugin.desktop-ui.time.live': 'BEO',
 	'plugin.desktop-ui.tooltip.play': 'Seinn / Sos',
 	'plugin.desktop-ui.tooltip.previous': 'Roimhe seo',
 	'plugin.desktop-ui.tooltip.next': 'Ar aghaidh',

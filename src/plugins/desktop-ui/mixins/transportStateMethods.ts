@@ -91,6 +91,8 @@ export const transportStateMethods = {
 	},
 
 	_formatRemaining(this: DesktopUiInternals, cur: number, dur: number): string {
+		if (dur === Number.POSITIVE_INFINITY)
+			return this.t('time.live');
 		if (dur <= 0)
 			return formatSeconds(0);
 		if (this._showRemaining)

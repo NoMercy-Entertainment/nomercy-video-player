@@ -9,6 +9,7 @@
 import type { DesktopUiTranslationKey } from './en';
 
 export default {
+	'plugin.desktop-ui.time.live': 'TRỰC TIẾP',
 	'plugin.desktop-ui.tooltip.play': 'Phát / Tạm dừng',
 	'plugin.desktop-ui.tooltip.previous': 'Trước',
 	'plugin.desktop-ui.tooltip.next': 'Tiếp theo',

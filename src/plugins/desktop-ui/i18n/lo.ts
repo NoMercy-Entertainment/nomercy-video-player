@@ -9,6 +9,7 @@
 import type { DesktopUiTranslationKey } from './en';
 
 export default {
+	'plugin.desktop-ui.time.live': 'ສົດ',
 	'plugin.desktop-ui.tooltip.play': 'ຫຼິ້ນ / ຢຸດຊົ່ວຄາວ',
 	'plugin.desktop-ui.tooltip.previous': 'ກ່ອນໜ້າ',
 	'plugin.desktop-ui.tooltip.next': 'ຕໍ່ໄປ',

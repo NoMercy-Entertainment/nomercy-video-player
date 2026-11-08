@@ -9,6 +9,7 @@
 import type { DesktopUiTranslationKey } from './en';
 
 export default {
+	'plugin.desktop-ui.time.live': 'തത്സമയം',
 	'plugin.desktop-ui.tooltip.play': 'പ്ലേ / താൽക്കാലികമായി നിർത്തുക',
 	'plugin.desktop-ui.tooltip.previous': 'മുമ്പത്തെ',
 	'plugin.desktop-ui.tooltip.next': 'അടുത്തത്',

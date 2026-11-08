@@ -9,6 +9,7 @@
 import type { DesktopUiTranslationKey } from './en';
 
 export default {
+	'plugin.desktop-ui.time.live': 'EM DIRETO',
 	'plugin.desktop-ui.tooltip.play': 'Reproduzir / Pausa',
 	'plugin.desktop-ui.tooltip.previous': 'Anterior',
 	'plugin.desktop-ui.tooltip.next': 'Próximo',

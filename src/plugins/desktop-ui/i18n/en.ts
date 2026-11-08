@@ -13,6 +13,7 @@
  * compile error. The plugin's glob discovery picks up each sibling language.
  */
 const translations = {
+	'plugin.desktop-ui.time.live': 'LIVE',
 	'plugin.desktop-ui.tooltip.play': 'Play / Pause',
 	'plugin.desktop-ui.tooltip.previous': 'Previous',
 	'plugin.desktop-ui.tooltip.next': 'Next',

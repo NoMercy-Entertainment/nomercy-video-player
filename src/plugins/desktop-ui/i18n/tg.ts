@@ -9,6 +9,7 @@
 import type { DesktopUiTranslationKey } from './en';
 
 export default {
+	'plugin.desktop-ui.time.live': 'ЗИНДА',
 	'plugin.desktop-ui.tooltip.play': 'Пахш / Таваққуф',
 	'plugin.desktop-ui.tooltip.previous': 'Қаблӣ',
 	'plugin.desktop-ui.tooltip.next': 'Оянда',

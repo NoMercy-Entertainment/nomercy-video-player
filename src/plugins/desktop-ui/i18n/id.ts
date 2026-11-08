@@ -9,6 +9,7 @@
 import type { DesktopUiTranslationKey } from './en';
 
 export default {
+	'plugin.desktop-ui.time.live': 'LANGSUNG',
 	'plugin.desktop-ui.tooltip.play': 'Putar / Jeda',
 	'plugin.desktop-ui.tooltip.previous': 'Sebelumnya',
 	'plugin.desktop-ui.tooltip.next': 'Berikutnya',

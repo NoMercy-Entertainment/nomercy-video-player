@@ -9,6 +9,7 @@
 import type { DesktopUiTranslationKey } from './en';
 
 export default {
+	'plugin.desktop-ui.time.live': 'ТІКЕЛЕЙ',
 	'plugin.desktop-ui.tooltip.play': 'Ойнату / Кідірту',
 	'plugin.desktop-ui.tooltip.previous': 'Алдыңғы',
 	'plugin.desktop-ui.tooltip.next': 'Келесі',

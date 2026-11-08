@@ -9,6 +9,7 @@
 import type { DesktopUiTranslationKey } from './en';
 
 export default {
+	'plugin.desktop-ui.time.live': 'TIESIOGIAI',
 	'plugin.desktop-ui.tooltip.play': 'Leisti / Pristabdyti',
 	'plugin.desktop-ui.tooltip.previous': 'Ankstesnis',
 	'plugin.desktop-ui.tooltip.next': 'Kitas',

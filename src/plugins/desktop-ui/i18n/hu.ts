@@ -9,6 +9,7 @@
 import type { DesktopUiTranslationKey } from './en';
 
 export default {
+	'plugin.desktop-ui.time.live': 'ÉLŐ',
 	'plugin.desktop-ui.tooltip.play': 'Lejátszás / Szünet',
 	'plugin.desktop-ui.tooltip.previous': 'Előző',
 	'plugin.desktop-ui.tooltip.next': 'Következő',

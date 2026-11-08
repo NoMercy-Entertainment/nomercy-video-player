@@ -9,6 +9,7 @@
 import type { DesktopUiTranslationKey } from './en';
 
 export default {
+	'plugin.desktop-ui.time.live': 'CANLI',
 	'plugin.desktop-ui.tooltip.play': 'Oynat / Duraklat',
 	'plugin.desktop-ui.tooltip.previous': 'Önceki',
 	'plugin.desktop-ui.tooltip.next': 'Sonraki',
