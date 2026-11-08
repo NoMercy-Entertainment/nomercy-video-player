@@ -1,7 +1,7 @@
 {
 	"name": "@nomercy-entertainment/nomercy-video-player",
 	"type": "module",
-	"version": "2.7.0",
+	"version": "2.8.0",
 	"packageManager": "yarn@4.18.1",
 	"description": "Headless, event-driven HTML5 video player with HLS streaming, subtitle rendering (VTT/ASS/SSA), and a plugin system. No UI — you build your own.",
 	"author": {
@@ -91,6 +91,10 @@
 		"./plugins/touch-zones": {
 			"types": "./dist/plugins/touch-zones/index.d.ts",
 			"import": "./dist/plugins/touch-zones/index.js"
+		},
+		"./plugins/twitch": {
+			"types": "./dist/plugins/twitch/index.d.ts",
+			"import": "./dist/plugins/twitch/index.js"
 		},
 		"./plugins/tv-key-handler": {
 			"types": "./dist/plugins/tv-key-handler/index.d.ts",

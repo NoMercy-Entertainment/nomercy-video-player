@@ -31,6 +31,8 @@ export type { TouchZonesOptions } from './touch-zones';
 // TV remote control plugin — subclasses KeyHandlerPlugin with TV-specific bindings
 export { tvKeyHandlerPlugin, TvKeyHandlerPlugin } from './tv-key-handler';
 export type { TvKeyHandlerOptions } from './tv-key-handler';
+export { TwitchPlugin } from './twitch';
+export type { TwitchPluginEvents, TwitchPluginOptions } from './twitch';
 // Cross-library kit plugins re-exported for ergonomic imports.
 export {
 	audioGraphPlugin,

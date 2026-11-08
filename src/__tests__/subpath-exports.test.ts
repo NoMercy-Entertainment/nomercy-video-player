@@ -65,6 +65,7 @@ const EXPECTED_EXPORT_KEYS = [
 	'./plugins/octopus',
 	'./plugins/subtitle-overlay',
 	'./plugins/touch-zones',
+	'./plugins/twitch',
 	'./plugins/tv-key-handler',
 	'./streams/native',
 	'./streams/hls',
@@ -77,7 +78,7 @@ describe('subpath-exports', () => {
 			readFileSync(resolve(process.cwd(), 'package.json'), 'utf8'),
 		) as { exports: Record<string, unknown> };
 
-		it('contains exactly the 16 documented export keys', () => {
+		it('contains exactly the 17 documented export keys', () => {
 			expect(Object.keys(packageJson.exports)).toEqual(EXPECTED_EXPORT_KEYS);
 		});
 
@@ -219,6 +220,13 @@ describe('subpath-exports', () => {
 		it('./plugins/touch-zones → TouchZonesPlugin', () => {
 			expect(typeof touchZonesModule.TouchZonesPlugin).toBe('function');
 			expect(touchZonesModule.touchZonesPlugin).toBe(touchZonesModule.TouchZonesPlugin);
+		});
+
+		it('./plugins/twitch → TwitchPlugin', async () => {
+			const twitchModule = await import('../plugins/twitch/index');
+
+			expect(typeof twitchModule.TwitchPlugin).toBe('function');
+			expect(pluginsBarrel.TwitchPlugin).toBe(twitchModule.TwitchPlugin);
 		});
 
 		it('./plugins/tv-key-handler → TvKeyHandlerPlugin', () => {
