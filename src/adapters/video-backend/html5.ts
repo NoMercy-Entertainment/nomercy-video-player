@@ -27,6 +27,7 @@ import {
 	StreamError,
 	supportsNativeHls,
 } from '@nomercy-entertainment/nomercy-player-core';
+import { drainCaptionCache } from './hls-caption-drain';
 import { createWarmLoader, HlsWarmCache } from './hls-warm-cache';
 import { definiteFailureCode, SOURCE_OUTAGE_BACKOFF_MS, sourceOutageRetryLimit } from './source-outage';
 
@@ -435,6 +436,10 @@ export class Html5VideoBackend
 					hlsInstance.startLevel = warmedLevel;
 			});
 			// hls.js fills its audio list after the manifest parse, then fires this.
+			hlsInstance.on(Hls.Events.BUFFER_APPENDED, (_event, data) => {
+				if (data?.type === 'audiovideo')
+					drainCaptionCache(hlsInstance);
+			});
 			hlsInstance.on(Hls.Events.LEVEL_LOADED, (_event, data) => {
 				this._setLive(Boolean(data?.details?.live));
 			});

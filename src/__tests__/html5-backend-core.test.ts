@@ -89,6 +89,7 @@ vi.mock('hls.js', () => {
 			FRAG_CHANGED: 'hlsFragChanged',
 			AUDIO_TRACKS_UPDATED: 'hlsAudioTracksUpdated',
 			LEVEL_LOADED: 'hlsLevelLoaded',
+			BUFFER_APPENDED: 'hlsBufferAppended',
 		};
 
 		static ErrorTypes: Record<string, string> = {
@@ -951,6 +952,41 @@ describe('subtitle tracks added after load', () => {
 		textTracks.dispatchEvent(new Event('removetrack'));
 
 		expect(counts).toEqual([1, 0]);
+	});
+});
+
+describe('captions on a muxed stream', () => {
+	async function loadWithTimeline(): Promise<{ cueCache: Record<string, Array<{ id: string }>>; added: Array<{ id: string }> }> {
+		const loadPromise = backend.load('https://example.invalid/live.m3u8');
+		await flushMicrotasks();
+		const videoEl = container.querySelector('video') as HTMLVideoElement;
+		Object.defineProperty(videoEl, 'readyState', { value: 1, configurable: true });
+		videoEl.dispatchEvent(new Event('loadedmetadata'));
+		await loadPromise;
+
+		const added: Array<{ id: string }> = [];
+		const track = { mode: 'hidden', cues: { getCueById: (id: string) => added.find(cue => cue.id === id) ?? null }, addCue: (cue: { id: string }) => { added.push(cue); } };
+		const cueCache = { textTrack1: [{ id: 'a' }] };
+		(_hlsRegistry.lastInstance as unknown as { coreComponents: unknown[] }).coreComponents = [{ cueCache, captionsTracks: { textTrack1: { track } } }];
+		return { cueCache, added };
+	}
+
+	it('drains the caption cache onto its track when a muxed audiovideo buffer is appended', async () => {
+		const { cueCache, added } = await loadWithTimeline();
+
+		_hlsRegistry.lastInstance!.fire('hlsBufferAppended', { type: 'audiovideo', timeRanges: { audiovideo: [{}] } });
+
+		expect(added.map(cue => cue.id)).toEqual(['a']);
+		expect(cueCache).toEqual({});
+	});
+
+	it('leaves a plain video append to hls.js', async () => {
+		const { cueCache, added } = await loadWithTimeline();
+
+		_hlsRegistry.lastInstance!.fire('hlsBufferAppended', { type: 'video', timeRanges: { video: [{}] } });
+
+		expect(added).toEqual([]);
+		expect(cueCache.textTrack1).toHaveLength(1);
 	});
 });
 
