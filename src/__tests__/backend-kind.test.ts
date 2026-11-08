@@ -6,6 +6,8 @@
 //  SPDX-License-Identifier: Apache-2.0
 // -----------------------------------------------------------------------------
 
+import type { VideoBackendKind } from '../adapters/video-backend/IVideoBackend';
+import type { VideoBackendFactory } from '../types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Html5VideoBackend } from '../adapters/video-backend/html5';
 import { NMVideoPlayer } from '../index';
@@ -63,6 +65,18 @@ describe('NMVideoPlayer backend(kind) setter', () => {
 		await videoPlayer.backend('mse');
 
 		expect(factory).toHaveBeenCalledWith('mse', expect.anything());
+		expect(videoPlayer.backend()).toBe(customBackend);
+	});
+
+	it('backend(kind) accepts a custom kind name from a backendFactory', async () => {
+		const customKind: VideoBackendKind = 'twitch';
+		const customBackend = new Html5VideoBackend(document.createElement('div'));
+		const factory: VideoBackendFactory = vi.fn().mockReturnValue(customBackend);
+		const videoPlayer = new NMVideoPlayer('backend-kind-test').setup({ backendFactory: factory });
+
+		await videoPlayer.backend(customKind);
+
+		expect(factory).toHaveBeenCalledWith('twitch', expect.anything());
 		expect(videoPlayer.backend()).toBe(customBackend);
 	});
 });

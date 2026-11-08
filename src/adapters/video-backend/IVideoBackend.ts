@@ -114,8 +114,8 @@ export const VIDEO_BACKEND_KIND = {
 	WEBCODECS: 'webcodecs',
 } as const;
 
-/** Video backend kind. */
-export type VideoBackendKind = typeof VIDEO_BACKEND_KIND[keyof typeof VIDEO_BACKEND_KIND];
+/** Video backend kind: built-in names stay suggested; any other string names a `backendFactory` backend. */
+export type VideoBackendKind = typeof VIDEO_BACKEND_KIND[keyof typeof VIDEO_BACKEND_KIND] | (string & {});
 
 /**
  * Contract every video backend implements. Parallels the audio backend
