@@ -13,7 +13,7 @@
 ### Fixed
 
 - The subtitles button shows the filled icon while a track is on, including when the track list changes after load.
-- Closed-caption rows show as one bottom-centre block.
+- Closed-caption rows show as one bottom-center block.
 
 ## [2.7.0] — 2026-11-01
 
