@@ -13,6 +13,13 @@
 	overflow: hidden;
 	background-color: #000;
 
+	/* The sizes below assume border-box; a host page without a reset made every menu row overflow on the right. */
+	*,
+	*::before,
+	*::after {
+		box-sizing: border-box;
+	}
+
 	video {
 		position: absolute;
 		inset: 0;
@@ -759,6 +766,11 @@
 
 	.remaining-time:hover {
 		background: rgba(255, 255, 255, 0.1);
+	}
+
+	/* A live viewer who fell behind sees the label dimmed; a click returns to the live edge. */
+	.remaining-time.behind-live {
+		opacity: 0.6;
 	}
 
 	.divider {
