@@ -9,7 +9,7 @@
 import type { AudioTrack, HdrOnSdrFallback, IStreamSource, QualityLevel, SubtitleTrack } from '@nomercy-entertainment/nomercy-player-core';
 import type { HtmlPreloadMode } from '../../types';
 import type { HlsLoaderConstructor } from './hls-warm-cache';
-import type { BackendEventPayload, BackendState, IVideoBackend, StreamResolver, SubtitleCue, SubtitleCueChange } from './IVideoBackend';
+import type { BackendEventPayload, BackendState, IVideoBackend, LiveSyncOptions, StreamResolver, SubtitleCue, SubtitleCueChange } from './IVideoBackend';
 import {
 	abrCeiling,
 	appendAuthTokenParam,
@@ -33,6 +33,9 @@ import { definiteFailureCode, SOURCE_OUTAGE_BACKOFF_MS, sourceOutageRetryLimit }
 
 /** Cap on bytes the next-item warmup may hold in memory. */
 const WARM_MAX_BYTES = 24 * 1024 * 1024;
+const DEFAULT_LIVE_TARGET_LATENCY = 6;
+const DEFAULT_MAX_CATCH_UP_RATE = 1.05;
+const DEFAULT_LIVE_FORWARD_BUFFER = 12;
 const VIDEO_CODEC_RE = /^(?:avc[1-4]|hvc1|hev1|dvh[1e]|vp0?[89]|av01|dav1)/i;
 
 interface HlsLevel {
@@ -69,6 +72,8 @@ interface HlsConstructor {
 }
 
 interface HlsInstance {
+	/** The live config; hls.js reads these two on every use, so a change takes effect at once. */
+	config: { maxBufferLength?: number; maxLiveSyncPlaybackRate?: number };
 	levels: HlsLevel[];
 	audioTracks: HlsAudioTrack[];
 	subtitleTracks: HlsSubtitleTrack[];
@@ -298,6 +303,7 @@ export class Html5VideoBackend
 			ownsElement = true;
 		}
 		super(element, ownsElement, 'html5');
+		this.element.preservesPitch = true;
 		this.wireElementEvents();
 		this._wireHdrMatchMedia();
 		this._wirePaneResizeObserver();
@@ -419,7 +425,9 @@ export class Html5VideoBackend
 				...(warmLoader ? { loader: warmLoader } : {}),
 				autoStartLoad: true,
 				enableWorker: true,
-				lowLatencyMode: false,
+				lowLatencyMode: this._maxCatchUpRate() > 1,
+				liveSyncDuration: this._liveSync.targetLatency ?? DEFAULT_LIVE_TARGET_LATENCY,
+				maxLiveSyncPlaybackRate: this._viewerRate === 1 ? this._maxCatchUpRate() : 1,
 				enableCEA708Captions: true,
 				startPosition: typeof opts?.startTime === 'number' && opts.startTime > 0 ? opts.startTime : -1,
 				startFragPrefetch: true,
@@ -441,7 +449,10 @@ export class Html5VideoBackend
 					drainCaptionCache(hlsInstance);
 			});
 			hlsInstance.on(Hls.Events.LEVEL_LOADED, (_event, data) => {
-				this._setLive(Boolean(data?.details?.live));
+				const live = Boolean(data?.details?.live);
+				this._setLive(live);
+				if (live)
+					hlsInstance.config.maxBufferLength = this._liveSync.forwardBuffer ?? DEFAULT_LIVE_FORWARD_BUFFER;
 			});
 			hlsInstance.on(Hls.Events.AUDIO_TRACKS_UPDATED, () => {
 				this._emitAudioTracks();
@@ -492,6 +503,30 @@ export class Html5VideoBackend
 		list.addEventListener('addtrack', handler);
 		list.addEventListener('removetrack', handler);
 		this._textTrackWatch = { list, handler };
+	}
+
+	private _liveSync: LiveSyncOptions = {};
+	/** The speed the viewer chose; hls.js catch-up may move the element's own rate off it while live. */
+	private _viewerRate = 1;
+
+	setLiveSync(options: LiveSyncOptions): void {
+		this._liveSync = options;
+	}
+
+	private _maxCatchUpRate(): number {
+		return this._liveSync.maxCatchUpRate ?? DEFAULT_MAX_CATCH_UP_RATE;
+	}
+
+	override playbackRate(): number;
+	override playbackRate(rate: number): void;
+	override playbackRate(rate?: number): number | void {
+		if (rate === undefined)
+			return this._live ? this._viewerRate : super.playbackRate();
+		this._viewerRate = rate;
+		super.playbackRate(rate);
+		// hls.js resets the element's rate to 1 whenever it is not catching up, so it must stand down while the viewer picks a speed.
+		if (this.hls)
+			this.hls.config.maxLiveSyncPlaybackRate = rate === 1 ? this._maxCatchUpRate() : 1;
 	}
 
 	private _live = false;

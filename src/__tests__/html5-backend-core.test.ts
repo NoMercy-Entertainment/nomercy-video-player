@@ -44,6 +44,7 @@ const _hlsRegistry: {
 type HlsListener = (event: string, data: unknown) => void;
 
 interface FakeHlsInstance {
+	config: Record<string, unknown>;
 	levels: unknown[];
 	audioTracks: unknown[];
 	subtitleTracks: unknown[];
@@ -79,6 +80,7 @@ vi.mock('hls.js', () => {
 		autoLevelCapping = -1;
 		bandwidthEstimate = 0;
 		_listeners = new Map<string, HlsListener[]>();
+		config: Record<string, unknown> = {};
 
 		static isSupported = (): boolean => true;
 		static Events: Record<string, string> = {
@@ -98,6 +100,7 @@ vi.mock('hls.js', () => {
 		};
 
 		constructor(config?: Record<string, unknown>) {
+			this.config = { ...config };
 			_hlsRegistry.lastConfig = config;
 			_hlsRegistry.lastInstance = this as unknown as FakeHlsInstance;
 		}
@@ -1002,6 +1005,70 @@ describe('subtitle tracks added after load', () => {
 		textTracks.dispatchEvent(new Event('removetrack'));
 
 		expect(counts).toEqual([1, 0]);
+	});
+});
+
+describe('live sync', () => {
+	async function loadHls(): Promise<void> {
+		const loadPromise = backend.load('https://example.invalid/live.m3u8');
+		await flushMicrotasks();
+		const videoEl = container.querySelector('video') as HTMLVideoElement;
+		Object.defineProperty(videoEl, 'readyState', { value: 1, configurable: true });
+		videoEl.dispatchEvent(new Event('loadedmetadata'));
+		await loadPromise;
+	}
+
+	it('builds hls.js with a catch-up rate and a target latency by default', async () => {
+		await loadHls();
+
+		expect(_hlsRegistry.lastConfig).toMatchObject({ lowLatencyMode: true, maxLiveSyncPlaybackRate: 1.05, liveSyncDuration: 6 });
+	});
+
+	it('uses the target latency and catch-up rate the player option sets', async () => {
+		backend.setLiveSync({ targetLatency: 9, maxCatchUpRate: 1.03 });
+
+		await loadHls();
+
+		expect(_hlsRegistry.lastConfig).toMatchObject({ lowLatencyMode: true, maxLiveSyncPlaybackRate: 1.03, liveSyncDuration: 9 });
+	});
+
+	it('turns catch-up off when the max rate is 1', async () => {
+		backend.setLiveSync({ maxCatchUpRate: 1 });
+
+		await loadHls();
+
+		expect(_hlsRegistry.lastConfig).toMatchObject({ lowLatencyMode: false, maxLiveSyncPlaybackRate: 1 });
+	});
+
+	it('limits the forward buffer once the playlist is live, and only then', async () => {
+		backend.setLiveSync({ forwardBuffer: 12 });
+		await loadHls();
+		const hls = _hlsRegistry.lastInstance!;
+
+		hls.fire('hlsLevelLoaded', { details: { live: false } });
+		expect(hls.config.maxBufferLength).toBeUndefined();
+
+		hls.fire('hlsLevelLoaded', { details: { live: true } });
+		expect(hls.config.maxBufferLength).toBe(12);
+	});
+
+	it('pauses hls.js catch-up while the viewer picks another speed, so it cannot reset it', async () => {
+		await loadHls();
+		const hls = _hlsRegistry.lastInstance!;
+		expect(hls.config.maxLiveSyncPlaybackRate).toBe(1.05);
+
+		backend.playbackRate(1.5);
+		expect(hls.config.maxLiveSyncPlaybackRate).toBe(1);
+		expect(backend.playbackRate()).toBe(1.5);
+
+		backend.playbackRate(1);
+		expect(hls.config.maxLiveSyncPlaybackRate).toBe(1.05);
+	});
+
+	it('keeps the pitch while the rate changes', () => {
+		const videoEl = container.querySelector('video') as HTMLVideoElement;
+
+		expect(videoEl.preservesPitch).toBe(true);
 	});
 });
 

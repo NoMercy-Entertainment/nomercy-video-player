@@ -27,7 +27,7 @@ import type {
 	SubtitleStyle,
 	VolumeState,
 } from '@nomercy-entertainment/nomercy-player-core';
-import type { IVideoBackend, VideoBackendKind } from './adapters/video-backend/IVideoBackend';
+import type { IVideoBackend, LiveSyncOptions, VideoBackendKind } from './adapters/video-backend/IVideoBackend';
 
 export type { QualityLevel };
 
@@ -406,6 +406,8 @@ export interface VideoPlayerConfig<T extends BasePlaylistItem = VideoPlaylistIte
 	 * can branch on it.
 	 */
 	backendFactory?: VideoBackendFactory;
+	/** How a live stream stays near the live edge: target latency, catch-up speed and forward buffer. Applies to live only. */
+	liveSync?: LiveSyncOptions;
 	/** Auto-select the subtitle track matching this language tag. */
 	defaultSubtitleLanguage?: string;
 	/** Auto-select the audio track matching this language tag. */

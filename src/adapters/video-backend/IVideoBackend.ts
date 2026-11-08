@@ -118,6 +118,16 @@ export const VIDEO_BACKEND_KIND = {
 	WEBCODECS: 'webcodecs',
 } as const;
 
+/** How a live stream stays near the live edge. Every field is optional; the backend's defaults apply to the rest. */
+export interface LiveSyncOptions {
+	/** Seconds behind the live edge the player aims for. A VOD ignores it. */
+	targetLatency?: number;
+	/** Highest playback rate used to catch up to the target; 1 turns catch-up off. The pitch is kept. */
+	maxCatchUpRate?: number;
+	/** Seconds of media kept buffered ahead of the playhead on a live stream. */
+	forwardBuffer?: number;
+}
+
 /** Video backend kind: built-in names stay suggested; any other string names a `backendFactory` backend. */
 export type VideoBackendKind = typeof VIDEO_BACKEND_KIND[keyof typeof VIDEO_BACKEND_KIND] | (string & {});
 
@@ -167,6 +177,9 @@ export interface IVideoBackend {
 	 * here once, at backend construction; unset means the backend's own default.
 	 */
 	setHdrOnSdrFallback?(fallback: HdrOnSdrFallback): void;
+
+	/** How a live stream stays near the live edge. `NMVideoPlayer` pushes `options.liveSync` here before the first load; backends with no live catch-up omit it. */
+	setLiveSync?(options: LiveSyncOptions): void;
 
 	/** Fetch the manifests and first `segments` segments of `url` into memory for the next `load(url)`. Optional; a repeat call for the same URL is a no-op. */
 	warm?(url: string, opts?: { segments?: number }): Promise<void>;

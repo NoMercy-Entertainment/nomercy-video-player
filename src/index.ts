@@ -89,6 +89,7 @@ export type {
 	BackendLoaderState,
 	BackendState,
 	IVideoBackend,
+	LiveSyncOptions,
 	SubtitleCue,
 	SubtitleCueChange,
 	VideoBackendKind,
@@ -707,6 +708,7 @@ export class NMVideoPlayer<T extends VideoPlaylistItem = VideoPlaylistItem>
 		// into `options` — `hdrDecision`'s own default ('play') applies at the
 		// point of use when this was never pushed at all.
 		instance.setHdrOnSdrFallback?.(this.options?.hdrOnSdr ?? 'play');
+		instance.setLiveSync?.(this.options?.liveSync ?? {});
 
 		// Mount the ResizeObserver that keeps videoRect() fresh. Done here so
 		// the observer sees the real video element immediately after backend init.
