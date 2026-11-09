@@ -70,7 +70,7 @@ import { VideoPreloadStrategy } from './player/preload';
 import { pickStartItem } from './player/start-selection';
 import { matchSubtitleTrack, SUBTITLES_OFF, TrackLanguageMemory } from './player/track-language-memory';
 import { titleTokenTranslations } from './plugins/desktop-ui/i18n/token-bundle';
-import { containedRect, FullscreenState, PipState, SubtitleState, TheaterState } from './types';
+import { FullscreenState, paintedRect, PipState, SubtitleState, TheaterState } from './types';
 
 export type { IChapterSource } from './adapters/chapter-source/IChapterSource';
 export { VttChapterSource } from './adapters/chapter-source/vtt-chapters';
@@ -120,7 +120,7 @@ export type {
 	WatchProgress,
 } from './types';
 
-export { containedRect } from './types';
+export { containedRect, paintedRect } from './types';
 
 export {
 	AudioTrackState,
@@ -1052,6 +1052,7 @@ export class NMVideoPlayer<T extends VideoPlaylistItem = VideoPlaylistItem>
 		this._aspectRatio = value;
 		this._applyObjectFit(value);
 		this.emit('aspectRatio', { value });
+		this._emitVideoRect();
 	}
 
 	cycleAspectRatio(): void {
@@ -1061,6 +1062,7 @@ export class NMVideoPlayer<T extends VideoPlaylistItem = VideoPlaylistItem>
 		this._aspectRatio = next;
 		this._applyObjectFit(next);
 		this.emit('aspectRatio', { value: next });
+		this._emitVideoRect();
 	}
 
 	private _applyObjectFit(value: Stretching): void {
@@ -1075,13 +1077,14 @@ export class NMVideoPlayer<T extends VideoPlaylistItem = VideoPlaylistItem>
 	private _videoRectObserver: ResizeObserver | null = null;
 
 	/**
-	 * The displayed video content rectangle relative to the player container,
-	 * computed from `object-fit: contain` geometry.
+	 * The painted picture clipped to the player container, following the
+	 * current `aspectRatio()` mode. Unchanged for Fit; Stretch and Crop give the
+	 * container; True size gives the native size, centered and clipped.
 	 *
 	 * Returns `null` when the video has no loaded metadata yet.
 	 * Changes are signalled by the `'videoRect'` event — fired on `mediaReady`,
-	 * `duration`, `fullscreen`, and a `ResizeObserver` on the container and
-	 * video element.
+	 * `duration`, `fullscreen`, `aspectRatio`, and a `ResizeObserver` on the
+	 * container and video element.
 	 */
 	videoRect(): VideoRect | null {
 		const video = this.videoElement;
@@ -1090,7 +1093,8 @@ export class NMVideoPlayer<T extends VideoPlaylistItem = VideoPlaylistItem>
 		}
 
 		const container = this.container;
-		const rect = containedRect(
+		const rect = paintedRect(
+			this._aspectRatio,
 			video.videoWidth,
 			video.videoHeight,
 			container.clientWidth,

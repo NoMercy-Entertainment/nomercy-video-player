@@ -39,6 +39,8 @@ interface SubtitleOctopusInstance {
 	/** Replaces the track; the renderer remounts and redraws the current frame. */
 	trackContent(content: string | null): void;
 	dispose(): void;
+	/** Re-syncs the canvas box to its geometry source. */
+	resize?(): void;
 }
 
 /** Minimal shape of the NMSubtitleOctopus constructor options we pass. */
@@ -114,6 +116,7 @@ export class OctopusPlugin<T extends VideoPlaylistItem = VideoPlaylistItem> exte
 	/** The track as fetched, before the viewer's size is applied. Null when nothing is shown. */
 	private trackSource: string | null = null;
 	private appliedScale = 1;
+	private subtitleBox: HTMLElement | null = null;
 
 	/**
 	 * Accepts constructor-supplied opts for callers that instantiate the plugin
@@ -149,6 +152,11 @@ export class OctopusPlugin<T extends VideoPlaylistItem = VideoPlaylistItem> exte
 
 		this.on('subtitleStyle', () => {
 			this.applyStyle();
+		});
+
+		// The generic T hides the video-only event keys from Plugin.on; videoRect is in VideoEventMap.
+		(this as unknown as { on: (event: 'videoRect', fn: () => void) => void }).on('videoRect', () => {
+			this.placeFrame();
 		});
 
 		// The item already lists its tracks, so the carried selection is redrawn
@@ -493,7 +501,7 @@ export class OctopusPlugin<T extends VideoPlaylistItem = VideoPlaylistItem> exte
 				workerUrl: this.opts?.workerUrl,
 				legacyWorkerUrl: this.opts?.legacyWorkerUrl,
 				fallbackFont: this.opts?.fallbackFont,
-				geometrySource: this.player.container,
+				geometrySource: this.ensureFrame(),
 			};
 
 			this.instance = new OctopusCtor(opts);
@@ -528,8 +536,37 @@ export class OctopusPlugin<T extends VideoPlaylistItem = VideoPlaylistItem> exte
 		}
 	}
 
+	/** The box the libass canvas copies: the painted picture clipped to the player (`videoRect()`). */
+	private ensureFrame(): HTMLElement {
+		if (!this.subtitleBox) {
+			const box = document.createElement('div');
+			box.className = 'nomercy-libass-box';
+			box.style.position = 'absolute';
+			box.style.pointerEvents = 'none';
+			box.style.visibility = 'hidden';
+			this.player.container.appendChild(box);
+			this.subtitleBox = box;
+		}
+		this.placeFrame();
+		return this.subtitleBox;
+	}
+
+	private placeFrame(): void {
+		const box = this.subtitleBox;
+		if (!box)
+			return;
+		const rect = this.player.videoRect();
+		box.style.left = rect ? `${rect.x}px` : '0';
+		box.style.top = rect ? `${rect.y}px` : '0';
+		box.style.width = rect ? `${rect.width}px` : '100%';
+		box.style.height = rect ? `${rect.height}px` : '100%';
+		this.instance?.resize?.();
+	}
+
 	private destroy(): void {
 		this.loadSeq++;
+		this.subtitleBox?.remove();
+		this.subtitleBox = null;
 		this.currentLoadedUrl = null;
 		this.trackSource = null;
 		const inst = this.instance;

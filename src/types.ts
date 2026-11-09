@@ -220,6 +220,34 @@ export function containedRect(
 	return { x, y, width, height, scale };
 }
 
+/** The painted picture clipped to the player box, per `aspectRatio()` mode (the subtitle box). */
+export function paintedRect(
+	fit: Stretching,
+	videoW: number,
+	videoH: number,
+	containerW: number,
+	containerH: number,
+): VideoRect | null {
+	if (!videoW || !videoH || !containerW || !containerH) {
+		return null;
+	}
+
+	if (fit === 'uniform') {
+		return containedRect(videoW, videoH, containerW, containerH);
+	}
+
+	const width = fit === 'none' ? Math.min(videoW, containerW) : containerW;
+	const height = fit === 'none' ? Math.min(videoH, containerH) : containerH;
+
+	return {
+		x: Math.round((containerW - width) / 2),
+		y: Math.round((containerH - height) / 2),
+		width,
+		height,
+		scale: width / videoW,
+	};
+}
+
 /**
  * The behaviour when a segment window's `endSec` is reached.
  *
