@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [2.8.1] — 2026-11-09
+
+### Changed
+
+- Needs `@nomercy-entertainment/nomercy-player-core` 2.6.1: `pause` is emitted when the browser refuses a `play`, so the play button returns to paused after an autoplay refusal. The core also gains a native sidecar subtitle fallback.
+
 ## [2.8.0] — 2026-11-08
 
 ### Added
