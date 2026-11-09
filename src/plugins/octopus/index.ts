@@ -536,14 +536,16 @@ export class OctopusPlugin<T extends VideoPlaylistItem = VideoPlaylistItem> exte
 		}
 	}
 
-	/** The box the libass canvas copies: the painted picture clipped to the player (`videoRect()`). */
+	/** The libass mount and size source: the painted picture clipped to the player. Margins, because the package copies left/top/transform onto the canvas. */
 	private ensureFrame(): HTMLElement {
 		if (!this.subtitleBox) {
 			const box = document.createElement('div');
 			box.className = 'nomercy-libass-box';
 			box.style.position = 'absolute';
+			box.style.left = '0';
+			box.style.top = '0';
+			box.style.overflow = 'hidden';
 			box.style.pointerEvents = 'none';
-			box.style.visibility = 'hidden';
 			this.player.container.appendChild(box);
 			this.subtitleBox = box;
 		}
@@ -556,8 +558,8 @@ export class OctopusPlugin<T extends VideoPlaylistItem = VideoPlaylistItem> exte
 		if (!box)
 			return;
 		const rect = this.player.videoRect();
-		box.style.left = rect ? `${rect.x}px` : '0';
-		box.style.top = rect ? `${rect.y}px` : '0';
+		box.style.marginLeft = rect ? `${rect.x}px` : '0';
+		box.style.marginTop = rect ? `${rect.y}px` : '0';
 		box.style.width = rect ? `${rect.width}px` : '100%';
 		box.style.height = rect ? `${rect.height}px` : '100%';
 		this.instance?.resize?.();
