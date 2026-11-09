@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [2.8.2] — 2026-11-09
+
+### Fixed
+
+- `videoRect` reports the painted picture, clipped to the player, in every aspect mode: `uniform`, `fill`, `exactfit` and `none`. The setters emit `videoRect` on a mode change.
+- `./plugins/octopus`: the ASS canvas follows that rectangle, so subtitles stay on the picture after a resize or a mode change.
+
 ## [2.8.1] — 2026-11-09
 
 ### Changed
